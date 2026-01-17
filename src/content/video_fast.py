@@ -67,6 +67,17 @@ class FastVideoGenerator:
             os.path.expanduser("~\\ffmpeg\\bin\\ffmpeg.exe"),
         ]
 
+        # Check WinGet installation paths
+        winget_base = os.path.expanduser("~\\AppData\\Local\\Microsoft\\WinGet\\Packages")
+        if os.path.exists(winget_base):
+            for folder in os.listdir(winget_base):
+                if "FFmpeg" in folder:
+                    # Search for ffmpeg.exe in this package
+                    package_path = os.path.join(winget_base, folder)
+                    for root, dirs, files in os.walk(package_path):
+                        if "ffmpeg.exe" in files:
+                            common_paths.insert(0, os.path.join(root, "ffmpeg.exe"))
+
         for path in common_paths:
             if os.path.exists(path):
                 return path

@@ -139,12 +139,12 @@ class YouTubeCrew:
         from ..research.idea_generator import IdeaGenerator
         from ..content.script_writer import ScriptWriter
         from ..content.tts import TextToSpeech
-        from ..content.video_assembler import VideoAssembler
+        from ..content.video_fast import FastVideoGenerator
 
         self.idea_gen = IdeaGenerator(provider=self.provider, api_key=self.api_key)
         self.script_writer = ScriptWriter(provider=self.provider, api_key=self.api_key)
         self.tts = TextToSpeech()
-        self.video_assembler = VideoAssembler()
+        self.video_generator = FastVideoGenerator()
 
     def run_pipeline(
         self,
@@ -277,14 +277,14 @@ class YouTubeCrew:
             await self.tts.generate(narration, str(audio_file))
 
             # Create video
-            self.video_assembler.create_video_from_audio(
+            self.video_generator.create_video(
                 audio_file=str(audio_file),
                 output_file=str(video_file),
                 title=script.title
             )
 
             # Create thumbnail
-            self.video_assembler.create_thumbnail(
+            self.video_generator.create_thumbnail(
                 output_file=str(thumbnail_file),
                 title=script.title[:30],
                 subtitle=topic[:40]

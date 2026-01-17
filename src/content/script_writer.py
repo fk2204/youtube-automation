@@ -7,7 +7,7 @@ Supports multiple AI providers:
 
 Usage:
     # FREE - Using Ollama (local, unlimited)
-    writer = ScriptWriter(provider="ollama", model="llama3.2")
+    writer = ScriptWriter(provider="ollama", model="llama3.2:1b")
 
     # FREE - Using Groq (cloud, 30 req/min free)
     writer = ScriptWriter(provider="groq", api_key="your-key")
@@ -49,11 +49,11 @@ class OllamaProvider(AIProvider):
 
     Setup:
     1. Install Ollama: https://ollama.ai/download
-    2. Run: ollama pull llama3.2
+    2. Run: ollama pull llama3.2:1b
     3. Start: ollama serve
     """
 
-    def __init__(self, model: str = "llama3.2", base_url: str = "http://localhost:11434"):
+    def __init__(self, model: str = "llama3.2:1b", base_url: str = "http://localhost:11434"):
         self.model = model
         self.base_url = base_url
         logger.info(f"Ollama provider: {model} at {base_url}")
@@ -218,7 +218,7 @@ def get_provider(
         model: Model name override
     """
     providers = {
-        "ollama": (OllamaProvider, "llama3.2"),
+        "ollama": (OllamaProvider, "llama3.2:1b"),
         "groq": (GroqProvider, "llama-3.3-70b-versatile"),
         "gemini": (GeminiProvider, "gemini-1.5-flash"),
         "claude": (ClaudeProvider, "claude-sonnet-4-20250514"),
