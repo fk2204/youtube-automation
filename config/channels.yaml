@@ -1,0 +1,79 @@
+# YouTube Channels Configuration
+# Add your YouTube channels here for multi-channel management
+
+channels:
+  # Channel 1 - Main educational channel
+  - id: "channel_1"
+    name: "Tech Tutorials"
+    enabled: true
+
+    # OAuth credentials file for this channel
+    credentials_file: "config/credentials/channel_1.json"
+
+    # Channel-specific settings
+    settings:
+      niche: "programming"
+      target_audience: "beginners"
+      default_privacy: "unlisted"
+
+      # Voice preference for this channel
+      voice: "en-US-GuyNeural"
+
+      # Posting schedule (days of week, 0=Monday)
+      posting_days: [0, 2, 4]  # Monday, Wednesday, Friday
+
+      # Topics this channel focuses on
+      topics:
+        - "python tutorials"
+        - "web development"
+        - "coding for beginners"
+
+    # Channel branding
+    branding:
+      intro_text: "Welcome to Tech Tutorials!"
+      outro_text: "Don't forget to like and subscribe!"
+      watermark: "templates/watermarks/channel_1.png"
+
+  # Channel 2 - Secondary channel
+  - id: "channel_2"
+    name: "Quick Tips"
+    enabled: true
+    credentials_file: "config/credentials/channel_2.json"
+
+    settings:
+      niche: "tips-and-tricks"
+      target_audience: "intermediate"
+      default_privacy: "unlisted"
+      voice: "en-US-JennyNeural"
+      posting_days: [1, 3, 5]  # Tuesday, Thursday, Saturday
+
+      topics:
+        - "productivity tips"
+        - "software shortcuts"
+        - "tech hacks"
+
+    branding:
+      intro_text: "Quick tip of the day!"
+      outro_text: "See you in the next tip!"
+
+  # Channel 3 - Example disabled channel
+  - id: "channel_3"
+    name: "Deep Dives"
+    enabled: false  # Disabled - won't be used
+    credentials_file: "config/credentials/channel_3.json"
+
+    settings:
+      niche: "in-depth-tutorials"
+      target_audience: "advanced"
+      voice: "en-GB-RyanNeural"
+
+# Global channel settings
+global:
+  # Maximum uploads per day across all channels
+  max_daily_uploads: 5
+
+  # Minimum hours between uploads to same channel
+  min_hours_between_uploads: 12
+
+  # Rotate content across channels
+  content_rotation: true

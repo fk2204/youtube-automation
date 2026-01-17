@@ -1,0 +1,91 @@
+# YouTube Automation Tool - OPTIMIZED Dependencies
+# Install with: pip install -r requirements-optimized.txt
+
+# ============================================================
+# CORE (Required)
+# ============================================================
+python-dotenv>=1.0.0
+pyyaml>=6.0.0
+loguru>=0.7.0
+rich>=13.0.0              # Beautiful console output
+aiohttp>=3.9.0            # Async HTTP
+
+# ============================================================
+# AI PROVIDERS (Choose one or more)
+# ============================================================
+
+# FREE - Local (Ollama - no package needed, just install app)
+# FREE - Groq Cloud (30 req/min)
+# FREE - Google Gemini (15 req/min)
+requests>=2.31.0          # For API calls
+
+# PAID - Better quality
+anthropic>=0.40.0         # Claude API
+# openai>=1.0.0           # OpenAI (optional)
+
+# ============================================================
+# TEXT-TO-SPEECH (FREE!)
+# ============================================================
+edge-tts>=7.0.0           # Microsoft Edge TTS - 322 voices, FREE
+
+# Alternative TTS options (faster/better quality):
+# kokoro>=0.1.0           # 82M params, very fast, Apache 2.0
+# piper-tts>=1.2.0        # Fast CPU inference, offline
+
+# ============================================================
+# VIDEO GENERATION - OPTIMIZED
+# ============================================================
+
+# Option 1: MoviePy (easier, slower)
+moviepy>=1.0.3
+
+# Option 2: MovieLite (faster, Numba-powered) - RECOMMENDED
+# pip install git+https://github.com/francozanardi/movielite.git
+
+# Option 3: Direct FFmpeg (fastest)
+ffmpeg-python>=0.2.0      # FFmpeg wrapper
+
+# Supporting libraries
+pillow>=10.0.0            # Image processing
+numpy>=1.24.0             # Array operations
+opencv-python>=4.8.0      # Video processing (optional)
+
+# ============================================================
+# RESEARCH
+# ============================================================
+pytrends>=4.9.0           # Google Trends (FREE, no API key)
+praw>=7.7.0               # Reddit API (FREE with registration)
+
+# ============================================================
+# YOUTUBE API
+# ============================================================
+google-api-python-client>=2.100.0
+google-auth-oauthlib>=1.2.0
+google-auth>=2.23.0
+
+# Alternative: python-youtube for read operations
+# python-youtube>=0.9.0
+
+# ============================================================
+# SCHEDULING & AUTOMATION
+# ============================================================
+apscheduler>=3.10.0       # Job scheduling
+
+# ============================================================
+# AI AGENTS (Optional - for advanced orchestration)
+# ============================================================
+# crewai>=0.80.0          # Multi-agent framework
+# langchain>=0.3.0        # LLM orchestration
+
+# ============================================================
+# PERFORMANCE OPTIMIZATIONS
+# ============================================================
+# uvloop>=0.19.0          # Faster async (Linux/Mac only)
+# numba>=0.58.0           # JIT compilation for MovieLite
+tenacity>=8.2.0           # Retry logic
+
+# ============================================================
+# DEVELOPMENT
+# ============================================================
+# pytest>=7.0.0           # Testing
+# black>=23.0.0           # Code formatting

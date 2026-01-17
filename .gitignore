@@ -1,0 +1,42 @@
+# Environment
+.env
+config/.env
+*.pickle
+
+# Credentials (NEVER commit these!)
+config/client_secret.json
+config/youtube_credentials.pickle
+config/credentials/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv/
+
+# Output files
+output/
+logs/
+*.mp4
+*.mp3
+*.wav
+*.png
+*.jpg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp files
+temp_*
+*.tmp

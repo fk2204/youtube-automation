@@ -1,0 +1,101 @@
+# YouTube Automation Tool - Main Configuration
+
+# General Settings
+app:
+  name: "YouTube Automation Tool"
+  version: "1.0.0"
+  debug: true
+  log_level: "INFO"
+
+# Research Settings
+research:
+  # How many video ideas to generate per run
+  ideas_per_run: 5
+
+  # Minimum score threshold for video ideas (0-100)
+  min_score: 60
+
+  # Categories to focus on
+  categories:
+    - "programming"
+    - "technology"
+    - "tutorials"
+    - "how-to"
+
+  # Subreddits to monitor for ideas
+  subreddits:
+    - "learnprogramming"
+    - "webdev"
+    - "Python"
+    - "javascript"
+    - "explainlikeimfive"
+    - "howto"
+
+# Content Generation
+content:
+  # Script settings
+  script:
+    min_length: 500        # Minimum words
+    max_length: 2000       # Maximum words
+    style: "educational"   # educational, casual, professional
+
+  # Voice settings (Edge-TTS)
+  voice:
+    default: "en-US-GuyNeural"      # Default voice
+    alternatives:
+      - "en-US-JennyNeural"         # Female US
+      - "en-GB-SoniaNeural"         # Female UK
+      - "en-AU-WilliamNeural"       # Male Australian
+    rate: "+0%"                      # Speed adjustment (-50% to +100%)
+    pitch: "+0Hz"                    # Pitch adjustment
+
+  # Video settings
+  video:
+    resolution: [1920, 1080]  # 1080p
+    fps: 30
+    format: "mp4"
+    codec: "libx264"
+
+  # Thumbnail settings
+  thumbnail:
+    size: [1280, 720]
+    format: "png"
+
+# YouTube Settings
+youtube:
+  # Default video settings
+  defaults:
+    privacy: "unlisted"     # public, unlisted, private
+    category: "27"          # 27 = Education
+    language: "en"
+
+  # Upload schedule (24-hour format)
+  schedule:
+    timezone: "UTC"
+    upload_times:
+      - "14:00"
+      - "18:00"
+
+# Scheduler Settings
+scheduler:
+  # Enable/disable automated scheduling
+  enabled: true
+
+  # Daily pipeline schedule (24-hour format, UTC)
+  pipeline:
+    research: "06:00"
+    script_generation: "08:00"
+    video_creation: "10:00"
+    upload: "14:00"
+
+# Database
+database:
+  type: "sqlite"
+  path: "data/youtube_automation.db"
+
+# Output directories
+output:
+  videos: "output/videos"
+  thumbnails: "output/thumbnails"
+  audio: "output/audio"
+  scripts: "output/scripts"
