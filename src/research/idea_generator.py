@@ -14,6 +14,10 @@ import json
 from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, asdict
 from loguru import logger
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 from .trends import TrendResearcher, TrendTopic
 from .reddit import RedditResearcher, VideoIdea
@@ -75,7 +79,7 @@ Generate the ideas now:"""
 
     def __init__(
         self,
-        provider: str = "ollama",
+        provider: str = None,
         api_key: Optional[str] = None,
         model: Optional[str] = None
     ):
@@ -83,12 +87,16 @@ Generate the ideas now:"""
         Initialize the idea generator.
 
         Args:
-            provider: AI provider (ollama, groq, gemini, claude, openai)
+            provider: AI provider (ollama, groq, gemini, claude, openai). Defaults to AI_PROVIDER env var or "ollama".
             api_key: API key for cloud providers
             model: Model override
         """
         # Import here to avoid circular imports
         from ..content.script_writer import get_provider
+
+        # Use environment variable if provider not specified
+        if provider is None:
+            provider = os.getenv("AI_PROVIDER", "ollama")
 
         self.ai = get_provider(provider=provider, api_key=api_key, model=model)
         self.trend_researcher = TrendResearcher()
@@ -581,7 +589,8 @@ Return as JSON."""
 
 # Example usage
 if __name__ == "__main__":
-    generator = IdeaGenerator(provider="ollama")
+    # Uses AI_PROVIDER from environment, falls back to "ollama"
+    generator = IdeaGenerator()
 
     print("\n" + "="*60)
     print("GENERATING VIDEO IDEAS")

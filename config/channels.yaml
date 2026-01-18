@@ -226,6 +226,15 @@ global:
   test_mode: true  # Set to false for real uploads
 
   # ============================================================
+  # QUALITY CHECK SETTINGS (Pre-upload validation)
+  # Validates videos before uploading to YouTube
+  # ============================================================
+  quality_check_enabled: true          # Enable quality checks before upload
+  quality_threshold: 70                # Minimum score (0-100) to pass
+  skip_upload_on_quality_fail: false   # If true, skip upload when quality check fails
+                                       # If false, log warning but continue upload
+
+  # ============================================================
   # GLOBAL MUSIC SETTINGS (defaults for all channels)
   # Channel-specific settings override these defaults
   # ============================================================

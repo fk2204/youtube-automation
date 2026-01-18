@@ -500,7 +500,7 @@ Generate the full {duration}-minute script now:"""
 
     def __init__(
         self,
-        provider: str = "ollama",
+        provider: str = None,
         api_key: Optional[str] = None,
         model: Optional[str] = None
     ):
@@ -508,7 +508,7 @@ Generate the full {duration}-minute script now:"""
         Initialize the script writer.
 
         Args:
-            provider: AI provider (ollama, groq, gemini, claude, openai)
+            provider: AI provider (ollama, groq, gemini, claude, openai). Defaults to AI_PROVIDER env var or "ollama".
             api_key: API key (not needed for ollama)
             model: Model override (uses provider default if not specified)
 
@@ -522,6 +522,9 @@ Generate the full {duration}-minute script now:"""
             # PAID - Claude (best quality)
             writer = ScriptWriter(provider="claude", api_key="your-key")
         """
+        # Use environment variable if provider not specified
+        if provider is None:
+            provider = os.getenv("AI_PROVIDER", "ollama")
         self.provider_name = provider
         self.ai = get_provider(provider=provider, api_key=api_key, model=model)
         logger.info(f"ScriptWriter initialized with provider: {provider}")

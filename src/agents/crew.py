@@ -18,6 +18,10 @@ from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 from pathlib import Path
 from loguru import logger
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Try to import CrewAI (optional dependency)
 try:
@@ -50,7 +54,7 @@ class YouTubeCrew:
 
     def __init__(
         self,
-        provider: str = "ollama",
+        provider: str = None,
         api_key: Optional[str] = None,
         output_dir: str = "output"
     ):
@@ -58,10 +62,13 @@ class YouTubeCrew:
         Initialize the YouTube crew.
 
         Args:
-            provider: AI provider for agents (ollama, groq, claude, etc.)
+            provider: AI provider for agents (ollama, groq, claude, etc.). Defaults to AI_PROVIDER env var or "ollama".
             api_key: API key for cloud providers
             output_dir: Directory for output files
         """
+        # Use environment variable if provider not specified
+        if provider is None:
+            provider = os.getenv("AI_PROVIDER", "ollama")
         self.provider = provider
         self.api_key = api_key
         self.output_dir = Path(output_dir)
@@ -351,10 +358,12 @@ if __name__ == "__main__":
     print("YOUTUBE AUTOMATION CREW")
     print("="*60 + "\n")
 
-    crew = YouTubeCrew(provider="ollama")
+    # Uses AI_PROVIDER from environment, falls back to "ollama"
+    crew = YouTubeCrew()
 
-    print("Running pipeline for: Python programming tutorials")
-    print("(This will use Ollama for AI - make sure it's running)\n")
+    provider = os.getenv("AI_PROVIDER", "ollama")
+    print(f"Running pipeline for: Python programming tutorials")
+    print(f"(Using {provider} for AI)\n")
 
     result = crew.run_pipeline(
         niche="python programming tutorials",

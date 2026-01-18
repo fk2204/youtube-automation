@@ -46,7 +46,7 @@ def task_research(niche: str, count: int = 5) -> Dict[str, Any]:
 
     from src.research.idea_generator import IdeaGenerator
 
-    generator = IdeaGenerator(provider="ollama")
+    generator = IdeaGenerator(provider=os.getenv("AI_PROVIDER", "ollama"))
     ideas = generator.generate_ideas(niche=niche, count=count)
 
     if not ideas:
@@ -75,7 +75,7 @@ def task_script(topic: str, niche: str = "default", duration: int = 5) -> Dict[s
 
     from src.content.script_writer import ScriptWriter
 
-    writer = ScriptWriter(provider="ollama")
+    writer = ScriptWriter(provider=os.getenv("AI_PROVIDER", "ollama"))
     script = writer.generate_script(
         topic=topic,
         duration_minutes=duration,
@@ -492,18 +492,146 @@ def task_full_pipeline(channel_id: str, topic: str = None) -> Dict[str, Any]:
     return {"success": True, "results": results}
 
 
+def task_quality_check(
+    video_file: str,
+    script_data: Optional[Dict[str, Any]] = None,
+    is_short: bool = False,
+    threshold: int = 70,
+    skip_ai_checks: bool = False
+) -> Dict[str, Any]:
+    """
+    TASK: Run quality check on a video before upload.
+
+    Args:
+        video_file: Path to the video file
+        script_data: Optional script data dict with title, description, tags, sections
+        is_short: Whether this is a YouTube Short
+        threshold: Minimum score to pass (0-100)
+        skip_ai_checks: Skip AI-based content analysis (faster)
+
+    Returns dict with quality check results.
+    """
+    logger.info(f"Running quality check on: {video_file}")
+
+    from src.content.quality_checker import VideoQualityChecker
+
+    checker = VideoQualityChecker()
+    report = checker.check_video(
+        video_file=video_file,
+        script_data=script_data,
+        is_short=is_short,
+        threshold=threshold,
+        skip_ai_checks=skip_ai_checks
+    )
+
+    logger.info(f"Quality score: {report.overall_score}/100 (threshold: {threshold})")
+
+    if report.passed:
+        logger.success(f"Quality check PASSED ({report.overall_score}/100)")
+    else:
+        logger.warning(f"Quality check FAILED ({report.overall_score}/100)")
+        for issue in report.issues[:5]:  # Show top 5 issues
+            logger.warning(f"  - {issue.category}: {issue.issue}")
+
+    return {
+        "success": True,
+        "passed": report.passed,
+        "score": report.overall_score,
+        "threshold": threshold,
+        "issues_count": len(report.issues),
+        "issues": [
+            {
+                "category": issue.category,
+                "issue": issue.issue,
+                "severity": issue.severity.value,
+                "recommendation": issue.recommendation
+            }
+            for issue in report.issues
+        ],
+        "recommendations": report.recommendations,
+        "summary": report.summary(),
+        "report": report.to_dict()
+    }
+
+
 def task_full_with_upload(channel_id: str, topic: str = None) -> Dict[str, Any]:
     """
     TASK: Run full pipeline and upload to YouTube.
+
+    Includes quality check before upload if enabled in channel config.
     """
+    import yaml
+
     # Run pipeline
     result = task_full_pipeline(channel_id, topic)
 
     if not result["success"]:
         return result
 
+    # Load channel config for quality check settings
+    with open(PROJECT_ROOT / "config" / "channels.yaml") as f:
+        config = yaml.safe_load(f)
+
+    # Find channel config
+    channel_config = None
+    for ch in config["channels"]:
+        if ch["id"] == channel_id:
+            channel_config = ch
+            break
+
+    # Get quality check settings (from channel or global)
+    global_settings = config.get("global", {})
+    quality_check_enabled = channel_config.get("settings", {}).get(
+        "quality_check_enabled",
+        global_settings.get("quality_check_enabled", False)
+    )
+    quality_threshold = channel_config.get("settings", {}).get(
+        "quality_threshold",
+        global_settings.get("quality_threshold", 70)
+    )
+    skip_upload_on_fail = channel_config.get("settings", {}).get(
+        "skip_upload_on_quality_fail",
+        global_settings.get("skip_upload_on_quality_fail", False)
+    )
+
+    # Quality check
+    if quality_check_enabled:
+        logger.info("\n[5/6] QUALITY CHECK")
+
+        # Build script_data for quality check
+        script_data = {
+            "title": result["results"]["title"],
+            "description": result["results"]["description"],
+            "tags": result["results"]["tags"],
+            "sections": result["results"]["steps"].get("script", {}).get("sections", []),
+            "full_narration": result["results"]["steps"].get("script", {}).get("full_narration", "")
+        }
+
+        quality_result = task_quality_check(
+            video_file=result["results"]["video_file"],
+            script_data=script_data,
+            is_short=False,
+            threshold=quality_threshold
+        )
+
+        result["results"]["steps"]["quality_check"] = quality_result
+        result["results"]["quality_score"] = quality_result["score"]
+
+        if not quality_result["passed"]:
+            logger.warning(f"Quality check failed: {quality_result['score']}/{quality_threshold}")
+            if skip_upload_on_fail:
+                logger.warning("Skipping upload due to failed quality check")
+                result["results"]["upload_skipped"] = True
+                result["results"]["upload_skip_reason"] = "Quality check failed"
+                return result
+            else:
+                logger.warning("Proceeding with upload despite failed quality check")
+    else:
+        logger.info("\n[Quality check disabled]")
+
     # Upload
-    logger.info("\n[5/5] UPLOAD")
+    step_num = "6/6" if quality_check_enabled else "5/5"
+    logger.info(f"\n[{step_num}] UPLOAD")
     upload_result = task_upload(
         video_file=result["results"]["video_file"],
         channel_id=channel_id,
@@ -649,15 +777,81 @@ def task_short_pipeline(channel_id: str, topic: str = None) -> Dict[str, Any]:
 def task_short_with_upload(channel_id: str, topic: str = None) -> Dict[str, Any]:
     """
     TASK: Run full Shorts pipeline and upload to YouTube.
+
+    Includes quality check before upload if enabled in channel config.
     """
+    import yaml
+
     # Run pipeline
     result = task_short_pipeline(channel_id, topic)
 
     if not result["success"]:
         return result
 
+    # Load channel config for quality check settings
+    with open(PROJECT_ROOT / "config" / "channels.yaml") as f:
+        config = yaml.safe_load(f)
+
+    # Find channel config
+    channel_config = None
+    for ch in config["channels"]:
+        if ch["id"] == channel_id:
+            channel_config = ch
+            break
+
+    # Get quality check settings (from channel or global)
+    global_settings = config.get("global", {})
+    quality_check_enabled = channel_config.get("settings", {}).get(
+        "quality_check_enabled",
+        global_settings.get("quality_check_enabled", False)
+    )
+    quality_threshold = channel_config.get("settings", {}).get(
+        "quality_threshold",
+        global_settings.get("quality_threshold", 70)
+    )
+    skip_upload_on_fail = channel_config.get("settings", {}).get(
+        "skip_upload_on_quality_fail",
+        global_settings.get("skip_upload_on_quality_fail", False)
+    )
+
+    # Quality check
+    if quality_check_enabled:
+        logger.info("\n[5/6] QUALITY CHECK (Shorts)")
+
+        # Build script_data for quality check
+        script_data = {
+            "title": result["results"]["title"],
+            "description": result["results"]["description"],
+            "tags": result["results"]["tags"],
+            "sections": result["results"]["steps"].get("script", {}).get("sections", []),
+            "full_narration": result["results"]["steps"].get("script", {}).get("full_narration", "")
+        }
+
+        quality_result = task_quality_check(
+            video_file=result["results"]["video_file"],
+            script_data=script_data,
+            is_short=True,  # This is a Short
+            threshold=quality_threshold
+        )
+
+        result["results"]["steps"]["quality_check"] = quality_result
+        result["results"]["quality_score"] = quality_result["score"]
+
+        if not quality_result["passed"]:
+            logger.warning(f"Quality check failed: {quality_result['score']}/{quality_threshold}")
+            if skip_upload_on_fail:
+                logger.warning("Skipping upload due to failed quality check")
+                result["results"]["upload_skipped"] = True
+                result["results"]["upload_skip_reason"] = "Quality check failed"
+                return result
+            else:
+                logger.warning("Proceeding with upload despite failed quality check")
+    else:
+        logger.info("\n[Quality check disabled]")
+
     # Upload
-    logger.info("\n[5/5] UPLOAD (Shorts)")
+    step_num = "6/6" if quality_check_enabled else "5/5"
+    logger.info(f"\n[{step_num}] UPLOAD (Shorts)")
     upload_result = task_upload(
         video_file=result["results"]["video_file"],
         channel_id=channel_id,

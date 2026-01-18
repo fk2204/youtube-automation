@@ -569,47 +569,71 @@ class UltraVideoGenerator:
         style: Dict,
         subtitle: str = None
     ) -> Optional[str]:
-        """Create an animated title card."""
+        """
+        Create a clean, professional title card.
+
+        Design principles:
+        - Minimal, clean gradient background (no particles/dots)
+        - Clear typography hierarchy with generous spacing
+        - Subtle vignette for depth
+        - High contrast for text readability
+        - Professional accent line
+        """
         try:
             # Get colors
             primary = style.get("primary_color", "#3498db").lstrip('#')
             primary_rgb = tuple(int(primary[i:i+2], 16) for i in (0, 2, 4))
             secondary = style.get("secondary_color", "#1a1a2e").lstrip('#')
             secondary_rgb = tuple(int(secondary[i:i+2], 16) for i in (0, 2, 4))
-            gradient_colors = style.get("gradient_colors", ["#1a1a2e", "#16213e"])
 
-            # Create gradient background
+            # Create base image
             img = Image.new('RGB', self.resolution, secondary_rgb)
             draw = ImageDraw.Draw(img)
 
-            # Draw animated-looking gradient
+            # Draw clean vertical gradient (dark to slightly lighter, subtle)
             for y in range(self.height):
+                # Smooth gradient from top to bottom
                 ratio = y / self.height
+                # Use a subtle curve for more natural gradient
+                curve = ratio * ratio  # Quadratic easing
                 color = tuple(
-                    int(secondary_rgb[i] * (1 - ratio * 0.3) + primary_rgb[i] * ratio * 0.1)
+                    int(secondary_rgb[i] + (primary_rgb[i] - secondary_rgb[i]) * curve * 0.08)
                     for i in range(3)
                 )
                 draw.line([(0, y), (self.width, y)], fill=color)
 
-            # Add subtle pattern/texture
-            for _ in range(50):
-                x = random.randint(0, self.width)
-                y = random.randint(0, self.height)
-                size = random.randint(2, 8)
-                alpha = random.randint(5, 20)
-                draw.ellipse([x, y, x + size, y + size], fill=tuple(min(255, c + alpha) for c in secondary_rgb))
+            # Add subtle radial vignette for depth (darkens edges)
+            # Create vignette overlay
+            vignette = Image.new('RGB', self.resolution, (0, 0, 0))
+            vignette_draw = ImageDraw.Draw(vignette)
+            center_x, center_y = self.width // 2, self.height // 2
+            max_radius = int(math.sqrt(center_x**2 + center_y**2))
 
-            # Load fonts
+            for r in range(max_radius, 0, -4):
+                # Vignette intensity increases toward edges
+                intensity = int(255 * (1 - (r / max_radius) ** 1.5))
+                vignette_draw.ellipse(
+                    [center_x - r, center_y - r, center_x + r, center_y + r],
+                    fill=(intensity, intensity, intensity)
+                )
+
+            # Blend vignette with base image
+            img = Image.composite(img, Image.new('RGB', self.resolution, (0, 0, 0)), vignette)
+
+            # Recreate draw object after composite
+            draw = ImageDraw.Draw(img)
+
+            # Load fonts with proper sizes for hierarchy
             try:
-                title_font = ImageFont.truetype(self.fonts.get("bold", ""), 80)
-                sub_font = ImageFont.truetype(self.fonts.get("regular", ""), 36)
+                title_font = ImageFont.truetype(self.fonts.get("bold", ""), 72)
+                sub_font = ImageFont.truetype(self.fonts.get("regular", ""), 32)
             except (OSError, IOError) as e:
                 logger.debug(f"Font loading failed, using default: {e}")
                 title_font = ImageFont.load_default()
                 sub_font = ImageFont.load_default()
 
-            # Wrap title
-            max_width = self.width - 200
+            # Wrap title with generous margins
+            max_width = self.width - 300  # More margin for cleaner look
             words = title.split()
             lines = []
             current_line = ""
@@ -626,32 +650,51 @@ class UltraVideoGenerator:
             if current_line:
                 lines.append(current_line)
 
-            # Draw title
-            total_height = len(lines) * 90
-            start_y = (self.height - total_height) // 2 - 30
+            # Calculate layout with proper spacing
+            line_height = 95  # Generous line spacing
+            total_text_height = len(lines[:3]) * line_height
+            if subtitle:
+                total_text_height += 70  # Space for subtitle
 
+            # Center vertically with slight upward offset for visual balance
+            start_y = (self.height - total_text_height) // 2 - 20
+
+            # Draw title lines with clean shadow for depth
             for i, line in enumerate(lines[:3]):
                 bbox = draw.textbbox((0, 0), line, font=title_font)
-                x = (self.width - (bbox[2] - bbox[0])) // 2
-                y = start_y + i * 90
+                text_width = bbox[2] - bbox[0]
+                x = (self.width - text_width) // 2
+                y = start_y + i * line_height
 
-                # Shadow
-                draw.text((x + 4, y + 4), line, font=title_font, fill=(0, 0, 0))
-                # Accent color text
-                draw.text((x, y), line, font=title_font, fill=primary_rgb)
+                # Soft shadow for depth (offset and slightly transparent feel)
+                shadow_offset = 3
+                draw.text((x + shadow_offset, y + shadow_offset), line, font=title_font, fill=(0, 0, 0))
 
-            # Draw subtitle
+                # Main title in white for maximum readability
+                draw.text((x, y), line, font=title_font, fill=(255, 255, 255))
+
+            # Draw subtitle below title with proper spacing
+            subtitle_y = start_y + len(lines[:3]) * line_height + 25
             if subtitle:
-                bbox = draw.textbbox((0, 0), subtitle[:60], font=sub_font)
+                sub_text = subtitle[:60]
+                bbox = draw.textbbox((0, 0), sub_text, font=sub_font)
                 x = (self.width - (bbox[2] - bbox[0])) // 2
-                y = start_y + len(lines) * 90 + 30
-                draw.text((x, y), subtitle[:60], font=sub_font, fill=(200, 200, 200))
+                # Muted color for hierarchy
+                draw.text((x, subtitle_y), sub_text, font=sub_font, fill=(180, 180, 180))
 
-            # Add accent line
-            line_width = 200
-            line_y = start_y + len(lines) * 90 + (80 if subtitle else 20)
+            # Add subtle accent line below content
+            accent_y = subtitle_y + (50 if subtitle else 25)
+            line_width = 120  # Shorter, more elegant line
+            line_thickness = 3
+
+            # Accent line with primary color
             draw.rectangle(
-                [(self.width - line_width) // 2, line_y, (self.width + line_width) // 2, line_y + 4],
+                [
+                    (self.width - line_width) // 2,
+                    accent_y,
+                    (self.width + line_width) // 2,
+                    accent_y + line_thickness
+                ],
                 fill=primary_rgb
             )
 

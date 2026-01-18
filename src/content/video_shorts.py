@@ -546,9 +546,15 @@ class ShortsVideoGenerator:
         subtitle: str = None
     ) -> Optional[str]:
         """
-        Create a title card optimized for vertical Shorts format.
+        Create a clean, professional title card optimized for vertical Shorts format.
 
-        Uses larger fonts for mobile readability.
+        Design principles:
+        - Minimal, clean gradient background (no particles/dots)
+        - Large text for mobile readability
+        - Respects safe zones (top 288px, bottom 672px)
+        - Clear typography hierarchy with generous spacing
+        - Subtle vignette for depth
+        - High contrast for text readability
         """
         try:
             primary = style.get("primary_color", "#3498db").lstrip('#')
@@ -556,28 +562,34 @@ class ShortsVideoGenerator:
             secondary = style.get("secondary_color", "#0a0a14").lstrip('#')
             secondary_rgb = tuple(int(secondary[i:i+2], 16) for i in (0, 2, 4))
 
-            # Create gradient background
+            # Create base image
             img = Image.new('RGB', self.resolution, secondary_rgb)
             draw = ImageDraw.Draw(img)
 
-            # Draw vertical gradient
+            # Draw clean vertical gradient (subtle, dark to slightly lighter)
             for y in range(self.height):
                 ratio = y / self.height
+                # Subtle curve for natural gradient
+                curve = ratio * ratio
                 color = tuple(
-                    int(secondary_rgb[i] * (1 - ratio * 0.3) + primary_rgb[i] * ratio * 0.15)
+                    int(secondary_rgb[i] + (primary_rgb[i] - secondary_rgb[i]) * curve * 0.06)
                     for i in range(3)
                 )
                 draw.line([(0, y), (self.width, y)], fill=color)
 
-            # Add subtle pattern
-            for _ in range(80):
-                x = random.randint(0, self.width)
-                y = random.randint(0, self.height)
-                size = random.randint(2, 10)
-                alpha = random.randint(5, 25)
-                draw.ellipse([x, y, x + size, y + size], fill=tuple(min(255, c + alpha) for c in secondary_rgb))
+            # Add subtle radial vignette for depth
+            center_x, center_y = self.width // 2, self.height // 2
+            max_radius = int((self.width**2 + self.height**2) ** 0.5 / 2)
 
-            # Load fonts (larger for Shorts)
+            # Draw vignette as concentric ellipses (darkens edges)
+            for r in range(max_radius, 0, -6):
+                intensity = int(255 * (1 - (r / max_radius) ** 1.8))
+                draw.ellipse(
+                    [center_x - r, center_y - int(r * 1.8), center_x + r, center_y + int(r * 1.8)],
+                    outline=(intensity, intensity, intensity)
+                )
+
+            # Load fonts (larger for mobile Shorts viewing)
             try:
                 title_font = ImageFont.truetype(self.fonts.get("bold", ""), self.TITLE_FONT_SIZE)
                 sub_font = ImageFont.truetype(self.fonts.get("regular", ""), self.SUBTITLE_FONT_SIZE)
@@ -586,8 +598,13 @@ class ShortsVideoGenerator:
                 title_font = ImageFont.load_default()
                 sub_font = ImageFont.load_default()
 
-            # Wrap title for vertical format (narrower width)
-            max_width = self.width - 120
+            # Calculate safe content area (respecting YouTube UI overlays)
+            safe_top = self.SAFE_ZONE["top"]
+            safe_bottom = self.height - self.SAFE_ZONE["bottom"]
+            safe_center_y = (safe_top + safe_bottom) // 2
+
+            # Wrap title with generous margins for vertical format
+            max_width = self.width - 100  # Generous side margins
             words = title.split()
             lines = []
             current_line = ""
@@ -604,34 +621,51 @@ class ShortsVideoGenerator:
             if current_line:
                 lines.append(current_line)
 
-            # Draw title (centered vertically in upper portion)
-            line_height = self.TITLE_FONT_SIZE + 20
-            total_height = len(lines) * line_height
-            start_y = (self.height // 2) - total_height - 50
+            # Calculate layout with proper spacing
+            line_height = self.TITLE_FONT_SIZE + 25  # Generous line spacing
+            total_text_height = len(lines[:3]) * line_height
+            if subtitle:
+                total_text_height += 60  # Space for subtitle
 
-            for i, line in enumerate(lines[:4]):  # Max 4 lines
+            # Center vertically within safe zone
+            start_y = safe_center_y - (total_text_height // 2) - 30
+
+            # Draw title lines with clean shadow for depth
+            for i, line in enumerate(lines[:3]):  # Max 3 lines for clean look
                 bbox = draw.textbbox((0, 0), line, font=title_font)
-                x = (self.width - (bbox[2] - bbox[0])) // 2
+                text_width = bbox[2] - bbox[0]
+                x = (self.width - text_width) // 2
                 y = start_y + i * line_height
 
-                # Shadow
-                draw.text((x + 4, y + 4), line, font=title_font, fill=(0, 0, 0))
-                # Main text with primary color
-                draw.text((x, y), line, font=title_font, fill=primary_rgb)
+                # Soft shadow for depth
+                shadow_offset = 4
+                draw.text((x + shadow_offset, y + shadow_offset), line, font=title_font, fill=(0, 0, 0))
 
-            # Draw subtitle if provided
+                # Main title in white for maximum readability on mobile
+                draw.text((x, y), line, font=title_font, fill=(255, 255, 255))
+
+            # Draw subtitle with proper spacing
+            subtitle_y = start_y + len(lines[:3]) * line_height + 20
             if subtitle:
-                sub_text = subtitle[:50]
+                sub_text = subtitle[:45]  # Shorter for vertical format
                 bbox = draw.textbbox((0, 0), sub_text, font=sub_font)
                 x = (self.width - (bbox[2] - bbox[0])) // 2
-                y = start_y + len(lines) * line_height + 40
-                draw.text((x, y), sub_text, font=sub_font, fill=(200, 200, 200))
+                # Muted color for visual hierarchy
+                draw.text((x, subtitle_y), sub_text, font=sub_font, fill=(170, 170, 170))
 
-            # Add accent line
-            line_width = 250
-            line_y = start_y + len(lines) * line_height + (100 if subtitle else 40)
+            # Add subtle accent line below content
+            accent_y = subtitle_y + (55 if subtitle else 30)
+            line_width = 100  # Shorter, elegant line for vertical format
+            line_thickness = 4
+
+            # Accent line with primary color
             draw.rectangle(
-                [(self.width - line_width) // 2, line_y, (self.width + line_width) // 2, line_y + 6],
+                [
+                    (self.width - line_width) // 2,
+                    accent_y,
+                    (self.width + line_width) // 2,
+                    accent_y + line_thickness
+                ],
                 fill=primary_rgb
             )
 
