@@ -1,79 +1,179 @@
 # YouTube Channels Configuration
-# Add your YouTube channels here for multi-channel management
+# 3 Faceless Channels for Automated Content
 
 channels:
-  # Channel 1 - Main educational channel
-  - id: "channel_1"
-    name: "Tech Tutorials"
+  # ============================================================
+  # CHANNEL 1: FINANCE & WEALTH BUILDING
+  # CPM: $10-25 (Highest Earning Potential)
+  # ============================================================
+  - id: "money_blueprints"
+    name: "Money Blueprints"
     enabled: true
+    credentials_file: "config/credentials/money_blueprints.json"
 
-    # OAuth credentials file for this channel
-    credentials_file: "config/credentials/channel_1.json"
-
-    # Channel-specific settings
     settings:
-      niche: "programming"
-      target_audience: "beginners"
-      default_privacy: "unlisted"
+      niche: "finance"
+      target_audience: "18-45 year olds interested in wealth building"
+      default_privacy: "unlisted"  # Change to "public" when ready
 
-      # Voice preference for this channel
+      # Professional male voice for authority
       voice: "en-US-GuyNeural"
 
-      # Posting schedule (days of week, 0=Monday)
-      posting_days: [0, 2, 4]  # Monday, Wednesday, Friday
+      # Post Mon, Wed, Fri (optimal for finance content)
+      posting_days: [0, 2, 4]
 
-      # Topics this channel focuses on
+      # Video length target (minutes)
+      target_duration: 8
+
+      # Topics to rotate through
       topics:
-        - "python tutorials"
-        - "web development"
-        - "coding for beginners"
+        - "side hustle ideas that actually work"
+        - "passive income strategies for beginners"
+        - "money mindset and wealth habits"
+        - "how to pay off debt fast"
+        - "investing for beginners explained"
+        - "budgeting tips to save money"
+        - "financial mistakes to avoid"
+        - "trading app tutorials for beginners"
 
-    # Channel branding
     branding:
-      intro_text: "Welcome to Tech Tutorials!"
-      outro_text: "Don't forget to like and subscribe!"
-      watermark: "templates/watermarks/channel_1.png"
+      intro_text: "Welcome to Money Blueprints - your guide to building wealth."
+      outro_text: "If you found value in this video, hit subscribe and turn on notifications. Your financial future starts now."
+      background_color: "#1a1a2e"
+      accent_color: "#00d4aa"
 
-  # Channel 2 - Secondary channel
-  - id: "channel_2"
-    name: "Quick Tips"
+    seo:
+      default_tags:
+        - "money"
+        - "finance"
+        - "wealth"
+        - "passive income"
+        - "side hustle"
+        - "investing"
+        - "personal finance"
+        - "money tips"
+
+  # ============================================================
+  # CHANNEL 2: PSYCHOLOGY & SELF-IMPROVEMENT
+  # CPM: $5-12 (High Engagement)
+  # ============================================================
+  - id: "mind_unlocked"
+    name: "Mind Unlocked"
     enabled: true
-    credentials_file: "config/credentials/channel_2.json"
+    credentials_file: "config/credentials/mind_unlocked.json"
 
     settings:
-      niche: "tips-and-tricks"
-      target_audience: "intermediate"
+      niche: "psychology"
+      target_audience: "curious minds interested in human behavior"
       default_privacy: "unlisted"
+
+      # Calm, authoritative female voice
       voice: "en-US-JennyNeural"
-      posting_days: [1, 3, 5]  # Tuesday, Thursday, Saturday
+
+      # Post Tue, Thu, Sat
+      posting_days: [1, 3, 5]
+
+      target_duration: 10
 
       topics:
-        - "productivity tips"
-        - "software shortcuts"
-        - "tech hacks"
+        - "dark psychology and manipulation tactics"
+        - "stoicism and ancient wisdom"
+        - "psychology facts about human behavior"
+        - "signs of narcissism and toxic people"
+        - "body language secrets and cues"
+        - "motivation and self discipline"
+        - "cognitive biases that affect decisions"
+        - "emotional intelligence tips"
 
     branding:
-      intro_text: "Quick tip of the day!"
-      outro_text: "See you in the next tip!"
+      intro_text: "Welcome to Mind Unlocked - where we decode the mysteries of human psychology."
+      outro_text: "Understanding the mind is the first step to mastering life. Subscribe for more insights."
+      background_color: "#0f0f1a"
+      accent_color: "#9b59b6"
 
-  # Channel 3 - Example disabled channel
-  - id: "channel_3"
-    name: "Deep Dives"
-    enabled: false  # Disabled - won't be used
-    credentials_file: "config/credentials/channel_3.json"
+    seo:
+      default_tags:
+        - "psychology"
+        - "dark psychology"
+        - "stoicism"
+        - "self improvement"
+        - "motivation"
+        - "manipulation"
+        - "body language"
+        - "mindset"
+
+  # ============================================================
+  # CHANNEL 3: STORIES & ENTERTAINMENT
+  # CPM: $4-10 (Viral Potential)
+  # ============================================================
+  - id: "untold_stories"
+    name: "Untold Stories"
+    enabled: true
+    credentials_file: "config/credentials/untold_stories.json"
 
     settings:
-      niche: "in-depth-tutorials"
-      target_audience: "advanced"
+      niche: "storytelling"
+      target_audience: "entertainment seekers who love mysteries and stories"
+      default_privacy: "unlisted"
+
+      # Dramatic, engaging voice for storytelling
       voice: "en-GB-RyanNeural"
 
-# Global channel settings
+      # Post every other day for maximum reach
+      posting_days: [0, 1, 2, 3, 4, 5, 6]
+
+      target_duration: 12
+
+      topics:
+        - "true crime stories and unsolved mysteries"
+        - "scary stories and creepypasta"
+        - "business rise and fall documentaries"
+        - "historical mysteries and secrets"
+        - "reddit stories compilation"
+        - "internet mysteries explained"
+        - "famous disappearances and cold cases"
+        - "conspiracy theories debunked"
+
+    branding:
+      intro_text: "Welcome to Untold Stories. Some stories were never meant to be forgotten."
+      outro_text: "If this story gave you chills, hit that subscribe button. New stories every week."
+      background_color: "#0d0d0d"
+      accent_color: "#e74c3c"
+
+    seo:
+      default_tags:
+        - "true crime"
+        - "scary stories"
+        - "mystery"
+        - "unsolved"
+        - "documentary"
+        - "creepy"
+        - "reddit stories"
+        - "storytelling"
+
+# ============================================================
+# GLOBAL SETTINGS
+# ============================================================
 global:
   # Maximum uploads per day across all channels
-  max_daily_uploads: 5
+  max_daily_uploads: 6
 
   # Minimum hours between uploads to same channel
-  min_hours_between_uploads: 12
+  min_hours_between_uploads: 8
 
   # Rotate content across channels
   content_rotation: true
+
+  # Default video settings
+  default_resolution: [1920, 1080]
+  default_fps: 30
+
+  # Thumbnail settings
+  thumbnail_size: [1280, 720]
+
+  # Upload settings
+  notify_subscribers: true
+  allow_comments: true
+
+  # Safety settings
+  test_mode: true  # Set to false for real uploads

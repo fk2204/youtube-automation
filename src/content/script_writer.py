@@ -392,34 +392,51 @@ Write the complete script now:"""
             logger.error(f"Script generation failed: {e}")
             raise
 
+    def _fix_json(self, json_str: str) -> str:
+        """Fix common JSON issues from LLM outputs."""
+        import re
+        # Remove trailing commas before ] or }
+        json_str = re.sub(r',\s*]', ']', json_str)
+        json_str = re.sub(r',\s*}', '}', json_str)
+        return json_str
+
     def _parse_json_response(self, content: str) -> Dict[str, Any]:
-        """Parse JSON from Claude's response."""
-        # Try to find JSON in the response
+        """Parse JSON from AI response with error handling."""
+        # Try direct parse first
         try:
-            # First, try direct JSON parsing
             return json.loads(content)
         except json.JSONDecodeError:
             pass
+
+        # Extract JSON from content
+        json_str = content
 
         # Try to extract JSON from markdown code block
         if "```json" in content:
             start = content.find("```json") + 7
             end = content.find("```", start)
             json_str = content[start:end].strip()
-            return json.loads(json_str)
-
-        if "```" in content:
+        elif "```" in content:
             start = content.find("```") + 3
             end = content.find("```", start)
             json_str = content[start:end].strip()
-            return json.loads(json_str)
+        else:
+            # Try to find JSON object in text
+            start = content.find("{")
+            end = content.rfind("}") + 1
+            if start != -1 and end > start:
+                json_str = content[start:end]
 
-        # Try to find JSON object in text
-        start = content.find("{")
-        end = content.rfind("}") + 1
-        if start != -1 and end > start:
-            json_str = content[start:end]
+        # Try parsing with fixes
+        try:
             return json.loads(json_str)
+        except json.JSONDecodeError:
+            # Apply fixes and try again
+            fixed = self._fix_json(json_str)
+            try:
+                return json.loads(fixed)
+            except json.JSONDecodeError:
+                pass
 
         raise ValueError("Could not parse JSON from response")
 
