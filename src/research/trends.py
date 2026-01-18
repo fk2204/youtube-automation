@@ -13,6 +13,8 @@ from typing import List, Dict, Optional
 from dataclasses import dataclass
 from datetime import datetime
 from loguru import logger
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+import requests
 
 try:
     from pytrends.request import TrendReq
@@ -46,6 +48,51 @@ class TrendResearcher:
         self.pytrends = TrendReq(hl=language, tz=360)
         logger.info(f"TrendResearcher initialized for {geo}")
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=2, min=4, max=30),
+        retry=retry_if_exception_type((requests.RequestException, ConnectionError, TimeoutError, Exception))
+    )
+    def _build_payload_with_retry(self, kw_list: List[str], cat: int, timeframe: str, geo: str):
+        """Build pytrends payload with retry logic for rate limiting."""
+        self.pytrends.build_payload(kw_list=kw_list, cat=cat, timeframe=timeframe, geo=geo)
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=2, min=4, max=30),
+        retry=retry_if_exception_type((requests.RequestException, ConnectionError, TimeoutError, Exception))
+    )
+    def _get_related_queries_with_retry(self):
+        """Get related queries with retry logic."""
+        return self.pytrends.related_queries()
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=2, min=4, max=30),
+        retry=retry_if_exception_type((requests.RequestException, ConnectionError, TimeoutError, Exception))
+    )
+    def _get_related_topics_with_retry(self):
+        """Get related topics with retry logic."""
+        return self.pytrends.related_topics()
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=2, min=4, max=30),
+        retry=retry_if_exception_type((requests.RequestException, ConnectionError, TimeoutError, Exception))
+    )
+    def _get_interest_over_time_with_retry(self):
+        """Get interest over time with retry logic."""
+        return self.pytrends.interest_over_time()
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=2, min=4, max=30),
+        retry=retry_if_exception_type((requests.RequestException, ConnectionError, TimeoutError, Exception))
+    )
+    def _get_trending_searches_with_retry(self, pn: str):
+        """Get trending searches with retry logic."""
+        return self.pytrends.trending_searches(pn=pn)
+
     def get_trending_topics(
         self,
         seed_keyword: str,
@@ -66,8 +113,8 @@ class TrendResearcher:
         logger.info(f"Researching trends for: {seed_keyword}")
 
         try:
-            # Build payload
-            self.pytrends.build_payload(
+            # Build payload with retry
+            self._build_payload_with_retry(
                 kw_list=[seed_keyword],
                 cat=category,
                 timeframe=timeframe,
@@ -80,7 +127,7 @@ class TrendResearcher:
             related_topics = []
 
             try:
-                related = self.pytrends.related_queries()
+                related = self._get_related_queries_with_retry()
                 if related and seed_keyword in related:
                     rising_data = related[seed_keyword].get("rising")
                     top_data = related[seed_keyword].get("top")
@@ -89,21 +136,21 @@ class TrendResearcher:
                         rising_queries = rising_data["query"].tolist()[:10]
                     if top_data is not None and not top_data.empty:
                         top_queries = top_data["query"].tolist()[:10]
-            except Exception:
-                pass  # Continue without related queries
+            except (KeyError, AttributeError, TypeError) as e:
+                logger.debug(f"Related queries unavailable: {e}")  # Continue without related queries
 
             # Get related topics with safe access
             try:
-                topics = self.pytrends.related_topics()
+                topics = self._get_related_topics_with_retry()
                 if topics and seed_keyword in topics:
                     rising_topics = topics[seed_keyword].get("rising")
                     if rising_topics is not None and not rising_topics.empty:
                         related_topics = rising_topics["topic_title"].tolist()[:10]
-            except Exception:
-                pass  # Continue without related topics
+            except (KeyError, AttributeError, TypeError) as e:
+                logger.debug(f"Related topics unavailable: {e}")  # Continue without related topics
 
             # Get interest over time to determine trend direction
-            interest = self.pytrends.interest_over_time()
+            interest = self._get_interest_over_time_with_retry()
             trend_direction = "stable"
             interest_score = 50
 
@@ -144,7 +191,7 @@ class TrendResearcher:
             logger.success(f"Found {len(trend_topics)} trending topics")
             return trend_topics
 
-        except Exception as e:
+        except (requests.RequestException, ConnectionError, TimeoutError, KeyError, ValueError) as e:
             logger.error(f"Trend research failed: {e}")
             return []
 
@@ -161,14 +208,14 @@ class TrendResearcher:
         logger.info("Fetching realtime trends...")
 
         try:
-            # Get trending searches
-            trends = self.pytrends.trending_searches(pn=self.geo.lower())
+            # Get trending searches with retry
+            trends = self._get_trending_searches_with_retry(pn=self.geo.lower())
 
             if trends is not None and not trends.empty:
                 return trends[0].tolist()[:20]
             return []
 
-        except Exception as e:
+        except (requests.RequestException, ConnectionError, TimeoutError, KeyError, ValueError) as e:
             logger.error(f"Realtime trends failed: {e}")
             return []
 
@@ -194,13 +241,14 @@ class TrendResearcher:
         logger.info(f"Comparing {len(keywords)} keywords...")
 
         try:
-            self.pytrends.build_payload(
+            self._build_payload_with_retry(
                 kw_list=keywords,
+                cat=0,
                 timeframe=timeframe,
                 geo=self.geo
             )
 
-            interest = self.pytrends.interest_over_time()
+            interest = self._get_interest_over_time_with_retry()
 
             if interest.empty:
                 return {k: 0 for k in keywords}
@@ -215,7 +263,7 @@ class TrendResearcher:
 
             return scores
 
-        except Exception as e:
+        except (requests.RequestException, ConnectionError, TimeoutError, KeyError, ValueError) as e:
             logger.error(f"Keyword comparison failed: {e}")
             return {k: 0 for k in keywords}
 
@@ -237,13 +285,14 @@ class TrendResearcher:
         logger.info(f"Analyzing seasonal trends for: {keyword}")
 
         try:
-            self.pytrends.build_payload(
+            self._build_payload_with_retry(
                 kw_list=[keyword],
+                cat=0,
                 timeframe=f"today {years*12}-m",
                 geo=self.geo
             )
 
-            interest = self.pytrends.interest_over_time()
+            interest = self._get_interest_over_time_with_retry()
 
             if interest.empty:
                 return {}
@@ -261,7 +310,7 @@ class TrendResearcher:
                 for i in range(1, 13)
             }
 
-        except Exception as e:
+        except (requests.RequestException, ConnectionError, TimeoutError, KeyError, ValueError) as e:
             logger.error(f"Seasonal analysis failed: {e}")
             return {}
 

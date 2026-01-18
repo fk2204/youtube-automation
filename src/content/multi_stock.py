@@ -23,6 +23,7 @@ from typing import List, Dict, Optional, Union
 from dataclasses import dataclass, field
 from loguru import logger
 from dotenv import load_dotenv
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 # Load environment variables from relative paths (portable)
 _env_paths = [
@@ -60,20 +61,30 @@ class PexelsClient:
         self.api_key = api_key
         self.headers = {"Authorization": api_key}
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((requests.RequestException, ConnectionError, TimeoutError))
+    )
+    def _search_videos_request(self, query: str, count: int) -> requests.Response:
+        """Make the API request for video search with retry logic."""
+        response = requests.get(
+            f"{self.BASE_URL}/videos/search",
+            headers=self.headers,
+            params={
+                "query": query,
+                "per_page": min(count * 2, 80),
+                "orientation": "landscape",
+                "size": "medium"
+            },
+            timeout=30
+        )
+        return response
+
     def search_videos(self, query: str, count: int = 10) -> List[StockClip]:
         """Search Pexels for videos."""
         try:
-            response = requests.get(
-                f"{self.BASE_URL}/videos/search",
-                headers=self.headers,
-                params={
-                    "query": query,
-                    "per_page": min(count * 2, 80),
-                    "orientation": "landscape",
-                    "size": "medium"
-                },
-                timeout=30
-            )
+            response = self._search_videos_request(query, count)
 
             if response.status_code != 200:
                 logger.warning(f"Pexels API error: {response.status_code}")
@@ -119,7 +130,7 @@ class PexelsClient:
 
             return clips
 
-        except Exception as e:
+        except (requests.RequestException, ConnectionError, TimeoutError, KeyError, ValueError) as e:
             logger.error(f"Pexels search failed: {e}")
             return []
 
@@ -152,7 +163,7 @@ class PexelsClient:
 
             return images
 
-        except Exception as e:
+        except (requests.RequestException, ConnectionError, TimeoutError, KeyError, ValueError) as e:
             logger.error(f"Pexels image search failed: {e}")
             return []
 
@@ -165,20 +176,30 @@ class PixabayClient:
     def __init__(self, api_key: str):
         self.api_key = api_key
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((requests.RequestException, ConnectionError, TimeoutError))
+    )
+    def _search_videos_request(self, query: str, count: int) -> requests.Response:
+        """Make the API request for video search with retry logic."""
+        response = requests.get(
+            f"{self.BASE_URL}/videos/",
+            params={
+                "key": self.api_key,
+                "q": query,
+                "per_page": min(count * 2, 200),
+                "video_type": "film",
+                "min_width": 1280
+            },
+            timeout=30
+        )
+        return response
+
     def search_videos(self, query: str, count: int = 10) -> List[StockClip]:
         """Search Pixabay for videos."""
         try:
-            response = requests.get(
-                f"{self.BASE_URL}/videos/",
-                params={
-                    "key": self.api_key,
-                    "q": query,
-                    "per_page": min(count * 2, 200),
-                    "video_type": "film",
-                    "min_width": 1280
-                },
-                timeout=30
-            )
+            response = self._search_videos_request(query, count)
 
             if response.status_code != 200:
                 logger.warning(f"Pixabay API error: {response.status_code}")
@@ -217,7 +238,7 @@ class PixabayClient:
 
             return clips
 
-        except Exception as e:
+        except (requests.RequestException, ConnectionError, TimeoutError, KeyError, ValueError) as e:
             logger.error(f"Pixabay search failed: {e}")
             return []
 
@@ -252,7 +273,7 @@ class PixabayClient:
 
             return images
 
-        except Exception as e:
+        except (requests.RequestException, ConnectionError, TimeoutError, KeyError, ValueError) as e:
             logger.error(f"Pixabay image search failed: {e}")
             return []
 
@@ -567,6 +588,17 @@ class MultiStockProvider:
         logger.info(f"Collected {len(all_clips)} clips ({total_duration}s total) for topic: {topic}")
         return all_clips
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((requests.RequestException, ConnectionError, TimeoutError))
+    )
+    def _download_clip_request(self, download_url: str) -> requests.Response:
+        """Make the download request with retry logic."""
+        response = requests.get(download_url, stream=True, timeout=120)
+        response.raise_for_status()
+        return response
+
     def download_clip(self, clip: StockClip, output_dir: str = None) -> Optional[str]:
         """Download a stock clip to local file."""
         output_dir = output_dir or str(self.cache_dir)
@@ -580,11 +612,7 @@ class MultiStockProvider:
 
         try:
             logger.info(f"Downloading {clip.id} ({clip.duration}s)...")
-            response = requests.get(clip.download_url, stream=True, timeout=120)
-
-            if response.status_code != 200:
-                logger.error(f"Download failed: {response.status_code}")
-                return None
+            response = self._download_clip_request(clip.download_url)
 
             with open(cache_file, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):
@@ -593,7 +621,7 @@ class MultiStockProvider:
             logger.success(f"Downloaded: {clip.id}")
             return str(cache_file)
 
-        except Exception as e:
+        except (requests.RequestException, ConnectionError, TimeoutError, OSError, IOError) as e:
             logger.error(f"Download failed: {e}")
             return None
 
@@ -614,7 +642,7 @@ class MultiStockProvider:
                 with open(cache_file, 'wb') as f:
                     f.write(response.content)
                 return str(cache_file)
-        except Exception as e:
+        except (requests.RequestException, ConnectionError, TimeoutError, OSError, IOError, KeyError) as e:
             logger.error(f"Image download failed: {e}")
 
         return None

@@ -29,6 +29,7 @@ from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from loguru import logger
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 
 # ============================================================
@@ -89,6 +90,11 @@ class GroqProvider(AIProvider):
             raise ValueError("Groq API key required. Set GROQ_API_KEY or pass api_key.")
         logger.info(f"Groq provider: {model}")
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((requests.RequestException, ConnectionError, TimeoutError))
+    )
     def generate(self, prompt: str, max_tokens: int = 4096) -> str:
         response = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
@@ -123,6 +129,11 @@ class GeminiProvider(AIProvider):
             raise ValueError("Google API key required. Set GOOGLE_API_KEY or pass api_key.")
         logger.info(f"Gemini provider: {model}")
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((requests.RequestException, ConnectionError, TimeoutError))
+    )
     def generate(self, prompt: str, max_tokens: int = 4096) -> str:
         response = requests.post(
             f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent",
@@ -149,7 +160,10 @@ class ClaudeProvider(AIProvider):
 
     def __init__(self, api_key: Optional[str] = None, model: str = "claude-sonnet-4-20250514"):
         try:
-            from anthropic import Anthropic
+            from anthropic import Anthropic, APIConnectionError, APITimeoutError, RateLimitError
+            self._api_connection_error = APIConnectionError
+            self._api_timeout_error = APITimeoutError
+            self._rate_limit_error = RateLimitError
         except ImportError:
             raise ImportError("Please install anthropic: pip install anthropic")
 
@@ -161,12 +175,31 @@ class ClaudeProvider(AIProvider):
         logger.info(f"Claude provider: {model}")
 
     def generate(self, prompt: str, max_tokens: int = 4096) -> str:
-        response = self.client.messages.create(
-            model=self.model,
-            max_tokens=max_tokens,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        return response.content[0].text
+        return self._generate_with_retry(prompt, max_tokens)
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((ConnectionError, TimeoutError))
+    )
+    def _generate_with_retry(self, prompt: str, max_tokens: int) -> str:
+        """Generate with retry logic for network errors (not auth errors)."""
+        try:
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=max_tokens,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            return response.content[0].text
+        except self._api_connection_error as e:
+            # Re-raise as ConnectionError for retry
+            raise ConnectionError(str(e)) from e
+        except self._api_timeout_error as e:
+            # Re-raise as TimeoutError for retry
+            raise TimeoutError(str(e)) from e
+        except self._rate_limit_error as e:
+            # Re-raise as ConnectionError for retry (rate limits are temporary)
+            raise ConnectionError(str(e)) from e
 
 
 class OpenAIProvider(AIProvider):
@@ -185,6 +218,11 @@ class OpenAIProvider(AIProvider):
             raise ValueError("OpenAI API key required. Set OPENAI_API_KEY or pass api_key.")
         logger.info(f"OpenAI provider: {model}")
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((requests.RequestException, ConnectionError, TimeoutError))
+    )
     def generate(self, prompt: str, max_tokens: int = 4096) -> str:
         response = requests.post(
             "https://api.openai.com/v1/chat/completions",
@@ -490,7 +528,7 @@ Generate the full {duration}-minute script now:"""
             logger.success(f"Script generated: {len(video_script.sections)} sections")
             return video_script
 
-        except Exception as e:
+        except (requests.RequestException, ConnectionError, TimeoutError, json.JSONDecodeError, KeyError, ValueError) as e:
             logger.warning(f"Complex script failed, trying simple format: {e}")
 
             # Fallback to simpler prompt for smaller models
@@ -582,7 +620,7 @@ Just write the narration text, no JSON or formatting needed. Write naturally as 
                 thumbnail_idea=f"Bold text with '{topic[:20]}' overlay"
             )
 
-        except Exception as e:
+        except (requests.RequestException, ConnectionError, TimeoutError, KeyError, ValueError) as e:
             logger.error(f"Simple script generation also failed: {e}")
             raise
 
@@ -697,8 +735,8 @@ Return as a JSON array of strings:
                 start = content.find("[")
                 end = content.rfind("]") + 1
                 return json.loads(content[start:end])
-        except:
-            pass
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.debug(f"Title variations JSON parsing failed: {e}")
 
         return [f"Tutorial: {topic}"]  # Fallback
 

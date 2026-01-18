@@ -200,12 +200,13 @@ class ShortsVideoGenerator:
         try:
             from .multi_stock import MultiStockProvider
             self.stock = MultiStockProvider()
-        except Exception as e:
+        except ImportError as e:
             logger.warning(f"Multi-stock provider unavailable: {e}")
             try:
                 from .stock_footage import StockFootage
                 self.stock = StockFootage()
-            except:
+            except ImportError as e:
+                logger.warning(f"Stock footage provider unavailable: {e}")
                 self.stock = None
 
         # Temp directory
@@ -287,7 +288,7 @@ class ShortsVideoGenerator:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             if result.returncode == 0 and result.stdout.strip():
                 return float(result.stdout.strip())
-        except Exception as e:
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError, ValueError) as e:
             logger.warning(f"FFprobe failed: {e}")
 
         return os.path.getsize(audio_file) / 16000
@@ -348,7 +349,7 @@ class ShortsVideoGenerator:
             if os.path.exists(output_path):
                 return output_path
 
-        except Exception as e:
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError) as e:
             logger.error(f"Crop to vertical failed: {e}")
 
         return None
@@ -477,7 +478,7 @@ class ShortsVideoGenerator:
             logger.warning("Ken Burns failed, using simple crop")
             return self._create_simple_clip(input_path, output_path, duration, style)
 
-        except Exception as e:
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError) as e:
             logger.error(f"Ken Burns clip failed: {e}")
             return None
 
@@ -533,7 +534,7 @@ class ShortsVideoGenerator:
             subprocess.run(cmd, capture_output=True, timeout=120)
             return output_path if os.path.exists(output_path) else None
 
-        except Exception as e:
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError) as e:
             logger.error(f"Simple clip failed: {e}")
             return None
 
@@ -580,7 +581,8 @@ class ShortsVideoGenerator:
             try:
                 title_font = ImageFont.truetype(self.fonts.get("bold", ""), self.TITLE_FONT_SIZE)
                 sub_font = ImageFont.truetype(self.fonts.get("regular", ""), self.SUBTITLE_FONT_SIZE)
-            except:
+            except (OSError, IOError) as e:
+                logger.debug(f"Font loading failed, using default: {e}")
                 title_font = ImageFont.load_default()
                 sub_font = ImageFont.load_default()
 
@@ -636,7 +638,7 @@ class ShortsVideoGenerator:
             img.save(output_path)
             return output_path
 
-        except Exception as e:
+        except (OSError, IOError, ValueError) as e:
             logger.error(f"Title card creation failed: {e}")
             return None
 
@@ -666,7 +668,8 @@ class ShortsVideoGenerator:
             # Load font (research: 40-56px optimal)
             try:
                 font = ImageFont.truetype(self.fonts.get("bold", ""), self.MIN_FONT_SIZE)
-            except:
+            except (OSError, IOError) as e:
+                logger.debug(f"Font loading failed, using default: {e}")
                 font = ImageFont.load_default()
 
             # Calculate safe area for text (avoiding YouTube UI)
@@ -737,7 +740,7 @@ class ShortsVideoGenerator:
             img.save(output_path)
             return output_path
 
-        except Exception as e:
+        except (OSError, IOError, ValueError) as e:
             logger.error(f"Text overlay creation failed: {e}")
             return None
 
@@ -793,7 +796,7 @@ class ShortsVideoGenerator:
 
             return output_path if os.path.exists(output_path) else None
 
-        except Exception as e:
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError, IOError) as e:
             logger.error(f"Gradient background failed: {e}")
             return None
 
@@ -1038,7 +1041,7 @@ class ShortsVideoGenerator:
             else:
                 logger.error(f"Final video creation failed: {result.stderr.decode()[:500]}")
 
-        except Exception as e:
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError, IOError) as e:
             logger.error(f"Short creation failed: {e}")
             import traceback
             traceback.print_exc()
@@ -1051,8 +1054,8 @@ class ShortsVideoGenerator:
             for f in self.temp_dir.glob("*"):
                 if f.is_file():
                     f.unlink()
-        except:
-            pass
+        except (OSError, IOError) as e:
+            logger.debug(f"Cleanup failed: {e}")
 
     def add_background_music(
         self,
@@ -1116,7 +1119,7 @@ class ShortsVideoGenerator:
             else:
                 logger.error(f"Failed to add music: {result.stderr.decode()[:200]}")
 
-        except Exception as e:
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError) as e:
             logger.error(f"Add music failed: {e}")
 
         return None

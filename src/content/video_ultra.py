@@ -176,12 +176,13 @@ class UltraVideoGenerator:
         try:
             from .multi_stock import MultiStockProvider
             self.stock = MultiStockProvider()
-        except Exception as e:
+        except ImportError as e:
             logger.warning(f"Multi-stock provider unavailable: {e}")
             try:
                 from .stock_footage import StockFootage
                 self.stock = StockFootage()
-            except:
+            except ImportError as e:
+                logger.warning(f"Stock footage provider unavailable: {e}")
                 self.stock = None
 
         # Temp directory
@@ -264,7 +265,7 @@ class UltraVideoGenerator:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             if result.returncode == 0 and result.stdout.strip():
                 return float(result.stdout.strip())
-        except Exception as e:
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError, ValueError) as e:
             logger.warning(f"FFprobe failed: {e}")
 
         # Fallback
@@ -404,7 +405,7 @@ class UltraVideoGenerator:
             logger.warning("Ken Burns failed, using simple scale")
             return self._create_simple_clip(input_path, output_path, duration, style)
 
-        except Exception as e:
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError) as e:
             logger.error(f"Ken Burns clip failed: {e}")
             return None
 
@@ -459,7 +460,7 @@ class UltraVideoGenerator:
             subprocess.run(cmd, capture_output=True, timeout=120)
             return output_path if os.path.exists(output_path) else None
 
-        except Exception as e:
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError) as e:
             logger.error(f"Simple clip failed: {e}")
             return None
 
@@ -496,7 +497,8 @@ class UltraVideoGenerator:
 
             try:
                 font = ImageFont.truetype(font_path, 42) if font_path else ImageFont.load_default()
-            except:
+            except (OSError, IOError) as e:
+                logger.debug(f"Font loading failed, using default: {e}")
                 font = ImageFont.load_default()
 
             # Calculate text size
@@ -556,7 +558,7 @@ class UltraVideoGenerator:
             img.save(output_path)
             return output_path
 
-        except Exception as e:
+        except (OSError, IOError, ValueError) as e:
             logger.error(f"Lower third creation failed: {e}")
             return None
 
@@ -601,7 +603,8 @@ class UltraVideoGenerator:
             try:
                 title_font = ImageFont.truetype(self.fonts.get("bold", ""), 80)
                 sub_font = ImageFont.truetype(self.fonts.get("regular", ""), 36)
-            except:
+            except (OSError, IOError) as e:
+                logger.debug(f"Font loading failed, using default: {e}")
                 title_font = ImageFont.load_default()
                 sub_font = ImageFont.load_default()
 
@@ -655,7 +658,7 @@ class UltraVideoGenerator:
             img.save(output_path)
             return output_path
 
-        except Exception as e:
+        except (OSError, IOError, ValueError) as e:
             logger.error(f"Title card creation failed: {e}")
             return None
 
@@ -781,7 +784,7 @@ class UltraVideoGenerator:
 
             return output_path if os.path.exists(output_path) else None
 
-        except Exception as e:
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError, IOError) as e:
             logger.error(f"Gradient background failed: {e}")
             return None
 
@@ -1017,7 +1020,7 @@ class UltraVideoGenerator:
             else:
                 logger.error(f"Final video creation failed: {result.stderr.decode()[:500] if hasattr(result, 'stderr') else 'unknown error'}")
 
-        except Exception as e:
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError, IOError) as e:
             logger.error(f"Video creation failed: {e}")
             import traceback
             traceback.print_exc()
@@ -1030,8 +1033,8 @@ class UltraVideoGenerator:
             for f in self.temp_dir.glob("*"):
                 if f.is_file():
                     f.unlink()
-        except:
-            pass
+        except (OSError, IOError) as e:
+            logger.debug(f"Cleanup failed: {e}")
 
     def concatenate_with_crossfade(
         self,
@@ -1118,7 +1121,7 @@ class UltraVideoGenerator:
             logger.warning("Crossfade failed, falling back to simple concat")
             return self._simple_concat(segment_files, output_path)
 
-        except Exception as e:
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError) as e:
             logger.error(f"Crossfade concatenation failed: {e}")
             return self._simple_concat(segment_files, output_path)
 
@@ -1205,7 +1208,7 @@ class UltraVideoGenerator:
             logger.warning("Music mixing failed, returning original")
             return video_file
 
-        except Exception as e:
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError) as e:
             logger.error(f"Background music failed: {e}")
             return video_file
 
@@ -1317,7 +1320,7 @@ class UltraVideoGenerator:
             logger.warning("Subtitle filter failed, trying drawtext")
             return self._burn_captions_drawtext(video_file, captions, output_file, style)
 
-        except Exception as e:
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError) as e:
             logger.error(f"Caption burning failed: {e}")
             return video_file
 
@@ -1336,7 +1339,7 @@ class UltraVideoGenerator:
 
             return os.path.exists(output_path)
 
-        except Exception as e:
+        except (OSError, IOError, KeyError) as e:
             logger.error(f"SRT creation failed: {e}")
             return False
 
@@ -1405,7 +1408,7 @@ class UltraVideoGenerator:
 
             return video_file
 
-        except Exception as e:
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError) as e:
             logger.error(f"Drawtext caption fallback failed: {e}")
             return video_file
 

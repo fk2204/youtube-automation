@@ -102,7 +102,7 @@ class TextToSpeech:
             logger.success(f"Audio saved: {output_file}")
             return str(output_path)
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, IOError) as e:
             logger.error(f"TTS generation failed: {e}")
             raise
 
@@ -167,7 +167,7 @@ class TextToSpeech:
                 "subtitles": subtitle_file
             }
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, IOError) as e:
             logger.error(f"TTS with subtitles failed: {e}")
             raise
 
