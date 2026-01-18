@@ -185,10 +185,46 @@ print(result.video_url)
 - Edge-TTS may be rate-limited with heavy use
 - YouTube API has 10,000 quota units/day limit
 
+## Claude Code Preferences
+
+When working on this project, Claude should:
+
+1. **Always use subagents** for complex tasks to save tokens:
+   - Use `Task` tool with `run_in_background=true` for heavy work
+   - Launch multiple agents in parallel when tasks are independent
+   - Examples: testing, research, implementing features, code review
+
+2. **Parallel execution** - Run independent tasks simultaneously:
+   ```
+   Task 1: Research/exploration  ─┐
+   Task 2: Code implementation   ─┼─> All run in parallel
+   Task 3: Testing               ─┘
+   ```
+
+3. **Use automation scripts** instead of manual commands:
+   - `python run.py video <channel>` for video creation
+   - `python run.py short <channel>` for Shorts
+   - `python run.py daily-all` for full automation
+
+4. **Track progress** with TodoWrite for multi-step tasks
+
+5. **Commit frequently** with descriptive messages
+
+## Recent Updates (2026-01)
+
+- [x] YouTube Shorts support (1080x1920 vertical)
+- [x] Research-backed optimizations (safe zones, 30s optimal duration)
+- [x] Smart stock footage matching (niche-specific keywords)
+- [x] SQLite database tracking
+- [x] Shorts scheduler (post after regular videos)
+- [x] Background music support (15% volume)
+
 ## Future Improvements
 
 - [ ] Add screen recording simulation with Playwright
 - [ ] Implement CrewAI multi-agent workflow
 - [ ] Add video analytics tracking
-- [ ] Support YouTube Shorts format
 - [ ] Add A/B testing for thumbnails
+- [ ] Crossfade transitions between segments
+- [ ] Animated gradient fallbacks
+- [ ] Burned-in captions support
