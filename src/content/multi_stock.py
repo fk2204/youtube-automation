@@ -263,32 +263,105 @@ class MultiStockProvider:
     Combines Pexels and Pixabay for maximum variety.
     """
 
-    # Enhanced niche keywords with more variety
+    # Topic-specific keyword mappings for smarter stock footage matching
     NICHE_KEYWORDS = {
-        "finance": {
-            "primary": ["money", "business", "stock market", "investment", "finance"],
-            "secondary": ["laptop work", "office", "success", "growth", "wealthy lifestyle"],
-            "abstract": ["gold coins", "dollar bills", "trading charts", "calculator", "bank"]
-        },
         "psychology": {
-            "primary": ["brain", "mind", "thinking person", "meditation", "psychology"],
-            "secondary": ["abstract thoughts", "contemplation", "mental health", "therapy", "emotions"],
-            "abstract": ["neurons", "silhouette thinking", "mirror reflection", "dark mood", "introspection"]
+            "narcissism": ["manipulative person", "toxic relationship", "gaslighting", "emotional abuse", "fake smile", "controlling behavior", "sad person", "argument couple"],
+            "anxiety": ["stressed person", "worried face", "panic", "breathing exercise", "calm meditation"],
+            "motivation": ["success celebration", "goal achievement", "determined person", "workout motivation"],
+            "depression": ["sad person", "loneliness", "dark room", "isolation", "empty room"],
+            "relationships": ["couple talking", "family conflict", "communication", "listening", "emotional support"],
+            "trauma": ["broken glass", "dark memories", "healing process", "therapy session", "recovery"],
+            "self_esteem": ["mirror reflection", "confident person", "self doubt", "body image", "positive affirmation"],
+            "default": ["brain", "thinking person", "psychology session", "mental health"]
         },
         "storytelling": {
-            "primary": ["mystery", "dark cinematic", "suspense", "investigation", "documentary"],
-            "secondary": ["abandoned building", "fog night", "crime scene", "detective", "evidence"],
-            "abstract": ["old photographs", "newspaper", "shadows", "flashlight dark", "rain window"]
+            "disappearance": ["missing person poster", "police investigation", "abandoned place", "old photographs", "detective", "search party"],
+            "crime": ["crime scene tape", "police lights", "courtroom", "evidence", "investigation"],
+            "mystery": ["dark forest", "fog", "abandoned building", "eerie location", "night scene"],
+            "horror": ["haunted house", "dark corridor", "creepy atmosphere", "night forest", "shadow figure"],
+            "true_crime": ["police car", "handcuffs", "jail cell", "trial courtroom", "news broadcast"],
+            "historical": ["old film footage", "vintage photos", "historical documents", "archive footage", "sepia tone"],
+            "default": ["documentary footage", "historical photos", "newspaper", "timeline"]
+        },
+        "finance": {
+            "investing": ["stock market", "trading screen", "money growth", "investment chart"],
+            "budgeting": ["calculator money", "savings jar", "piggy bank", "budget planning"],
+            "passive_income": ["laptop money", "rental property", "dividend stocks", "online business"],
+            "crypto": ["bitcoin", "cryptocurrency", "blockchain", "digital currency", "crypto trading"],
+            "debt": ["credit card", "bills pile", "financial stress", "debt payoff", "money worry"],
+            "wealth": ["luxury lifestyle", "expensive car", "mansion", "yacht", "wealthy person"],
+            "retirement": ["elderly couple", "retirement planning", "pension", "golden years", "senior lifestyle"],
+            "default": ["money", "business meeting", "office work", "financial planning"]
         },
         "technology": {
-            "primary": ["coding", "computer", "technology", "programming", "software"],
-            "secondary": ["data center", "circuit board", "futuristic", "digital", "artificial intelligence"],
-            "abstract": ["binary code", "network", "cyber", "hologram", "innovation"]
+            "ai": ["artificial intelligence", "robot", "machine learning", "neural network", "futuristic"],
+            "coding": ["programming", "developer", "code screen", "software development", "computer coding"],
+            "cybersecurity": ["hacker", "data security", "encryption", "cyber attack", "firewall"],
+            "gadgets": ["smartphone", "laptop", "tech devices", "electronics", "innovation"],
+            "default": ["technology", "computer", "digital", "circuit board", "data center"]
         },
         "motivation": {
-            "primary": ["success", "achievement", "winning", "champion", "determination"],
-            "secondary": ["mountain climbing", "sunrise", "running athlete", "gym workout", "celebration"],
-            "abstract": ["road ahead", "eagle flying", "lion", "fire", "storm"]
+            "fitness": ["gym workout", "running", "exercise", "training", "athlete"],
+            "success": ["celebration", "trophy", "achievement", "winning", "podium"],
+            "entrepreneurship": ["startup", "business owner", "hustle", "working late", "entrepreneur"],
+            "mindset": ["meditation", "focus", "determination", "mindfulness", "positive thinking"],
+            "default": ["success celebration", "goal achievement", "determined person", "sunrise motivation"]
+        },
+        "health": {
+            "fitness": ["workout", "gym", "exercise", "running", "yoga"],
+            "nutrition": ["healthy food", "vegetables", "cooking", "meal prep", "diet"],
+            "mental_health": ["meditation", "therapy", "relaxation", "stress relief", "self care"],
+            "medical": ["doctor", "hospital", "medical equipment", "healthcare", "treatment"],
+            "default": ["healthy lifestyle", "wellness", "medical", "fitness"]
+        }
+    }
+
+    # Keywords/phrases that map to sub-topics for detection
+    SUBTOPIC_TRIGGERS = {
+        "psychology": {
+            "narcissism": ["narciss", "manipulat", "toxic", "gaslight", "emotional abuse", "covert", "supply", "flying monkey"],
+            "anxiety": ["anxiet", "anxious", "worry", "panic", "nervous", "stress", "overwhelm"],
+            "motivation": ["motivat", "inspire", "achiev", "success", "goal", "discipline", "habit"],
+            "depression": ["depress", "sad", "lonely", "hopeless", "empty", "meaningless"],
+            "relationships": ["relationship", "partner", "marriage", "dating", "attachment", "love bomb"],
+            "trauma": ["trauma", "ptsd", "abuse", "survivor", "healing", "recover"],
+            "self_esteem": ["self-esteem", "self esteem", "confidence", "self-worth", "insecur"]
+        },
+        "storytelling": {
+            "disappearance": ["disappear", "missing", "vanish", "gone", "lost person", "search"],
+            "crime": ["murder", "killer", "crime", "criminal", "assault", "robbery"],
+            "mystery": ["mystery", "unsolved", "strange", "unexplained", "bizarre", "weird"],
+            "horror": ["horror", "scary", "terrif", "haunt", "creepy", "paranormal"],
+            "true_crime": ["true crime", "serial", "case", "investigation", "suspect", "trial"],
+            "historical": ["history", "historical", "ancient", "century", "war", "past"]
+        },
+        "finance": {
+            "investing": ["invest", "stock", "market", "portfolio", "dividend", "etf", "index fund"],
+            "budgeting": ["budget", "saving", "frugal", "expense", "spending", "money management"],
+            "passive_income": ["passive", "income stream", "side hustle", "affiliate", "royalt"],
+            "crypto": ["crypto", "bitcoin", "ethereum", "blockchain", "nft", "defi"],
+            "debt": ["debt", "credit card", "loan", "payoff", "interest", "owe"],
+            "wealth": ["wealth", "rich", "millionaire", "billionaire", "luxury", "affluent"],
+            "retirement": ["retire", "401k", "pension", "ira", "social security", "golden years"]
+        },
+        "technology": {
+            "ai": ["ai", "artificial intelligence", "machine learning", "chatgpt", "neural", "deep learning"],
+            "coding": ["cod", "program", "develop", "software", "javascript", "python", "web dev"],
+            "cybersecurity": ["security", "hack", "cyber", "breach", "malware", "phishing"],
+            "gadgets": ["phone", "laptop", "device", "gadget", "smart", "wearable"]
+        },
+        "motivation": {
+            "fitness": ["fitness", "workout", "gym", "exercise", "body", "muscle", "weight"],
+            "success": ["success", "win", "achieve", "goal", "champion", "victory"],
+            "entrepreneurship": ["entrepreneur", "business", "startup", "founder", "hustle", "grind"],
+            "mindset": ["mindset", "mental", "focus", "meditat", "mindful", "discipline"]
+        },
+        "health": {
+            "fitness": ["fitness", "workout", "exercise", "gym", "training"],
+            "nutrition": ["nutrition", "diet", "food", "eat", "meal", "vitamin"],
+            "mental_health": ["mental health", "therapy", "anxiety", "depression", "stress"],
+            "medical": ["doctor", "hospital", "treatment", "medicine", "diagnosis"]
         }
     }
 
@@ -314,6 +387,85 @@ class MultiStockProvider:
             logger.warning("No stock footage APIs configured. Add PEXELS_API_KEY or PIXABAY_API_KEY to .env")
         else:
             logger.info(f"MultiStockProvider initialized with {len(self.clients)} sources")
+
+    def _detect_subtopic(self, topic: str, niche: str) -> Optional[str]:
+        """
+        Detect the sub-topic from the topic text.
+
+        Args:
+            topic: The topic text to analyze
+            niche: The content niche
+
+        Returns:
+            Detected sub-topic name or None
+        """
+        topic_lower = topic.lower()
+        triggers = self.SUBTOPIC_TRIGGERS.get(niche, {})
+
+        # Score each sub-topic based on trigger matches
+        scores = {}
+        for subtopic, trigger_words in triggers.items():
+            score = 0
+            for trigger in trigger_words:
+                if trigger.lower() in topic_lower:
+                    # Longer matches are more specific, so weight them higher
+                    score += len(trigger)
+            if score > 0:
+                scores[subtopic] = score
+
+        # Return the highest scoring sub-topic
+        if scores:
+            best_subtopic = max(scores, key=scores.get)
+            logger.debug(f"Detected subtopic '{best_subtopic}' for topic '{topic}' (score: {scores[best_subtopic]})")
+            return best_subtopic
+
+        return None
+
+    def get_smart_keywords(self, topic: str, niche: str) -> List[str]:
+        """
+        Get smart keywords based on topic analysis and niche.
+
+        Analyzes the topic text to detect sub-topics and returns
+        relevant keywords for stock footage searching.
+
+        Args:
+            topic: The topic text to analyze
+            niche: The content niche (e.g., "psychology", "finance", "storytelling")
+
+        Returns:
+            List of relevant keywords for stock footage search
+        """
+        keywords = []
+        niche_data = self.NICHE_KEYWORDS.get(niche, {})
+
+        # Try to detect a specific sub-topic
+        detected_subtopic = self._detect_subtopic(topic, niche)
+
+        if detected_subtopic and detected_subtopic in niche_data:
+            # Use sub-topic specific keywords
+            subtopic_keywords = niche_data[detected_subtopic]
+            keywords.extend(subtopic_keywords)
+            logger.info(f"Using '{detected_subtopic}' keywords for niche '{niche}': {subtopic_keywords[:3]}...")
+        else:
+            # Fall back to default keywords for the niche
+            default_keywords = niche_data.get("default", [])
+            keywords.extend(default_keywords)
+            logger.info(f"Using default keywords for niche '{niche}': {default_keywords[:3]}...")
+
+        # Also add some words extracted from the topic itself
+        topic_words = [w for w in topic.lower().split() if len(w) > 3]
+        keywords.extend(topic_words[:3])
+
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_keywords = []
+        for kw in keywords:
+            kw_lower = kw.lower()
+            if kw_lower not in seen:
+                seen.add(kw_lower)
+                unique_keywords.append(kw)
+
+        return unique_keywords
 
     def search_videos(self, query: str, count: int = 10) -> List[StockClip]:
         """Search all sources for videos."""
@@ -351,6 +503,9 @@ class MultiStockProvider:
         """
         Get diverse clips for a topic with fallbacks.
 
+        Uses smart keyword detection to find topic-specific stock footage
+        instead of generic niche keywords.
+
         Args:
             topic: Main topic to search
             niche: Content niche for keyword expansion
@@ -364,17 +519,11 @@ class MultiStockProvider:
         seen_ids = set()
         total_duration = 0
 
-        # Build search queries
-        queries = [topic]
+        # Use smart keywords based on topic analysis
+        smart_keywords = self.get_smart_keywords(topic, niche)
 
-        # Add words from topic
-        words = topic.lower().split()[:3]
-        queries.extend(words)
-
-        # Add niche keywords
-        niche_kw = self.NICHE_KEYWORDS.get(niche, self.NICHE_KEYWORDS.get("motivation", {}))
-        queries.extend(niche_kw.get("primary", [])[:3])
-        queries.extend(niche_kw.get("secondary", [])[:2])
+        # Build search queries: start with the full topic, then smart keywords
+        queries = [topic] + smart_keywords
 
         # Remove duplicates while preserving order
         seen_queries = set()
@@ -384,8 +533,10 @@ class MultiStockProvider:
                 seen_queries.add(q.lower())
                 unique_queries.append(q)
 
+        logger.info(f"Searching for clips with queries: {unique_queries[:5]}...")
+
         # Search each query
-        for query in unique_queries[:8]:
+        for query in unique_queries[:10]:
             if len(all_clips) >= count and total_duration >= min_total_duration:
                 break
 
@@ -400,16 +551,18 @@ class MultiStockProvider:
                     if len(all_clips) >= count and total_duration >= min_total_duration:
                         break
 
-        # If still not enough, try abstract keywords
+        # If still not enough, try default keywords for the niche
         if total_duration < min_total_duration:
-            abstract_kw = niche_kw.get("abstract", ["abstract background", "cinematic"])
-            for query in abstract_kw[:3]:
-                clips = self.search_videos(query, count=3)
-                for clip in clips:
-                    if clip.id not in seen_ids:
-                        seen_ids.add(clip.id)
-                        all_clips.append(clip)
-                        total_duration += clip.duration
+            niche_data = self.NICHE_KEYWORDS.get(niche, {})
+            default_kw = niche_data.get("default", ["abstract background", "cinematic"])
+            for query in default_kw[:3]:
+                if query.lower() not in seen_queries:
+                    clips = self.search_videos(query, count=3)
+                    for clip in clips:
+                        if clip.id not in seen_ids:
+                            seen_ids.add(clip.id)
+                            all_clips.append(clip)
+                            total_duration += clip.duration
 
         logger.info(f"Collected {len(all_clips)} clips ({total_duration}s total) for topic: {topic}")
         return all_clips
@@ -475,10 +628,33 @@ if __name__ == "__main__":
 
     stock = MultiStockProvider()
 
+    # Test smart keyword detection
+    print("Testing Smart Keyword Detection:\n")
+
+    test_cases = [
+        ("10 Signs You're Dating a Covert Narcissist", "psychology"),
+        ("How Gaslighting Destroys Your Self-Esteem", "psychology"),
+        ("The Missing Girl: A Cold Case Investigation", "storytelling"),
+        ("True Crime: The Serial Killer Next Door", "storytelling"),
+        ("How to Build Passive Income with Dividend Stocks", "finance"),
+        ("Crypto Market Analysis: Bitcoin Price Prediction", "finance"),
+        ("Overcome Anxiety with These Simple Techniques", "psychology"),
+    ]
+
+    for topic, niche in test_cases:
+        keywords = stock.get_smart_keywords(topic, niche)
+        print(f"  Topic: '{topic[:50]}...'")
+        print(f"  Niche: {niche}")
+        print(f"  Keywords: {keywords[:5]}")
+        print()
+
     if stock.clients:
+        print("\n" + "-"*60)
+        print("Testing with API (fetching clips):\n")
+
         clips = stock.get_clips_for_topic(
-            topic="passive income money",
-            niche="finance",
+            topic="How Narcissists Manipulate Their Victims",
+            niche="psychology",
             count=10
         )
 
@@ -486,5 +662,5 @@ if __name__ == "__main__":
         for clip in clips:
             print(f"  [{clip.source}] {clip.id}: {clip.duration}s - {clip.tags[:3]}")
     else:
-        print("No API keys configured!")
+        print("\nNo API keys configured!")
         print("Add PEXELS_API_KEY and/or PIXABAY_API_KEY to config/.env")
