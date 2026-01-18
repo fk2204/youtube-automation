@@ -17,6 +17,7 @@ Usage:
 
 import asyncio
 import os
+import re
 from pathlib import Path
 from typing import Optional, List, Dict
 from loguru import logger
@@ -45,6 +46,14 @@ class TextToSpeech:
         # Australian English
         "en-AU-WilliamNeural": "AU Male - Friendly",
         "en-AU-NatashaNeural": "AU Female - Professional",
+    }
+
+    # Pause durations for SSML (in milliseconds)
+    PAUSE_DURATIONS = {
+        "short": 300,   # After comma
+        "medium": 500,  # After period, semicolon
+        "long": 800,    # After paragraph breaks, ellipsis
+        "dramatic": 1200  # For dramatic effect
     }
 
     def __init__(self, default_voice: str = "en-US-GuyNeural"):
@@ -104,6 +113,151 @@ class TextToSpeech:
 
         except (ConnectionError, TimeoutError, OSError, IOError) as e:
             logger.error(f"TTS generation failed: {e}")
+            raise
+
+    def add_dramatic_pauses(self, text: str) -> str:
+        """
+        Add SSML pause tags at punctuation for dramatic storytelling effect.
+
+        Inserts pauses after:
+        - Periods: medium pause (500ms)
+        - Commas: short pause (300ms)
+        - Ellipsis (...): long pause (800ms)
+        - Question marks: medium pause (500ms)
+        - Exclamation marks: medium pause (500ms)
+        - Paragraph breaks: long pause (800ms)
+
+        Args:
+            text: Plain text to add pauses to
+
+        Returns:
+            Text with SSML break tags inserted
+        """
+        # Replace ellipsis with long pause
+        text = re.sub(
+            r'\.{3}',
+            f'<break time="{self.PAUSE_DURATIONS["long"]}ms"/>',
+            text
+        )
+
+        # Replace double newlines (paragraph breaks) with long pause
+        text = re.sub(
+            r'\n\s*\n',
+            f' <break time="{self.PAUSE_DURATIONS["long"]}ms"/> ',
+            text
+        )
+
+        # Replace period followed by space with medium pause
+        text = re.sub(
+            r'\.\s+',
+            f'. <break time="{self.PAUSE_DURATIONS["medium"]}ms"/> ',
+            text
+        )
+
+        # Replace question mark followed by space with medium pause
+        text = re.sub(
+            r'\?\s+',
+            f'? <break time="{self.PAUSE_DURATIONS["medium"]}ms"/> ',
+            text
+        )
+
+        # Replace exclamation mark followed by space with medium pause
+        text = re.sub(
+            r'!\s+',
+            f'! <break time="{self.PAUSE_DURATIONS["medium"]}ms"/> ',
+            text
+        )
+
+        # Replace semicolon/colon followed by space with medium pause
+        text = re.sub(
+            r'[;:]\s+',
+            f'; <break time="{self.PAUSE_DURATIONS["medium"]}ms"/> ',
+            text
+        )
+
+        # Replace comma followed by space with short pause
+        text = re.sub(
+            r',\s+',
+            f', <break time="{self.PAUSE_DURATIONS["short"]}ms"/> ',
+            text
+        )
+
+        logger.debug("Added dramatic pauses to text with SSML breaks")
+        return text
+
+    def wrap_ssml(self, text: str, voice: str) -> str:
+        """
+        Wrap text in SSML speak tags for Edge-TTS.
+
+        Args:
+            text: Text (may contain SSML break tags)
+            voice: Voice name for the SSML
+
+        Returns:
+            Complete SSML document
+        """
+        # Edge-TTS uses a simplified SSML format
+        ssml = f"""<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US">
+    <voice name="{voice}">
+        {text}
+    </voice>
+</speak>"""
+        return ssml
+
+    async def generate_with_ssml(
+        self,
+        text: str,
+        output_file: str,
+        voice: Optional[str] = None,
+        rate: str = "+0%",
+        pitch: str = "+0Hz",
+        volume: str = "+0%",
+        add_pauses: bool = False
+    ) -> str:
+        """
+        Generate speech from text with SSML support.
+
+        Args:
+            text: Text to convert (can contain SSML tags or be plain text)
+            output_file: Output audio file path (mp3)
+            voice: Voice to use (default: self.default_voice)
+            rate: Speech rate adjustment (e.g., "+20%", "-10%")
+            pitch: Pitch adjustment (e.g., "+5Hz", "-5Hz")
+            volume: Volume adjustment (e.g., "+10%", "-10%")
+            add_pauses: If True, automatically add dramatic pauses at punctuation
+
+        Returns:
+            Path to the generated audio file
+        """
+        voice = voice or self.default_voice
+
+        # Add dramatic pauses if requested
+        if add_pauses:
+            text = self.add_dramatic_pauses(text)
+            logger.info("Added dramatic pauses for storytelling effect")
+
+        # Ensure output directory exists
+        output_path = Path(output_file)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        logger.info(f"Generating SSML speech: {len(text)} chars -> {output_file}")
+        logger.debug(f"Voice: {voice}, Rate: {rate}, Pitch: {pitch}")
+
+        try:
+            communicate = edge_tts.Communicate(
+                text=text,
+                voice=voice,
+                rate=rate,
+                pitch=pitch,
+                volume=volume
+            )
+            await communicate.save(str(output_path))
+
+            logger.success(f"SSML audio saved: {output_file}")
+            return str(output_path)
+
+        except (ConnectionError, TimeoutError, OSError, IOError) as e:
+            logger.error(f"SSML TTS generation failed: {e}")
             raise
 
     async def generate_with_subtitles(

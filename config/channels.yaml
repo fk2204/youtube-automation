@@ -18,6 +18,14 @@ channels:
 
       # Professional male voice for authority
       voice: "en-US-GuyNeural"
+      voice_settings:
+        rate: "+5%"      # Slightly faster for energy and engagement
+        pitch: "+0Hz"
+        volume: "+0%"
+
+      # Background music settings
+      music_enabled: true           # Enable/disable background music
+      music_volume: 0.12            # Music volume (0.0-1.0), default 12%
 
       # Post Mon, Wed, Fri (optimal for finance content)
       posting_days: [0, 2, 4]
@@ -76,6 +84,14 @@ channels:
 
       # Calm, authoritative female voice
       voice: "en-US-JennyNeural"
+      voice_settings:
+        rate: "-5%"      # Slower for mystery and calm atmosphere
+        pitch: "+0Hz"
+        volume: "+0%"
+
+      # Background music settings
+      music_enabled: true           # Enable/disable background music
+      music_volume: 0.10            # Softer music for psychology (10%)
 
       # Post Tue, Thu, Sat
       posting_days: [1, 3, 5]
@@ -132,6 +148,16 @@ channels:
 
       # Dramatic, engaging voice for storytelling
       voice: "en-GB-RyanNeural"
+      voice_settings:
+        rate: "+0%"      # Normal rate, pauses add drama
+        pitch: "+0Hz"
+        volume: "+0%"
+        use_ssml: true   # Enable SSML for dramatic pauses
+        dramatic_pauses: true  # Add pauses at punctuation
+
+      # Background music settings
+      music_enabled: true           # Enable/disable background music
+      music_volume: 0.15            # Slightly louder for dramatic effect (15%)
 
       # Post every other day for maximum reach
       posting_days: [0, 1, 2, 3, 4, 5, 6]
@@ -198,6 +224,16 @@ global:
 
   # Safety settings
   test_mode: true  # Set to false for real uploads
+
+  # ============================================================
+  # GLOBAL MUSIC SETTINGS (defaults for all channels)
+  # Channel-specific settings override these defaults
+  # ============================================================
+  music:
+    enabled: true               # Enable background music globally
+    volume: 0.12                # Default music volume (0.0-1.0), 12%
+    shorts_volume: 0.15         # Default volume for Shorts (slightly higher)
+    fade_out_duration: 2.0      # Seconds to fade out at video end
 
   # ============================================================
   # GLOBAL SHORTS SCHEDULE (defaults for all channels)

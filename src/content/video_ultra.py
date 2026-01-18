@@ -788,6 +788,54 @@ class UltraVideoGenerator:
             logger.error(f"Gradient background failed: {e}")
             return None
 
+    def _get_alternative_search_terms(self, title: str, niche: str) -> List[str]:
+        """
+        Generate alternative search terms when primary topic search returns nothing.
+
+        Args:
+            title: Original title/topic
+            niche: Content niche
+
+        Returns:
+            List of alternative search terms to try
+        """
+        alternatives = []
+
+        # Extract key words from title (words longer than 3 chars)
+        words = [w.strip('.,!?:;') for w in title.split() if len(w) > 3]
+        if words:
+            # Try pairs of words
+            for i in range(min(3, len(words))):
+                alternatives.append(words[i])
+
+            # Try combining first two meaningful words
+            if len(words) >= 2:
+                alternatives.append(f"{words[0]} {words[1]}")
+
+        # Add niche-specific generic terms as fallback
+        niche_fallbacks = {
+            "finance": ["money", "business", "office", "success", "charts"],
+            "psychology": ["person thinking", "conversation", "emotions", "mental health", "brain"],
+            "storytelling": ["dramatic scene", "mystery", "night city", "documentary", "interview"],
+            "technology": ["technology", "computer", "digital", "innovation", "future"],
+            "motivation": ["success", "achievement", "sunrise", "running", "determination"],
+            "health": ["wellness", "exercise", "healthy lifestyle", "medical", "nature"],
+        }
+
+        fallback_terms = niche_fallbacks.get(niche, ["abstract background", "cinematic", "nature", "city"])
+        alternatives.extend(fallback_terms[:3])
+
+        # Remove duplicates while preserving order
+        seen = set()
+        unique = []
+        for term in alternatives:
+            term_lower = term.lower()
+            if term_lower not in seen:
+                seen.add(term_lower)
+                unique.append(term)
+
+        return unique
+
     def create_video(
         self,
         audio_file: str,
@@ -838,11 +886,34 @@ class UltraVideoGenerator:
             title = getattr(script, 'title', str(script)) if script else "Video"
             sections = getattr(script, 'sections', []) if script else []
 
+            # PRE-FLIGHT CHECK: Verify stock provider is available and working
+            stock_available = False
+            if self.stock:
+                if hasattr(self.stock, 'is_available') and self.stock.is_available():
+                    stock_available = True
+                    logger.info("Stock footage provider is available")
+                elif hasattr(self.stock, 'clients') and self.stock.clients:
+                    stock_available = True
+                    logger.info(f"Stock footage provider has {len(self.stock.clients)} source(s)")
+                else:
+                    logger.warning(
+                        "Stock footage provider has no configured API sources!\n"
+                        "  Video will use GRADIENT BACKGROUNDS ONLY (small file size).\n"
+                        "  To fix: Add PEXELS_API_KEY to config/.env"
+                    )
+            else:
+                logger.warning(
+                    "No stock footage provider available!\n"
+                    "  Video will use GRADIENT BACKGROUNDS ONLY (small file size).\n"
+                    "  Expected video size: ~0.1-0.5 MB (much smaller than normal)"
+                )
+
             # Fetch stock footage
             stock_clips = []
             downloaded_paths = []
+            gradient_fallback_count = 0
 
-            if self.stock:
+            if self.stock and stock_available:
                 # Build search terms from script
                 search_terms = [title]
                 if sections:
@@ -863,6 +934,23 @@ class UltraVideoGenerator:
                         count=num_segments + 5,
                         min_total_duration=int(audio_duration * 1.5)
                     )
+
+                    # Try alternative search terms if primary search returns nothing
+                    if not clips:
+                        logger.warning(f"No clips found for primary topic: '{title}'. Trying alternatives...")
+                        alternative_terms = self._get_alternative_search_terms(title, niche)
+                        for alt_term in alternative_terms[:3]:
+                            logger.info(f"Trying alternative search: '{alt_term}'")
+                            clips = self.stock.get_clips_for_topic(
+                                topic=alt_term,
+                                niche=niche,
+                                count=num_segments + 5,
+                                min_total_duration=int(audio_duration * 1.5)
+                            )
+                            if clips:
+                                logger.success(f"Found {len(clips)} clips with alternative term: '{alt_term}'")
+                                break
+
                     for clip in clips:
                         path = self.stock.download_clip(clip)
                         if path:
@@ -878,7 +966,16 @@ class UltraVideoGenerator:
                                 if result:
                                     downloaded_paths.append(result)
 
-                logger.info(f"Downloaded {len(downloaded_paths)} stock clips")
+                # Log warning if insufficient clips found
+                if len(downloaded_paths) < num_segments:
+                    shortfall = num_segments - len(downloaded_paths)
+                    logger.warning(
+                        f"Insufficient stock footage! Only {len(downloaded_paths)} clips for {num_segments} segments.\n"
+                        f"  {shortfall} segment(s) will use GRADIENT FALLBACK.\n"
+                        f"  This will result in smaller video file size."
+                    )
+                else:
+                    logger.success(f"Downloaded {len(downloaded_paths)} stock clips (sufficient for {num_segments} segments)")
 
             # Also get some images for variety
             stock_images = []
@@ -948,6 +1045,15 @@ class UltraVideoGenerator:
                         continue
 
                 # Fallback: gradient background
+                gradient_fallback_count += 1
+                if gradient_fallback_count == 1:
+                    logger.warning(
+                        f"Using GRADIENT FALLBACK for segment {segment_num} "
+                        f"(no stock footage available). Video file will be smaller."
+                    )
+                else:
+                    logger.debug(f"Gradient fallback for segment {segment_num}")
+
                 result = self.create_gradient_background(
                     str(segment_path),
                     style,
@@ -965,11 +1071,19 @@ class UltraVideoGenerator:
                     media_index = 0
                     random.shuffle(all_media)
 
+            # Log summary of gradient fallback usage
+            if gradient_fallback_count > 0:
+                logger.warning(
+                    f"VIDEO QUALITY NOTICE: {gradient_fallback_count}/{segment_num} segments used gradient fallback.\n"
+                    f"  This results in smaller video file size (~0.1-0.5 MB instead of 10-50 MB).\n"
+                    f"  To fix: Ensure PEXELS_API_KEY is set correctly in config/.env"
+                )
+
             if not segment_files:
                 logger.error("No video segments created")
                 return None
 
-            logger.info(f"Created {len(segment_files)} video segments")
+            logger.info(f"Created {len(segment_files)} video segments ({segment_num - gradient_fallback_count} stock, {gradient_fallback_count} gradient)")
 
             # 3. Concatenate all segments with crossfade transitions
             video_only = self.temp_dir / "video_only.mp4"
@@ -1318,30 +1432,64 @@ class UltraVideoGenerator:
         """
         Get path to background music file for a niche.
 
-        Looks in assets/music/ directory for niche-specific or generic music.
+        Searches multiple locations for niche-specific or generic music files.
+        Priority order:
+        1. Niche-specific file (e.g., finance.mp3)
+        2. Generic background.mp3
+        3. Any .mp3 file in the music directory
 
         Args:
             niche: Content niche (finance, psychology, storytelling)
 
         Returns:
-            Path to music file or None
+            Path to music file or None if not found
         """
-        assets_dir = Path(__file__).parent.parent.parent / "assets" / "music"
+        # Build list of directories to search (in priority order)
+        project_root = Path(__file__).parent.parent.parent
+        search_dirs = [
+            project_root / "assets" / "music",           # Primary: assets/music/
+            project_root / "music",                       # Alternative: music/
+            Path.cwd() / "assets" / "music",             # CWD-relative
+            Path.home() / "youtube-automation" / "assets" / "music",  # Home directory
+        ]
 
-        # Try niche-specific first
-        niche_music = assets_dir / f"{niche}.mp3"
-        if niche_music.exists():
-            return str(niche_music)
+        logger.debug(f"Searching for background music for niche: {niche}")
 
-        # Try generic
-        generic_music = assets_dir / "background.mp3"
-        if generic_music.exists():
-            return str(generic_music)
+        for music_dir in search_dirs:
+            if not music_dir.exists():
+                continue
 
-        # Try any mp3 in the directory
-        if assets_dir.exists():
-            for f in assets_dir.glob("*.mp3"):
-                return str(f)
+            logger.debug(f"Checking music directory: {music_dir}")
+
+            # Try niche-specific first (e.g., finance.mp3)
+            niche_music = music_dir / f"{niche}.mp3"
+            if niche_music.exists():
+                logger.info(f"Found niche-specific music: {niche_music}")
+                return str(niche_music)
+
+            # Try generic background.mp3
+            generic_music = music_dir / "background.mp3"
+            if generic_music.exists():
+                logger.info(f"Found generic background music: {generic_music}")
+                return str(generic_music)
+
+            # Try any mp3 in the directory
+            mp3_files = list(music_dir.glob("*.mp3"))
+            if mp3_files:
+                selected = mp3_files[0]
+                logger.info(f"Found fallback music file: {selected}")
+                return str(selected)
+
+        # No music found - log helpful message
+        primary_dir = project_root / "assets" / "music"
+        logger.warning(
+            f"No background music found for niche '{niche}'. "
+            f"To add music, place MP3 files in: {primary_dir}"
+        )
+        logger.info(
+            f"Expected files: {niche}.mp3, background.mp3, or any .mp3 file. "
+            f"See assets/music/README.md for setup instructions."
+        )
 
         return None
 

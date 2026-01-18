@@ -805,7 +805,9 @@ class ShortsVideoGenerator:
         audio_file: str,
         script,
         output_file: str,
-        niche: str = "default"
+        niche: str = "default",
+        background_music: str = None,
+        music_volume: float = None
     ) -> Optional[str]:
         """
         Create a YouTube Short from audio and script.
@@ -815,6 +817,8 @@ class ShortsVideoGenerator:
             script: VideoScript object or dict with title/sections
             output_file: Output video path
             niche: Content niche for styling
+            background_music: Optional path to background music file
+            music_volume: Optional music volume (0.0-1.0), defaults to 0.15
 
         Returns:
             Path to created short video or None
@@ -1034,6 +1038,21 @@ class ShortsVideoGenerator:
             result = subprocess.run(final_cmd, capture_output=True, timeout=300)
 
             if os.path.exists(output_file):
+                # Add background music if provided
+                music_path = background_music or self.get_niche_music_path(niche)
+                if music_path:
+                    logger.info("Adding background music to Short...")
+                    video_with_music = self.temp_dir / "short_with_music.mp4"
+                    music_result = self.add_background_music(
+                        output_file,
+                        music_path,
+                        str(video_with_music),
+                        music_volume
+                    )
+                    if music_result and os.path.exists(str(video_with_music)):
+                        # Replace output with music version
+                        shutil.move(str(video_with_music), output_file)
+
                 file_size = os.path.getsize(output_file) / (1024 * 1024)
                 logger.success(f"YouTube Short created: {output_file} ({file_size:.1f} MB)")
                 self._cleanup()
@@ -1056,6 +1075,71 @@ class ShortsVideoGenerator:
                     f.unlink()
         except (OSError, IOError) as e:
             logger.debug(f"Cleanup failed: {e}")
+
+    def get_niche_music_path(self, niche: str) -> Optional[str]:
+        """
+        Get path to background music file for a niche.
+
+        Searches multiple locations for niche-specific or generic music files.
+        Priority order:
+        1. Niche-specific file (e.g., finance.mp3)
+        2. Generic background.mp3
+        3. Any .mp3 file in the music directory
+
+        Args:
+            niche: Content niche (finance, psychology, storytelling)
+
+        Returns:
+            Path to music file or None if not found
+        """
+        # Build list of directories to search (in priority order)
+        project_root = Path(__file__).parent.parent.parent
+        search_dirs = [
+            project_root / "assets" / "music",           # Primary: assets/music/
+            project_root / "music",                       # Alternative: music/
+            Path.cwd() / "assets" / "music",             # CWD-relative
+            Path.home() / "youtube-automation" / "assets" / "music",  # Home directory
+        ]
+
+        logger.debug(f"Searching for background music for niche: {niche}")
+
+        for music_dir in search_dirs:
+            if not music_dir.exists():
+                continue
+
+            logger.debug(f"Checking music directory: {music_dir}")
+
+            # Try niche-specific first (e.g., finance.mp3)
+            niche_music = music_dir / f"{niche}.mp3"
+            if niche_music.exists():
+                logger.info(f"Found niche-specific music: {niche_music}")
+                return str(niche_music)
+
+            # Try generic background.mp3
+            generic_music = music_dir / "background.mp3"
+            if generic_music.exists():
+                logger.info(f"Found generic background music: {generic_music}")
+                return str(generic_music)
+
+            # Try any mp3 in the directory
+            mp3_files = list(music_dir.glob("*.mp3"))
+            if mp3_files:
+                selected = mp3_files[0]
+                logger.info(f"Found fallback music file: {selected}")
+                return str(selected)
+
+        # No music found - log helpful message
+        primary_dir = project_root / "assets" / "music"
+        logger.warning(
+            f"No background music found for niche '{niche}'. "
+            f"To add music, place MP3 files in: {primary_dir}"
+        )
+        logger.info(
+            f"Expected files: {niche}.mp3, background.mp3, or any .mp3 file. "
+            f"See assets/music/README.md for setup instructions."
+        )
+
+        return None
 
     def add_background_music(
         self,

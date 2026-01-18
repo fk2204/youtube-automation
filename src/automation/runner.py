@@ -113,9 +113,20 @@ def task_script(topic: str, niche: str = "default", duration: int = 5) -> Dict[s
     return {"success": True, "script": script_data}
 
 
-def task_audio(narration: str, output_file: str, voice: str = "en-US-GuyNeural") -> Dict[str, Any]:
+def task_audio(
+    narration: str,
+    output_file: str,
+    voice: str = "en-US-GuyNeural",
+    voice_settings: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
     """
     TASK: Generate audio from narration text.
+
+    Args:
+        narration: Text to convert to speech
+        output_file: Output audio file path
+        voice: Voice to use (e.g., "en-US-GuyNeural")
+        voice_settings: Optional dict with rate, pitch, volume, use_ssml, dramatic_pauses
 
     Returns dict with audio file path.
     """
@@ -123,10 +134,38 @@ def task_audio(narration: str, output_file: str, voice: str = "en-US-GuyNeural")
 
     from src.content.tts import TextToSpeech
 
+    # Extract voice settings with defaults
+    settings = voice_settings or {}
+    rate = settings.get("rate", "+0%")
+    pitch = settings.get("pitch", "+0Hz")
+    volume = settings.get("volume", "+0%")
+    use_ssml = settings.get("use_ssml", False)
+    dramatic_pauses = settings.get("dramatic_pauses", False)
+
+    logger.info(f"Voice settings: rate={rate}, pitch={pitch}, ssml={use_ssml}, pauses={dramatic_pauses}")
+
     tts = TextToSpeech(default_voice=voice)
 
     async def generate():
-        await tts.generate(narration, output_file)
+        if use_ssml or dramatic_pauses:
+            # Use SSML generation with optional dramatic pauses
+            await tts.generate_with_ssml(
+                narration,
+                output_file,
+                rate=rate,
+                pitch=pitch,
+                volume=volume,
+                add_pauses=dramatic_pauses
+            )
+        else:
+            # Standard generation with rate/pitch settings
+            await tts.generate(
+                narration,
+                output_file,
+                rate=rate,
+                pitch=pitch,
+                volume=volume
+            )
 
     asyncio.run(generate())
 
@@ -138,13 +177,29 @@ def task_audio(narration: str, output_file: str, voice: str = "en-US-GuyNeural")
     return {"success": False, "error": "Audio generation failed"}
 
 
-def task_video(audio_file: str, script_data: Dict, output_file: str, niche: str = "default") -> Dict[str, Any]:
+def task_video(
+    audio_file: str,
+    script_data: Dict,
+    output_file: str,
+    niche: str = "default",
+    music_enabled: bool = True,
+    music_volume: Optional[float] = None
+) -> Dict[str, Any]:
     """
     TASK: Create video from audio and script.
+
+    Args:
+        audio_file: Path to narration audio
+        script_data: Script data dict with title, sections, etc.
+        output_file: Output video path
+        niche: Content niche for styling
+        music_enabled: Whether to add background music (default: True)
+        music_volume: Optional music volume override (0.0-1.0)
 
     Returns dict with video file path.
     """
     logger.info(f"Creating video: {output_file}")
+    logger.info(f"Music settings: enabled={music_enabled}, volume={music_volume}")
 
     from src.content.video_ultra import UltraVideoGenerator
     from src.content.script_writer import VideoScript, ScriptSection
@@ -172,11 +227,19 @@ def task_video(audio_file: str, script_data: Dict, output_file: str, niche: str 
     )
 
     generator = UltraVideoGenerator()
+
+    # Determine background music path (None if disabled)
+    background_music = None
+    if music_enabled:
+        background_music = generator.get_niche_music_path(niche)
+
     result = generator.create_video(
         audio_file=audio_file,
         script=script,
         output_file=output_file,
-        niche=niche
+        niche=niche,
+        background_music=background_music,
+        music_volume=music_volume
     )
 
     if result and os.path.exists(result):
@@ -187,7 +250,14 @@ def task_video(audio_file: str, script_data: Dict, output_file: str, niche: str 
     return {"success": False, "error": "Video generation failed"}
 
 
-def task_short(audio_file: str, script_data: Dict, output_file: str, niche: str = "default") -> Dict[str, Any]:
+def task_short(
+    audio_file: str,
+    script_data: Dict,
+    output_file: str,
+    niche: str = "default",
+    music_enabled: bool = True,
+    music_volume: Optional[float] = None
+) -> Dict[str, Any]:
     """
     TASK: Create YouTube Short (vertical video) from audio and script.
 
@@ -197,9 +267,18 @@ def task_short(audio_file: str, script_data: Dict, output_file: str, niche: str 
     - Faster pacing (visual change every 2-3 seconds)
     - Larger text overlays (readable on mobile)
 
+    Args:
+        audio_file: Path to narration audio
+        script_data: Script data dict with title, sections, etc.
+        output_file: Output video path
+        niche: Content niche for styling
+        music_enabled: Whether to add background music (default: True)
+        music_volume: Optional music volume override (0.0-1.0), defaults to 0.15 for Shorts
+
     Returns dict with video file path.
     """
     logger.info(f"Creating YouTube Short: {output_file}")
+    logger.info(f"Music settings: enabled={music_enabled}, volume={music_volume}")
 
     from src.content.video_shorts import ShortsVideoGenerator
     from src.content.script_writer import VideoScript, ScriptSection
@@ -227,11 +306,21 @@ def task_short(audio_file: str, script_data: Dict, output_file: str, niche: str 
     )
 
     generator = ShortsVideoGenerator()
+
+    # Determine background music path (None if disabled)
+    # Use slightly higher volume for Shorts (0.15 default)
+    background_music = None
+    shorts_volume = music_volume if music_volume is not None else 0.15
+    if music_enabled:
+        background_music = generator.get_niche_music_path(niche)
+
     result = generator.create_short(
         audio_file=audio_file,
         script=script,
         output_file=output_file,
-        niche=niche
+        niche=niche,
+        background_music=background_music,
+        music_volume=shorts_volume
     )
 
     if result and os.path.exists(result):
@@ -319,10 +408,21 @@ def task_full_pipeline(channel_id: str, topic: str = None) -> Dict[str, Any]:
 
     niche = channel_config["settings"]["niche"]
     voice = channel_config["settings"]["voice"]
+    voice_settings = channel_config["settings"].get("voice_settings", {})
+
+    # Get music settings from channel config, with fallback to global settings
+    global_music = config.get("global", {}).get("music", {})
+    channel_music_enabled = channel_config["settings"].get("music_enabled", global_music.get("enabled", True))
+    channel_music_volume = channel_config["settings"].get("music_volume", global_music.get("volume", 0.12))
+
+    logger.info(f"Music configuration: enabled={channel_music_enabled}, volume={channel_music_volume}")
 
     results = {
         "channel": channel_id,
         "niche": niche,
+        "voice_settings": voice_settings,
+        "music_enabled": channel_music_enabled,
+        "music_volume": channel_music_volume,
         "steps": {}
     }
 
@@ -356,7 +456,12 @@ def task_full_pipeline(channel_id: str, topic: str = None) -> Dict[str, Any]:
     safe_name = re.sub(r'[^\w\s-]', '', script_data["title"])[:40].replace(' ', '_')
     audio_file = str(PROJECT_ROOT / "output" / f"{safe_name}_audio.mp3")
 
-    audio_result = task_audio(script_data["full_narration"], audio_file, voice=voice)
+    audio_result = task_audio(
+        script_data["full_narration"],
+        audio_file,
+        voice=voice,
+        voice_settings=voice_settings
+    )
     if not audio_result["success"]:
         return {"success": False, "error": "Audio failed", "results": results}
 
@@ -366,7 +471,14 @@ def task_full_pipeline(channel_id: str, topic: str = None) -> Dict[str, Any]:
     logger.info("\n[4/4] VIDEO")
     video_file = str(PROJECT_ROOT / "output" / f"{safe_name}.mp4")
 
-    video_result = task_video(audio_file, script_data, video_file, niche=niche)
+    video_result = task_video(
+        audio_file,
+        script_data,
+        video_file,
+        niche=niche,
+        music_enabled=channel_music_enabled,
+        music_volume=channel_music_volume
+    )
     if not video_result["success"]:
         return {"success": False, "error": "Video failed", "results": results}
 
@@ -437,11 +549,23 @@ def task_short_pipeline(channel_id: str, topic: str = None) -> Dict[str, Any]:
 
     niche = channel_config["settings"]["niche"]
     voice = channel_config["settings"]["voice"]
+    voice_settings = channel_config["settings"].get("voice_settings", {})
+
+    # Get music settings from channel config, with fallback to global settings
+    # For Shorts, use shorts_volume if specified, otherwise use regular volume
+    global_music = config.get("global", {}).get("music", {})
+    channel_music_enabled = channel_config["settings"].get("music_enabled", global_music.get("enabled", True))
+    channel_music_volume = channel_config["settings"].get("music_volume", global_music.get("shorts_volume", 0.15))
+
+    logger.info(f"Shorts music configuration: enabled={channel_music_enabled}, volume={channel_music_volume}")
 
     results = {
         "channel": channel_id,
         "niche": niche,
         "format": "short",
+        "voice_settings": voice_settings,
+        "music_enabled": channel_music_enabled,
+        "music_volume": channel_music_volume,
         "steps": {}
     }
 
@@ -486,7 +610,12 @@ def task_short_pipeline(channel_id: str, topic: str = None) -> Dict[str, Any]:
     safe_name = re.sub(r'[^\w\s-]', '', script_data["title"])[:40].replace(' ', '_')
     audio_file = str(PROJECT_ROOT / "output" / f"{safe_name}_short_audio.mp3")
 
-    audio_result = task_audio(script_data["full_narration"], audio_file, voice=voice)
+    audio_result = task_audio(
+        script_data["full_narration"],
+        audio_file,
+        voice=voice,
+        voice_settings=voice_settings
+    )
     if not audio_result["success"]:
         return {"success": False, "error": "Audio failed", "results": results}
 
@@ -496,7 +625,14 @@ def task_short_pipeline(channel_id: str, topic: str = None) -> Dict[str, Any]:
     logger.info("\n[4/4] VIDEO (Shorts - 1080x1920 vertical)")
     video_file = str(PROJECT_ROOT / "output" / f"{safe_name}_short.mp4")
 
-    video_result = task_short(audio_file, script_data, video_file, niche=niche)
+    video_result = task_short(
+        audio_file,
+        script_data,
+        video_file,
+        niche=niche,
+        music_enabled=channel_music_enabled,
+        music_volume=channel_music_volume
+    )
     if not video_result["success"]:
         return {"success": False, "error": "Short video generation failed", "results": results}
 

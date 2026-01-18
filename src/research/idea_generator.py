@@ -109,50 +109,150 @@ Generate the ideas now:"""
             subreddits: Specific subreddits to search
 
         Returns:
-            Dict with trends and reddit data
+            Dict with trends and reddit data (always returns valid structure)
         """
+        # Input validation
+        if not niche or not isinstance(niche, str):
+            niche = "general"
+            logger.warning("Invalid niche provided, using 'general'")
+
+        niche = niche.strip() or "general"
         logger.info(f"Gathering research for niche: {niche}")
 
         # Get trending topics
         trends = []
         try:
             trend_results = self.trend_researcher.get_trending_topics(niche)
-            trends = [
-                {
-                    "keyword": t.keyword,
-                    "interest": t.interest_score,
-                    "direction": t.trend_direction,
-                    "related": t.related_queries[:5]
-                }
-                for t in trend_results
-            ]
+            # Defensive check - ensure we have a list
+            if trend_results and isinstance(trend_results, list):
+                for t in trend_results:
+                    # Validate each trend object before accessing
+                    if t and hasattr(t, 'keyword') and hasattr(t, 'interest_score'):
+                        related_queries = []
+                        if hasattr(t, 'related_queries') and t.related_queries:
+                            # Safe slice with bounds check
+                            related_queries = list(t.related_queries)[:5] if isinstance(t.related_queries, (list, tuple)) else []
+
+                        trends.append({
+                            "keyword": str(t.keyword) if t.keyword else niche,
+                            "interest": int(t.interest_score) if t.interest_score is not None else 50,
+                            "direction": str(t.trend_direction) if hasattr(t, 'trend_direction') and t.trend_direction else "stable",
+                            "related": related_queries
+                        })
+        except (AttributeError, TypeError, IndexError) as e:
+            logger.warning(f"Trends research data parsing failed: {e}")
         except Exception as e:
             logger.warning(f"Trends research failed: {e}")
 
         # Get Reddit ideas
         reddit_ideas = []
-        if self.reddit_researcher.reddit:
-            try:
+        try:
+            if self.reddit_researcher and hasattr(self.reddit_researcher, 'reddit') and self.reddit_researcher.reddit:
                 ideas = self.reddit_researcher.get_video_ideas(
                     subreddits=subreddits,
                     limit=20
                 )
-                reddit_ideas = [
-                    {
-                        "topic": idea.topic,
-                        "subreddit": idea.subreddit,
-                        "popularity": idea.popularity_score,
-                        "type": idea.idea_type
-                    }
-                    for idea in ideas
-                ]
-            except Exception as e:
-                logger.warning(f"Reddit research failed: {e}")
+                # Defensive check - ensure we have a list
+                if ideas and isinstance(ideas, list):
+                    for idea in ideas:
+                        # Validate each idea object before accessing
+                        if idea and hasattr(idea, 'topic'):
+                            reddit_ideas.append({
+                                "topic": str(idea.topic) if idea.topic else "",
+                                "subreddit": str(idea.subreddit) if hasattr(idea, 'subreddit') and idea.subreddit else "unknown",
+                                "popularity": int(idea.popularity_score) if hasattr(idea, 'popularity_score') and idea.popularity_score is not None else 0,
+                                "type": str(idea.idea_type) if hasattr(idea, 'idea_type') and idea.idea_type else "general"
+                            })
+        except (AttributeError, TypeError, IndexError) as e:
+            logger.warning(f"Reddit research data parsing failed: {e}")
+        except Exception as e:
+            logger.warning(f"Reddit research failed: {e}")
 
         return {
             "trends": trends,
             "reddit": reddit_ideas
         }
+
+    def _get_fallback_ideas(self, niche: str, count: int = 5) -> List[ScoredIdea]:
+        """
+        Generate fallback ideas when AI generation fails.
+
+        Args:
+            niche: Topic niche
+            count: Number of ideas to generate
+
+        Returns:
+            List of generic but usable ScoredIdea objects
+        """
+        fallback_templates = [
+            {
+                "title": f"Complete {niche} Tutorial for Beginners",
+                "description": f"A comprehensive beginner's guide to {niche} covering all the basics you need to know.",
+                "keywords": [niche, "tutorial", "beginners", "guide", "learn"],
+                "trend_score": 70,
+                "competition_score": 60,
+                "engagement_score": 75,
+                "reasoning": "Beginner tutorials have consistent demand and good engagement."
+            },
+            {
+                "title": f"Top 10 {niche} Tips You Need to Know",
+                "description": f"Essential tips and tricks for {niche} that will improve your skills immediately.",
+                "keywords": [niche, "tips", "tricks", "best practices"],
+                "trend_score": 65,
+                "competition_score": 55,
+                "engagement_score": 70,
+                "reasoning": "List-based content performs well and is easy to consume."
+            },
+            {
+                "title": f"{niche} in 2024: What's Changed",
+                "description": f"Discover the latest updates and trends in {niche} for the current year.",
+                "keywords": [niche, "2024", "trends", "updates", "new"],
+                "trend_score": 75,
+                "competition_score": 50,
+                "engagement_score": 65,
+                "reasoning": "Time-sensitive content attracts viewers looking for current information."
+            },
+            {
+                "title": f"Common {niche} Mistakes to Avoid",
+                "description": f"Learn from others' mistakes and avoid these common pitfalls in {niche}.",
+                "keywords": [niche, "mistakes", "avoid", "errors", "problems"],
+                "trend_score": 60,
+                "competition_score": 65,
+                "engagement_score": 70,
+                "reasoning": "Problem-solving content addresses viewer pain points directly."
+            },
+            {
+                "title": f"Advanced {niche} Techniques Explained",
+                "description": f"Take your {niche} skills to the next level with these advanced techniques.",
+                "keywords": [niche, "advanced", "techniques", "pro tips", "expert"],
+                "trend_score": 55,
+                "competition_score": 70,
+                "engagement_score": 60,
+                "reasoning": "Advanced content targets dedicated learners with high retention."
+            },
+        ]
+
+        ideas = []
+        for i, template in enumerate(fallback_templates[:count]):
+            trend = template.get("trend_score", 50)
+            competition = template.get("competition_score", 50)
+            engagement = template.get("engagement_score", 50)
+            overall = int((trend + competition + engagement) / 3)
+
+            ideas.append(ScoredIdea(
+                title=template["title"],
+                description=template["description"],
+                keywords=template.get("keywords", [niche]),
+                niche=niche,
+                score=overall,
+                trend_score=trend,
+                competition_score=competition,
+                engagement_score=engagement,
+                source="fallback",
+                reasoning=template.get("reasoning", "Fallback idea generated due to API failure.")
+            ))
+
+        return ideas
 
     def generate_ideas(
         self,
@@ -169,16 +269,40 @@ Generate the ideas now:"""
             subreddits: Specific subreddits to research
 
         Returns:
-            List of ScoredIdea objects sorted by score
+            List of ScoredIdea objects sorted by score (never empty - falls back to generic ideas)
         """
+        # Input validation
+        if not niche or not isinstance(niche, str):
+            niche = "general topics"
+            logger.warning("Invalid niche provided, using 'general topics'")
+
+        niche = niche.strip() or "general topics"
+        count = max(1, min(count, 20)) if isinstance(count, int) else 5
+
         logger.info(f"Generating {count} video ideas for: {niche}")
 
         # Gather research
-        research = self.gather_research(niche, subreddits)
+        try:
+            research = self.gather_research(niche, subreddits)
+        except Exception as e:
+            logger.warning(f"Research gathering failed: {e}")
+            research = {"trends": [], "reddit": []}
 
-        # Format research for prompt
-        trends_data = json.dumps(research["trends"], indent=2) if research["trends"] else "No trend data available"
-        reddit_data = json.dumps(research["reddit"], indent=2) if research["reddit"] else "No Reddit data available"
+        # Format research for prompt with safe access
+        trends_data = "No trend data available"
+        reddit_data = "No Reddit data available"
+
+        try:
+            if research and isinstance(research, dict):
+                trends_list = research.get("trends", [])
+                reddit_list = research.get("reddit", [])
+
+                if trends_list and isinstance(trends_list, list) and len(trends_list) > 0:
+                    trends_data = json.dumps(trends_list, indent=2)
+                if reddit_list and isinstance(reddit_list, list) and len(reddit_list) > 0:
+                    reddit_data = json.dumps(reddit_list, indent=2)
+        except (TypeError, ValueError) as e:
+            logger.debug(f"Could not serialize research data: {e}")
 
         # Generate ideas with AI
         prompt = self.IDEA_GENERATION_PROMPT.format(
@@ -190,30 +314,76 @@ Generate the ideas now:"""
 
         try:
             response = self.ai.generate(prompt, max_tokens=2000)
+
+            if not response or not isinstance(response, str) or not response.strip():
+                logger.warning("Empty response from AI, using fallback ideas")
+                return self._get_fallback_ideas(niche, count)
+
             ideas_data = self._parse_json_response(response)
 
-            # Convert to ScoredIdea objects
+            # Validate parsed data
+            if not ideas_data or not isinstance(ideas_data, list) or len(ideas_data) == 0:
+                logger.warning("No valid ideas parsed from AI response, using fallback ideas")
+                return self._get_fallback_ideas(niche, count)
+
+            # Convert to ScoredIdea objects with defensive checks
             ideas = []
             for data in ideas_data:
-                # Calculate overall score
-                trend = data.get("trend_score", 50)
-                competition = data.get("competition_score", 50)
-                engagement = data.get("engagement_score", 50)
-                overall = int((trend + competition + engagement) / 3)
+                if not data or not isinstance(data, dict):
+                    continue
 
-                idea = ScoredIdea(
-                    title=data.get("title", "Untitled"),
-                    description=data.get("description", ""),
-                    keywords=data.get("keywords", []),
-                    niche=niche,
-                    score=overall,
-                    trend_score=trend,
-                    competition_score=competition,
-                    engagement_score=engagement,
-                    source="ai_generated",
-                    reasoning=data.get("reasoning", "")
-                )
-                ideas.append(idea)
+                try:
+                    # Safe score extraction with validation
+                    trend = data.get("trend_score", 50)
+                    trend = int(trend) if trend is not None else 50
+                    trend = max(0, min(100, trend))
+
+                    competition = data.get("competition_score", 50)
+                    competition = int(competition) if competition is not None else 50
+                    competition = max(0, min(100, competition))
+
+                    engagement = data.get("engagement_score", 50)
+                    engagement = int(engagement) if engagement is not None else 50
+                    engagement = max(0, min(100, engagement))
+
+                    overall = int((trend + competition + engagement) / 3)
+
+                    # Safe string extraction
+                    title = data.get("title", "Untitled")
+                    title = str(title)[:100] if title else "Untitled"
+
+                    description = data.get("description", "")
+                    description = str(description)[:500] if description else ""
+
+                    keywords = data.get("keywords", [])
+                    if not isinstance(keywords, list):
+                        keywords = [str(keywords)] if keywords else []
+                    keywords = [str(k) for k in keywords[:10] if k]
+
+                    reasoning = data.get("reasoning", "")
+                    reasoning = str(reasoning)[:500] if reasoning else ""
+
+                    idea = ScoredIdea(
+                        title=title,
+                        description=description,
+                        keywords=keywords,
+                        niche=niche,
+                        score=overall,
+                        trend_score=trend,
+                        competition_score=competition,
+                        engagement_score=engagement,
+                        source="ai_generated",
+                        reasoning=reasoning
+                    )
+                    ideas.append(idea)
+                except (TypeError, ValueError, AttributeError) as e:
+                    logger.debug(f"Could not parse idea data: {e}")
+                    continue
+
+            # If no valid ideas were parsed, use fallback
+            if not ideas:
+                logger.warning("No valid ideas could be parsed, using fallback ideas")
+                return self._get_fallback_ideas(niche, count)
 
             # Sort by score
             ideas.sort(key=lambda x: x.score, reverse=True)
@@ -221,9 +391,15 @@ Generate the ideas now:"""
             logger.success(f"Generated {len(ideas)} ideas")
             return ideas
 
+        except json.JSONDecodeError as e:
+            logger.warning(f"JSON parsing failed: {e}, using fallback ideas")
+            return self._get_fallback_ideas(niche, count)
+        except ValueError as e:
+            logger.warning(f"Value error in idea generation: {e}, using fallback ideas")
+            return self._get_fallback_ideas(niche, count)
         except Exception as e:
-            logger.error(f"Idea generation failed: {e}")
-            return []
+            logger.error(f"Idea generation failed: {e}, using fallback ideas")
+            return self._get_fallback_ideas(niche, count)
 
     def _fix_json(self, json_str: str) -> str:
         """Fix common JSON issues from LLM outputs."""
@@ -239,9 +415,27 @@ Generate the ideas now:"""
 
     def _parse_json_response(self, content: str) -> List[Dict]:
         """Parse JSON array from AI response."""
+        # Input validation
+        if not content or not isinstance(content, str):
+            logger.warning("Empty or invalid content for JSON parsing")
+            return []
+
+        content = content.strip()
+        if not content:
+            logger.warning("Empty content after stripping")
+            return []
+
         # Try direct parse first
         try:
-            return json.loads(content)
+            result = json.loads(content)
+            if isinstance(result, list):
+                return result
+            elif isinstance(result, dict):
+                # Wrap single dict in list
+                return [result]
+            else:
+                logger.warning(f"Unexpected JSON type: {type(result)}")
+                return []
         except json.JSONDecodeError:
             pass
 
@@ -249,30 +443,45 @@ Generate the ideas now:"""
         json_str = content
 
         # Try to extract JSON from markdown
-        if "```json" in content:
-            start = content.find("```json") + 7
-            end = content.find("```", start)
-            json_str = content[start:end].strip()
-        elif "```" in content:
-            start = content.find("```") + 3
-            end = content.find("```", start)
-            json_str = content[start:end].strip()
-        else:
-            # Find array in text
-            start = content.find("[")
-            end = content.rfind("]") + 1
-            if start != -1 and end > start:
-                json_str = content[start:end]
+        try:
+            if "```json" in content:
+                start = content.find("```json") + 7
+                end = content.find("```", start)
+                if start > 6 and end > start:
+                    json_str = content[start:end].strip()
+            elif "```" in content:
+                start = content.find("```") + 3
+                end = content.find("```", start)
+                if start > 2 and end > start:
+                    json_str = content[start:end].strip()
+            else:
+                # Find array in text
+                start = content.find("[")
+                end = content.rfind("]") + 1
+                if start != -1 and end > start:
+                    json_str = content[start:end]
+        except (ValueError, IndexError) as e:
+            logger.debug(f"Error extracting JSON from content: {e}")
 
         # Try parsing with fixes
         try:
-            return json.loads(json_str)
+            result = json.loads(json_str)
+            if isinstance(result, list):
+                return result
+            elif isinstance(result, dict):
+                return [result]
+            return []
         except json.JSONDecodeError:
             # Apply fixes and try again
-            fixed = self._fix_json(json_str)
             try:
-                return json.loads(fixed)
-            except json.JSONDecodeError:
+                fixed = self._fix_json(json_str)
+                result = json.loads(fixed)
+                if isinstance(result, list):
+                    return result
+                elif isinstance(result, dict):
+                    return [result]
+                return []
+            except (json.JSONDecodeError, ValueError):
                 pass
 
         raise ValueError("Could not parse JSON from response")
@@ -290,10 +499,20 @@ Generate the ideas now:"""
             subreddits: Subreddits to research
 
         Returns:
-            Best ScoredIdea or None
+            Best ScoredIdea or None (falls back to generic idea if generation fails)
         """
-        ideas = self.generate_ideas(niche, count=5, subreddits=subreddits)
-        return ideas[0] if ideas else None
+        try:
+            ideas = self.generate_ideas(niche, count=5, subreddits=subreddits)
+            # Safe access with validation
+            if ideas and isinstance(ideas, list) and len(ideas) > 0:
+                return ideas[0]
+            logger.warning("No ideas generated, returning fallback")
+            fallback_ideas = self._get_fallback_ideas(niche, 1)
+            return fallback_ideas[0] if fallback_ideas else None
+        except (IndexError, TypeError, AttributeError) as e:
+            logger.error(f"Error getting best idea: {e}")
+            fallback_ideas = self._get_fallback_ideas(niche, 1)
+            return fallback_ideas[0] if fallback_ideas else None
 
     def expand_idea(self, idea: ScoredIdea) -> Dict[str, Any]:
         """
@@ -303,12 +522,28 @@ Generate the ideas now:"""
             idea: ScoredIdea to expand
 
         Returns:
-            Dict with expanded details
+            Dict with expanded details (always returns a valid dict)
         """
+        # Input validation
+        if not idea:
+            logger.warning("No idea provided for expansion")
+            return {"error": "No idea provided", "raw_response": ""}
+
+        # Safe attribute access
+        title = "Untitled"
+        description = ""
+        try:
+            if hasattr(idea, 'title') and idea.title:
+                title = str(idea.title)
+            if hasattr(idea, 'description') and idea.description:
+                description = str(idea.description)
+        except (AttributeError, TypeError):
+            pass
+
         prompt = f"""Expand this video idea into a detailed outline:
 
-Title: {idea.title}
-Description: {idea.description}
+Title: {title}
+Description: {description}
 
 Provide:
 1. Target audience (who is this for?)
@@ -320,12 +555,28 @@ Provide:
 
 Return as JSON."""
 
-        response = self.ai.generate(prompt, max_tokens=1000)
-
         try:
-            return self._parse_json_response(response)
-        except:
-            return {"raw_response": response}
+            response = self.ai.generate(prompt, max_tokens=1000)
+
+            if not response or not isinstance(response, str):
+                logger.warning("Empty response from AI for idea expansion")
+                return {"error": "Empty AI response", "raw_response": ""}
+
+            parsed = self._parse_json_response(response)
+
+            # Ensure we return a dict
+            if isinstance(parsed, list) and len(parsed) > 0:
+                return parsed[0] if isinstance(parsed[0], dict) else {"raw_response": response}
+            elif isinstance(parsed, dict):
+                return parsed
+            else:
+                return {"raw_response": response}
+        except (ValueError, json.JSONDecodeError) as e:
+            logger.debug(f"Could not parse expansion response: {e}")
+            return {"raw_response": response if response else ""}
+        except Exception as e:
+            logger.error(f"Error expanding idea: {e}")
+            return {"error": str(e), "raw_response": ""}
 
 
 # Example usage

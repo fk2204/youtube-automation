@@ -391,23 +391,102 @@ class MultiStockProvider:
         self.clients = []
         self.cache_dir = Path("cache/stock_multi")
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self._api_verified = False
+        self._last_api_error = None
 
         # Initialize Pexels
         pexels_key = os.getenv("PEXELS_API_KEY")
         if pexels_key:
-            self.clients.append(("pexels", PexelsClient(pexels_key)))
-            logger.info("Pexels API initialized")
+            if pexels_key.startswith("#") or pexels_key.lower() in ("your_key_here", "your_pexels_key_here", ""):
+                logger.warning("PEXELS_API_KEY appears to be a placeholder - please set a real API key")
+            else:
+                self.clients.append(("pexels", PexelsClient(pexels_key)))
+                logger.info("Pexels API initialized")
+        else:
+            logger.warning("PEXELS_API_KEY not found in environment. Get free key at: https://www.pexels.com/api/")
 
         # Initialize Pixabay
         pixabay_key = os.getenv("PIXABAY_API_KEY")
         if pixabay_key:
-            self.clients.append(("pixabay", PixabayClient(pixabay_key)))
-            logger.info("Pixabay API initialized")
+            if pixabay_key.startswith("#") or pixabay_key.lower() in ("your_key_here", "your_pixabay_key_here", ""):
+                logger.warning("PIXABAY_API_KEY appears to be a placeholder - please set a real API key")
+            else:
+                self.clients.append(("pixabay", PixabayClient(pixabay_key)))
+                logger.info("Pixabay API initialized")
+        else:
+            logger.debug("PIXABAY_API_KEY not found - Pixabay source disabled (optional)")
 
         if not self.clients:
-            logger.warning("No stock footage APIs configured. Add PEXELS_API_KEY or PIXABAY_API_KEY to .env")
+            logger.error(
+                "NO STOCK FOOTAGE APIs CONFIGURED!\n"
+                "  Videos will only use gradient backgrounds (very small file sizes).\n"
+                "  To fix: Add PEXELS_API_KEY and/or PIXABAY_API_KEY to config/.env\n"
+                "  Get free Pexels key: https://www.pexels.com/api/\n"
+                "  Get free Pixabay key: https://pixabay.com/api/docs/"
+            )
         else:
-            logger.info(f"MultiStockProvider initialized with {len(self.clients)} sources")
+            logger.info(f"MultiStockProvider initialized with {len(self.clients)} source(s): {[c[0] for c in self.clients]}")
+
+    def verify_api_connectivity(self) -> Dict[str, bool]:
+        """
+        Test API connectivity for all configured providers.
+
+        Returns:
+            Dict mapping provider name to connectivity status (True/False)
+        """
+        results = {}
+
+        if not self.clients:
+            logger.error("No API clients configured - cannot verify connectivity")
+            return {"error": "No API clients configured"}
+
+        for name, client in self.clients:
+            try:
+                logger.info(f"Testing {name} API connectivity...")
+                # Try a simple search to verify the API works
+                if hasattr(client, 'search_videos'):
+                    test_clips = client.search_videos("nature", count=1)
+                    if test_clips:
+                        results[name] = True
+                        logger.success(f"{name} API: Connected and working (found {len(test_clips)} test clip)")
+                    else:
+                        results[name] = False
+                        logger.warning(f"{name} API: Connected but returned no results (may be rate limited or invalid key)")
+                else:
+                    results[name] = False
+                    logger.warning(f"{name} API: Client missing search_videos method")
+            except requests.exceptions.HTTPError as e:
+                results[name] = False
+                if e.response and e.response.status_code == 401:
+                    logger.error(f"{name} API: Authentication failed - invalid API key")
+                elif e.response and e.response.status_code == 429:
+                    logger.warning(f"{name} API: Rate limited - try again later")
+                else:
+                    logger.error(f"{name} API: HTTP error {e.response.status_code if e.response else 'unknown'}")
+            except requests.exceptions.ConnectionError:
+                results[name] = False
+                logger.error(f"{name} API: Connection failed - check internet connection")
+            except requests.exceptions.Timeout:
+                results[name] = False
+                logger.error(f"{name} API: Request timed out")
+            except Exception as e:
+                results[name] = False
+                logger.error(f"{name} API: Unexpected error - {type(e).__name__}: {e}")
+
+        self._api_verified = any(results.values())
+        if not self._api_verified:
+            logger.error("All stock footage APIs failed! Videos will use gradient fallbacks.")
+
+        return results
+
+    def is_available(self) -> bool:
+        """
+        Check if at least one stock provider is available.
+
+        Returns:
+            True if at least one provider is configured
+        """
+        return len(self.clients) > 0
 
     def _detect_subtopic(self, topic: str, niche: str) -> Optional[str]:
         """
@@ -600,29 +679,78 @@ class MultiStockProvider:
         return response
 
     def download_clip(self, clip: StockClip, output_dir: str = None) -> Optional[str]:
-        """Download a stock clip to local file."""
+        """
+        Download a stock clip to local file.
+
+        Includes validation to ensure the file was actually downloaded
+        and is a valid video file (not empty or corrupted).
+
+        Args:
+            clip: StockClip object to download
+            output_dir: Optional output directory
+
+        Returns:
+            Path to downloaded file or None if download failed
+        """
         output_dir = output_dir or str(self.cache_dir)
         Path(output_dir).mkdir(parents=True, exist_ok=True)
 
         # Check cache
         cache_file = self.cache_dir / f"{clip.id}.mp4"
         if cache_file.exists():
-            logger.debug(f"Using cached: {clip.id}")
-            return str(cache_file)
+            # Validate cached file is not empty/corrupted
+            file_size = cache_file.stat().st_size
+            if file_size > 10000:  # At least 10KB for a valid video
+                logger.debug(f"Using cached: {clip.id} ({file_size / 1024:.1f} KB)")
+                return str(cache_file)
+            else:
+                logger.warning(f"Cached file {clip.id} is too small ({file_size} bytes) - re-downloading")
+                cache_file.unlink()  # Delete corrupt cache
 
         try:
-            logger.info(f"Downloading {clip.id} ({clip.duration}s)...")
+            logger.info(f"Downloading {clip.id} ({clip.duration}s) from {clip.source}...")
             response = self._download_clip_request(clip.download_url)
 
             with open(cache_file, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     f.write(chunk)
 
-            logger.success(f"Downloaded: {clip.id}")
+            # Validate download
+            if not cache_file.exists():
+                logger.error(f"Download failed: file not created for {clip.id}")
+                return None
+
+            file_size = cache_file.stat().st_size
+            min_valid_size = 10000  # 10KB minimum for a valid video
+
+            if file_size < min_valid_size:
+                logger.error(
+                    f"Download failed: {clip.id} is only {file_size} bytes "
+                    f"(expected at least {min_valid_size} bytes). "
+                    f"API may be returning error response instead of video."
+                )
+                # Try to read and log error response
+                try:
+                    with open(cache_file, 'r', errors='ignore') as f:
+                        content = f.read(500)
+                        if content.strip().startswith(('<', '{', 'error', 'Error')):
+                            logger.error(f"API error response: {content[:200]}")
+                except:
+                    pass
+                cache_file.unlink()  # Delete invalid file
+                return None
+
+            logger.success(f"Downloaded: {clip.id} ({file_size / 1024:.1f} KB)")
             return str(cache_file)
 
         except (requests.RequestException, ConnectionError, TimeoutError, OSError, IOError) as e:
-            logger.error(f"Download failed: {e}")
+            logger.error(f"Download failed for {clip.id}: {type(e).__name__}: {e}")
+            # Clean up partial download
+            if cache_file.exists():
+                try:
+                    cache_file.unlink()
+                except:
+                    pass
             return None
 
     def download_image(self, image: Dict, output_dir: str = None) -> Optional[str]:
@@ -648,11 +776,165 @@ class MultiStockProvider:
         return None
 
 
+def diagnose_stock_api() -> Dict[str, any]:
+    """
+    Diagnostic function to test stock API connectivity and configuration.
+
+    Run this to troubleshoot why videos might only be 0.10 MB (gradient fallback).
+
+    Returns:
+        Dict with diagnostic results
+    """
+    print("\n" + "=" * 70)
+    print("  STOCK FOOTAGE API DIAGNOSTIC")
+    print("=" * 70 + "\n")
+
+    results = {
+        "env_loaded": False,
+        "pexels_key_found": False,
+        "pixabay_key_found": False,
+        "pexels_key_valid": False,
+        "pixabay_key_valid": False,
+        "apis_working": {},
+        "test_download": False,
+        "recommendations": []
+    }
+
+    # Check environment loading
+    from dotenv import load_dotenv
+    env_paths = [
+        Path(__file__).parent.parent.parent / "config" / ".env",
+        Path.cwd() / "config" / ".env",
+    ]
+
+    for env_path in env_paths:
+        if env_path.exists():
+            load_dotenv(env_path)
+            results["env_loaded"] = True
+            print(f"[OK] Environment loaded from: {env_path}")
+            break
+
+    if not results["env_loaded"]:
+        print("[ERROR] No .env file found!")
+        results["recommendations"].append("Create config/.env file with API keys")
+
+    # Check API keys
+    pexels_key = os.getenv("PEXELS_API_KEY", "")
+    pixabay_key = os.getenv("PIXABAY_API_KEY", "")
+
+    # Pexels check
+    if pexels_key:
+        if pexels_key.startswith("#") or pexels_key.lower() in ("your_key_here", ""):
+            print("[WARNING] PEXELS_API_KEY is a placeholder value")
+            results["recommendations"].append("Set a real PEXELS_API_KEY in config/.env")
+        else:
+            results["pexels_key_found"] = True
+            print(f"[OK] PEXELS_API_KEY found ({len(pexels_key)} chars)")
+    else:
+        print("[WARNING] PEXELS_API_KEY not set")
+        results["recommendations"].append("Add PEXELS_API_KEY to config/.env (get free key at https://www.pexels.com/api/)")
+
+    # Pixabay check
+    if pixabay_key:
+        if pixabay_key.startswith("#") or pixabay_key.lower() in ("your_key_here", ""):
+            print("[INFO] PIXABAY_API_KEY is a placeholder value")
+        else:
+            results["pixabay_key_found"] = True
+            print(f"[OK] PIXABAY_API_KEY found ({len(pixabay_key)} chars)")
+    else:
+        print("[INFO] PIXABAY_API_KEY not set (optional)")
+
+    print()
+
+    # Test API connectivity
+    print("Testing API connectivity...\n")
+
+    provider = MultiStockProvider()
+    if provider.clients:
+        api_results = provider.verify_api_connectivity()
+        results["apis_working"] = api_results
+
+        for api_name, is_working in api_results.items():
+            if api_name == "error":
+                print(f"[ERROR] {is_working}")
+            elif is_working:
+                print(f"[OK] {api_name.upper()} API is working")
+                if api_name == "pexels":
+                    results["pexels_key_valid"] = True
+                elif api_name == "pixabay":
+                    results["pixabay_key_valid"] = True
+            else:
+                print(f"[ERROR] {api_name.upper()} API is NOT working")
+                results["recommendations"].append(f"Check your {api_name.upper()}_API_KEY - it may be invalid or expired")
+    else:
+        print("[ERROR] No API clients configured!")
+        results["recommendations"].append("At least one API key (PEXELS or PIXABAY) must be configured")
+
+    print()
+
+    # Test download if API is working
+    if any(results["apis_working"].values()):
+        print("Testing clip search and download...\n")
+        try:
+            clips = provider.search_videos("nature", count=1)
+            if clips:
+                print(f"[OK] Found {len(clips)} test clip(s)")
+                test_path = provider.download_clip(clips[0])
+                if test_path:
+                    file_size = Path(test_path).stat().st_size
+                    print(f"[OK] Successfully downloaded test clip ({file_size / 1024:.1f} KB)")
+                    results["test_download"] = True
+
+                    if file_size < 10000:
+                        print("[WARNING] Downloaded file is suspiciously small - may be an error response")
+                        results["test_download"] = False
+                        results["recommendations"].append("API key may be invalid or rate limited")
+                else:
+                    print("[ERROR] Download failed")
+                    results["recommendations"].append("Check internet connection and API key validity")
+            else:
+                print("[WARNING] No clips found in test search")
+                results["recommendations"].append("API may be rate limited or key invalid")
+        except Exception as e:
+            print(f"[ERROR] Test failed: {e}")
+            results["recommendations"].append(f"Fix error: {e}")
+
+    print()
+
+    # Summary
+    print("=" * 70)
+    print("  DIAGNOSTIC SUMMARY")
+    print("=" * 70 + "\n")
+
+    if results["test_download"]:
+        print("[SUCCESS] Stock footage API is working correctly!")
+        print("  Videos should download real stock footage, not just gradients.")
+    else:
+        print("[PROBLEM] Stock footage is NOT working properly.")
+        print("  Videos will fall back to gradient backgrounds (very small file size).")
+
+    if results["recommendations"]:
+        print("\nRecommendations:")
+        for i, rec in enumerate(results["recommendations"], 1):
+            print(f"  {i}. {rec}")
+
+    print()
+    return results
+
+
 # Quick test
 if __name__ == "__main__":
+    import sys
+
+    # If --diagnose flag is passed, run diagnostic
+    if len(sys.argv) > 1 and sys.argv[1] in ("--diagnose", "-d", "diagnose"):
+        diagnose_stock_api()
+        sys.exit(0)
+
     print("\n" + "="*60)
     print("MULTI-SOURCE STOCK FOOTAGE TEST")
     print("="*60 + "\n")
+    print("TIP: Run with --diagnose flag for full API diagnostic\n")
 
     stock = MultiStockProvider()
 
@@ -692,3 +974,4 @@ if __name__ == "__main__":
     else:
         print("\nNo API keys configured!")
         print("Add PEXELS_API_KEY and/or PIXABAY_API_KEY to config/.env")
+        print("\nRun with --diagnose flag for detailed troubleshooting.")

@@ -320,22 +320,58 @@ Write a complete {duration}-minute YouTube script for:
 **Style:** {style}
 **Target Audience:** {audience}
 
+## PROVEN HOOK FORMULAS (Choose one for the opening):
+
+1. **"The Shocking Truth"** - Start with a counterintuitive fact that challenges common beliefs
+   Example: "Everything you've been told about [topic] is completely wrong..."
+
+2. **"Story Lead"** - Open with a compelling micro-story (15-20 seconds)
+   Example: "In 2019, a man lost everything... but what happened next changed the industry forever."
+
+3. **"Question Stack"** - 3 rapid curiosity questions in the first 10 seconds
+   Example: "What if I told you...? Would you believe...? And what would you do if...?"
+
+4. **"Stats Shock"** - Lead with a surprising, specific statistic
+   Example: "97.3% of people who try this method fail - here's why you won't."
+
 ## VIRAL VIDEO STRUCTURE (IMPORTANT):
 
-1. **HOOK (0-15 seconds):** Pattern interrupt - shocking fact, question, or bold claim
+1. **HOOK (0-15 seconds):** Use one of the proven hook formulas above
 2. **PROBLEM (15-45 seconds):** Identify pain point, create curiosity
-3. **PROMISE (45-60 seconds):** Tease what they'll learn
+3. **PROMISE (45-60 seconds):** Tease what they'll learn - "By the end of this video, you'll know exactly..."
 4. **MAIN CONTENT (3-5 minutes):** 5-7 key points with stories/examples
 5. **PAYOFF (30 seconds):** Deliver the key insight
 6. **CTA (15 seconds):** Subscribe, comment, like
 
-## ENGAGEMENT TECHNIQUES:
-- Use "you" frequently to connect with viewer
-- Add cliffhangers between sections ("But here's what most people miss...")
-- Include specific numbers and statistics
-- Tell micro-stories within points
-- Use rhetorical questions
-- Create curiosity loops
+## ENGAGEMENT TECHNIQUES (MANDATORY):
+
+### Open Loops - Plant these throughout the script:
+- "I'll reveal the most important tip at the end - trust me, it's worth waiting for..."
+- "But there's something even more shocking coming up..."
+- "The third point is where everything clicks - keep watching..."
+
+### Micro-Cliffhangers (every 60-90 seconds):
+- "But here's where it gets interesting..."
+- "What happened next shocked everyone..."
+- "And this is where most people make the fatal mistake..."
+
+### Direct Address - Use "you" at least 3 times per minute:
+- "You might be thinking..." / "When you try this..." / "Here's what you need to understand..."
+- Address the viewer directly to create personal connection
+
+### Rhetorical Questions (every 30-45 seconds):
+- "But what does this really mean for you?"
+- "Have you ever wondered why...?"
+- "Sound familiar?"
+
+### Specific Numbers (NEVER use vague words):
+- Say "73% of people" not "most people"
+- Say "$2,847 per month" not "thousands of dollars"
+- Say "in exactly 17 days" not "in a few weeks"
+- Say "4.7 times more effective" not "much more effective"
+
+## NICHE-SPECIFIC GUIDELINES:
+{niche_guide}
 
 ## Output JSON Format:
 ```json
@@ -364,6 +400,9 @@ Write a complete {duration}-minute YouTube script for:
 - Narration should total {word_count} words (~{duration} minutes when spoken)
 - Make it feel like a documentary, not a lecture
 - Include emotional hooks and power words
+- Use at least 2 open loops throughout the script
+- Include a micro-cliffhanger every 60-90 seconds
+- Add a rhetorical question every 30-45 seconds
 
 Write the COMPLETE viral script now:"""
 
@@ -372,40 +411,78 @@ Write the COMPLETE viral script now:"""
 
 Create a {duration}-MINUTE script about: {topic}
 
+## PROVEN HOOK FORMULAS (Use one for your opening):
+
+1. **"The Shocking Truth"** - Start with a counterintuitive fact
+   "Everything you've been told about [topic] is completely wrong. And by the end of this video, you'll see exactly why."
+
+2. **"Story Lead"** - Open with a compelling micro-story
+   "In 2019, a man with nothing but $47 in his bank account discovered something that would change everything..."
+
+3. **"Question Stack"** - 3 rapid curiosity questions
+   "What if I told you there's a method that 97% of experts hide? Would you believe it takes just 12 minutes a day? And what if it could transform your entire approach to [topic]?"
+
+4. **"Stats Shock"** - Lead with a surprising statistic
+   "Only 2.3% of people who try [topic] ever succeed. But here's the crazy part - the ones who do all share one thing in common."
+
 ## NICHE-SPECIFIC GUIDELINES:
 {niche_guide}
 
-## VIRAL FORMULA:
-The first 15 seconds determine if someone watches. Use pattern interrupts:
-- Start mid-thought: "...and that's exactly why most people fail"
-- Bold claim: "This one strategy made me $X in Y days"
-- Question: "What if everything you knew about X was wrong?"
+## ENGAGEMENT TECHNIQUES (MANDATORY):
+
+### Open Loops - Use at least 2 throughout the script:
+- "I'll reveal the most critical piece at the end - and trust me, it's worth waiting for..."
+- "But there's something even more shocking I need to show you first..."
+- "The third point changes everything - but you need context from the first two..."
+
+### Micro-Cliffhangers (insert every 60-90 seconds):
+- "But here's where it gets really interesting..."
+- "What happened next shocked even the experts..."
+- "And this is the exact moment when everything changed..."
+- "Most people stop here. But what comes next is what separates the winners..."
+
+### Direct Address - Use "you" frequently:
+- "You're probably thinking..." / "When you apply this..." / "Here's what you need to understand..."
+- "This affects you directly because..." / "Your results depend on..."
+
+### Rhetorical Questions (every 30-45 seconds):
+- "But why does this actually matter?"
+- "Have you ever stopped to think about...?"
+- "Sound familiar? That's exactly what I thought too."
+- "So what makes this different from everything else you've tried?"
+
+### Specific Numbers (NEVER be vague):
+- "73.2% of people" NOT "most people"
+- "$4,829 per month" NOT "thousands of dollars"
+- "in exactly 23 days" NOT "in a few weeks"
+- "3.7x more effective" NOT "much more effective"
+- "studied 847 cases" NOT "studied many cases"
 
 ## STORY STRUCTURE:
 Every point should follow: HOOK → TENSION → RESOLUTION
-- Hook: Grab attention with a surprising fact
-- Tension: Build curiosity, create stakes
-- Resolution: Deliver the insight
+- Hook: Grab attention with a surprising fact or question
+- Tension: Build curiosity, create stakes, what's at risk
+- Resolution: Deliver the insight with specific, actionable detail
 
 ## SECTIONS REQUIRED:
-1. HOOK (15s) - Pattern interrupt, shocking opener
-2. CONTEXT (30s) - Set up the problem/topic
-3. POINT 1 (45-60s) - First major insight with story
-4. POINT 2 (45-60s) - Second insight with example
-5. POINT 3 (45-60s) - Third insight with proof
-6. POINT 4 (45-60s) - Fourth insight (optional for longer videos)
+1. HOOK (15s) - Use one of the proven hook formulas above
+2. CONTEXT (30s) - Set up the problem, add an open loop
+3. POINT 1 (45-60s) - First major insight with story + cliffhanger
+4. POINT 2 (45-60s) - Second insight with example + rhetorical question
+5. POINT 3 (45-60s) - Third insight with proof + cliffhanger
+6. POINT 4 (45-60s) - Fourth insight (optional) + open loop callback
 7. POINT 5 (45-60s) - Fifth insight (optional)
-8. TWIST (30s) - Unexpected perspective or revelation
-9. CONCLUSION (30s) - Tie it all together
-10. CTA (15s) - Call to action
+8. TWIST (30s) - Unexpected perspective, deliver the promised insight
+9. CONCLUSION (30s) - Tie it all together, create urgency
+10. CTA (15s) - Subscribe, comment with specific question, like
 
 ## OUTPUT FORMAT:
 Return ONLY valid JSON:
 {{
-    "title": "VIRAL title - numbers, power words, curiosity gap",
+    "title": "VIRAL title - specific numbers, power words, curiosity gap",
     "description": "YouTube description with timestamps and keywords",
     "tags": ["list", "of", "15", "SEO", "tags"],
-    "thumbnail_idea": "High-contrast, faces/emotions, bold text overlay",
+    "thumbnail_idea": "High-contrast, faces/emotions, bold text overlay with specific number",
     "sections": [
         {{
             "timestamp": "00:00-00:15",
@@ -452,29 +529,121 @@ Generate the full {duration}-minute script now:"""
     # Niche-specific content guidelines
     NICHE_GUIDES = {
         "finance": """
-- Use specific dollar amounts and percentages
-- Reference real investment strategies
-- Mention common money mistakes people make
-- Include actionable steps viewers can take today
-- Tone: Authoritative but approachable""",
+FINANCE NICHE - CRITICAL REQUIREMENTS:
+
+### Specific Numbers (ALWAYS include):
+- Exact dollar amounts: "$4,273/month" not "thousands per month"
+- Precise percentages: "23.7% ROI" not "high returns"
+- Time frames: "in 47 days" not "in a few weeks"
+- Comparison ratios: "3.2x faster growth" not "much faster"
+
+### ROI and Growth Metrics:
+- Always mention potential ROI with realistic ranges
+- Include compound growth examples: "If you invested $500/month for 7 years..."
+- Reference inflation-adjusted returns when relevant
+- Compare to traditional savings: "vs. the 0.5% your bank gives you"
+
+### Actionable Steps (MANDATORY):
+- End each major point with "Here's what you can do TODAY..."
+- Provide specific platforms, tools, or accounts to open
+- Include exact steps: "Step 1: Open a brokerage account. Step 2: Set up automatic $200 transfers..."
+- Give specific allocation percentages: "Put 60% in index funds, 30% in bonds, 10% in high-risk"
+
+### Money Mistakes to Reference:
+- "The average person loses $847/year to this one mistake..."
+- "92% of people do this wrong - and it costs them $12,000 over a decade"
+- Use loss aversion: "You're currently losing $X by not doing Y"
+
+### Tone: Authoritative expert who's sharing insider knowledge, slightly urgent""",
+
         "psychology": """
-- Reference psychological studies and experiments
-- Use terms like "cognitive bias", "subconscious", "manipulation"
-- Include real-world examples of psychological principles
-- Make viewers feel like insiders learning secrets
-- Tone: Mysterious, intriguing, slightly dark""",
+PSYCHOLOGY NICHE - CRITICAL REQUIREMENTS:
+
+### Study References (ALWAYS include):
+- Name specific studies: "In a 2019 Stanford study with 847 participants..."
+- Reference famous experiments: "Just like Milgram's obedience experiments showed..."
+- Include researcher names: "Dr. Robert Cialdini's research proves..."
+- Cite statistics: "78% of participants in the study exhibited..."
+
+### "Dark Psychology" Intrigue Elements:
+- Use phrases like: "What I'm about to reveal is used by elite negotiators..."
+- Reference manipulation awareness: "Once you see this pattern, you can't unsee it"
+- Forbidden knowledge angle: "This technique is so powerful it's banned in some contexts..."
+- Self-defense framing: "Knowing this protects you from being manipulated"
+
+### Psychological Terms to Weave In:
+- Cognitive biases: anchoring, confirmation bias, availability heuristic
+- Subconscious triggers: priming, framing effects, social proof
+- Influence techniques: reciprocity, scarcity, authority, commitment
+- Brain science: amygdala hijack, dopamine loops, pattern recognition
+
+### Real-World Examples:
+- "This is exactly how casinos keep you playing..."
+- "Advertisers have used this against you for decades..."
+- "Every successful salesperson knows this trick..."
+- "Politicians exploit this bias during every election..."
+
+### Tone: Mysterious insider revealing secrets, slightly dark and intriguing, make viewers feel like they're learning forbidden knowledge""",
+
         "storytelling": """
-- Build suspense and tension throughout
-- Use vivid sensory details
-- Include unexpected twists
-- Create emotional connection to characters
-- Tone: Dramatic, immersive, documentary-style""",
+STORYTELLING NICHE - CRITICAL REQUIREMENTS:
+
+### Suspense Building Techniques:
+- Plant questions early: "But there was something he didn't know..."
+- Use time pressure: "She had exactly 47 minutes to make a decision that would change everything..."
+- False resolutions: "He thought it was over. He was wrong."
+- Escalation: "And then things got worse..."
+
+### Sensory Details (MANDATORY in every scene):
+- Visual: "The dim fluorescent light flickered above the empty hallway..."
+- Sound: "The only sound was the rhythmic drip of water echoing..."
+- Physical: "His hands trembled as he reached for the envelope..."
+- Emotional: "A cold knot formed in her stomach..."
+
+### Mini-Cliffhangers (every 45-60 seconds):
+- "What happened next would haunt him forever..."
+- "She had no idea what was waiting for her..."
+- "But the real story was just beginning..."
+- "And that's when everything changed..."
+
+### Character Connection:
+- Give specific details: "Maria, a 34-year-old nurse from Ohio with two kids..."
+- Show vulnerability: "He had failed at this exact thing three times before..."
+- Internal dialogue: "She thought to herself: 'This is it. There's no going back.'"
+- Relatable stakes: "Everything he'd worked for was about to disappear..."
+
+### Twist Techniques:
+- Perspective shift: "But what nobody knew was that the real villain was..."
+- Time reveal: "What seemed like coincidence was actually planned 10 years in advance..."
+- Hidden information: "There was one detail she left out of her confession..."
+
+### Tone: Documentary-style narrator, dramatic and immersive, treat the viewer as someone watching a thriller unfold""",
+
         "default": """
-- Use clear, engaging language
-- Include specific examples
-- Build curiosity throughout
-- End with a satisfying payoff
-- Tone: Professional but conversational"""
+DEFAULT NICHE - ENGAGEMENT REQUIREMENTS:
+
+### Specificity (ALWAYS be concrete):
+- Use exact numbers: "147 people tested this" not "many people"
+- Give time frames: "takes 23 minutes" not "takes some time"
+- Provide examples: "like Netflix did in 2015" not "like some companies"
+
+### Engagement Hooks:
+- Curiosity gaps: "There's one thing that makes all the difference..."
+- Contrarian angles: "Everything you've heard about this is wrong..."
+- Stakes: "Getting this wrong costs most people years of wasted effort..."
+
+### Structure Each Point:
+- Open with surprising fact or question
+- Build tension with what's at stake
+- Resolve with actionable insight
+- Transition with cliffhanger to next point
+
+### Call to Action Elements:
+- Specific comment prompt: "Tell me in the comments: which of these 3 did you not know?"
+- Subscribe hook: "We post 3 videos like this every week..."
+- Engagement driver: "If this changed how you think, smash that like button"
+
+### Tone: Professional but conversational, like a knowledgeable friend sharing valuable insights"""
     }
 
     def generate_script(
@@ -543,17 +712,40 @@ Generate the full {duration}-minute script now:"""
         """Generate a simpler script format for smaller LLMs."""
         logger.info(f"Using simple script generator for: {topic}")
 
-        # Simple prompt that smaller models can handle
+        # Get niche-specific guidance for the simple prompt
+        niche_hints = {
+            "finance": "Include specific dollar amounts (like $2,847), exact percentages (like 23.7% ROI), and actionable steps the viewer can take TODAY.",
+            "psychology": "Reference psychological studies, use terms like 'cognitive bias' and 'subconscious triggers', and make it feel like revealing forbidden knowledge.",
+            "storytelling": "Use vivid sensory details, build suspense with mini-cliffhangers, and make the viewer feel like they're watching a thriller unfold.",
+            "default": "Use specific numbers instead of vague words, ask rhetorical questions, and address the viewer directly with 'you'."
+        }
+        niche_hint = niche_hints.get(niche, niche_hints["default"])
+
+        # Enhanced simple prompt with engagement techniques
         prompt = f"""Write a {duration_minutes}-minute YouTube video script about: {topic}
 
 Write 5-8 paragraphs of narration text. Each paragraph should be about 50-80 words.
 
-Include:
-1. An attention-grabbing opening
-2. 3-5 main points with examples
-3. A conclusion with call to action
+CRITICAL ENGAGEMENT RULES:
+1. HOOK: Start with ONE of these proven formulas:
+   - "Shocking Truth": Start with a counterintuitive fact ("Everything you've been told about {topic} is wrong...")
+   - "Story Lead": Open with a micro-story ("In 2019, someone discovered something that changed everything...")
+   - "Question Stack": Ask 3 rapid questions ("What if...? Would you believe...? And what if...?")
+   - "Stats Shock": Lead with a surprising statistic ("Only 2.3% of people who try this succeed...")
 
-Just write the narration text, no JSON or formatting needed. Write naturally as if speaking to the viewer."""
+2. OPEN LOOPS: Include at least one phrase like "I'll reveal the most important tip at the end..." or "But there's something even more shocking coming up..."
+
+3. CLIFFHANGERS: Between major points, add phrases like "But here's where it gets interesting..." or "What most people don't realize is..."
+
+4. DIRECT ADDRESS: Use "you" at least 3 times per paragraph
+
+5. RHETORICAL QUESTIONS: Ask questions like "Sound familiar?" or "Have you ever wondered why...?" every 30-45 seconds
+
+6. SPECIFIC NUMBERS: Say "73% of people" NOT "most people". Say "$2,847" NOT "thousands of dollars"
+
+7. NICHE SPECIFICS: {niche_hint}
+
+Write the narration text now. No JSON or formatting needed. Write naturally as if speaking directly to the viewer."""
 
         try:
             content = self.ai.generate(prompt, max_tokens=3000)
