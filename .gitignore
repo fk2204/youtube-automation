@@ -21,6 +21,8 @@ env/
 # Output files
 output/
 logs/
+data/
+cache/
 *.mp4
 *.mp3
 *.wav

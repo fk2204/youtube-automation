@@ -9,6 +9,8 @@ Usage:
     python run.py short money_blueprints     # Create YouTube Short
     python run.py batch 3
     python run.py batch-all
+    python run.py schedule-shorts            # Run Shorts scheduler only
+    python run.py daily-all                  # Run both videos and Shorts scheduler
 """
 
 import sys
@@ -34,6 +36,12 @@ Commands:
   python run.py batch <count>       Create <count> videos for all channels
   python run.py batch-all           Create 1 video for each channel
 
+Scheduler Commands:
+  python run.py schedule-shorts     Run Shorts scheduler only
+  python run.py schedule-videos     Run regular videos scheduler only
+  python run.py daily-all           Run both videos and Shorts scheduler
+  python run.py status              Show scheduler status
+
 Video Formats:
   video    - Regular 1920x1080 horizontal video (5-10 min)
   short    - YouTube Shorts 1080x1920 vertical video (15-60 sec)
@@ -43,11 +51,18 @@ Channels:
   mind_unlocked       Psychology content
   untold_stories      Storytelling content
 
+Shorts Schedule:
+  - Shorts are posted 2-3 hours after each regular video
+  - Configure in config/channels.yaml under shorts_schedule
+  - Each channel can have custom delay_hours and standalone_times
+
 Examples:
   python run.py video money_blueprints
   python run.py short money_blueprints
   python run.py test-short mind_unlocked
   python run.py batch 3
+  python run.py daily-all              # Start full scheduler
+  python run.py schedule-shorts        # Shorts only
         """)
         return
 
@@ -104,6 +119,32 @@ Examples:
             print(f"    Duration: 15-60 seconds")
         else:
             print(f"\n[FAIL] Failed: {result.get('error')}")
+
+    elif cmd == "schedule-shorts":
+        # Run Shorts scheduler only
+        print("\n[INFO] Starting Shorts scheduler...")
+        print("       Shorts will be posted after regular videos based on config/channels.yaml")
+        from src.scheduler.daily_scheduler import run_scheduler
+        run_scheduler(include_videos=False, include_shorts=True)
+
+    elif cmd == "schedule-videos":
+        # Run regular videos scheduler only (backwards compatible)
+        print("\n[INFO] Starting regular videos scheduler...")
+        from src.scheduler.daily_scheduler import run_scheduler
+        run_scheduler(include_videos=True, include_shorts=False)
+
+    elif cmd == "daily-all":
+        # Run both regular videos and Shorts scheduler
+        print("\n[INFO] Starting full scheduler (videos + Shorts)...")
+        print("       Regular videos will be posted at scheduled times")
+        print("       Shorts will be posted 2-3 hours after each regular video")
+        from src.scheduler.daily_scheduler import run_scheduler
+        run_scheduler(include_videos=True, include_shorts=True)
+
+    elif cmd == "status":
+        # Show scheduler status
+        from src.scheduler.daily_scheduler import show_status
+        show_status()
 
     else:
         print(f"Unknown command: {cmd}")

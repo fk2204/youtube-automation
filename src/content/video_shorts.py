@@ -226,7 +226,12 @@ class ShortsVideoGenerator:
             return "ffprobe"
 
         if self.ffmpeg:
-            ffprobe = self.ffmpeg.replace("ffmpeg.exe", "ffprobe.exe").replace("ffmpeg", "ffprobe")
+            # Only replace the executable name, not directory names
+            ffprobe = self.ffmpeg.replace("ffmpeg.exe", "ffprobe.exe")
+            if ffprobe == self.ffmpeg:
+                # No .exe extension (Linux/Mac)
+                if self.ffmpeg.endswith("ffmpeg"):
+                    ffprobe = self.ffmpeg[:-6] + "ffprobe"
             if os.path.exists(ffprobe):
                 return ffprobe
 

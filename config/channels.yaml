@@ -53,6 +53,13 @@ channels:
         - "personal finance"
         - "money tips"
 
+    # Shorts scheduling for this channel
+    shorts_schedule:
+      enabled: true
+      post_after_regular: true  # Post Short after each regular video
+      delay_hours: 2            # Hours after regular video (14:00 -> 16:00)
+      standalone_times: []      # Additional standalone Shorts times
+
   # ============================================================
   # CHANNEL 2: PSYCHOLOGY & SELF-IMPROVEMENT
   # CPM: $5-12 (High Engagement)
@@ -101,6 +108,13 @@ channels:
         - "manipulation"
         - "body language"
         - "mindset"
+
+    # Shorts scheduling for this channel
+    shorts_schedule:
+      enabled: true
+      post_after_regular: true  # Post Short after each regular video
+      delay_hours: 2            # Hours after regular video
+      standalone_times: ["12:00"]  # Extra standalone Short at noon
 
   # ============================================================
   # CHANNEL 3: STORIES & ENTERTAINMENT
@@ -151,6 +165,13 @@ channels:
         - "reddit stories"
         - "storytelling"
 
+    # Shorts scheduling for this channel
+    shorts_schedule:
+      enabled: true
+      post_after_regular: true  # Post Short after each regular video
+      delay_hours: 3            # 3 hours after regular video for this channel
+      standalone_times: ["18:00"]  # Extra standalone Short at 6 PM
+
 # ============================================================
 # GLOBAL SETTINGS
 # ============================================================
@@ -177,3 +198,13 @@ global:
 
   # Safety settings
   test_mode: true  # Set to false for real uploads
+
+  # ============================================================
+  # GLOBAL SHORTS SCHEDULE (defaults for all channels)
+  # Channel-specific settings override these defaults
+  # ============================================================
+  shorts_schedule:
+    enabled: true               # Enable Shorts scheduling globally
+    post_after_regular: true    # Post Short after each regular video
+    delay_hours: 2              # Hours after regular video (e.g., 14:00 -> 16:00)
+    standalone_times: []        # Additional standalone Shorts times (e.g., ["12:00", "18:00"])
