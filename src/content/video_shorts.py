@@ -65,20 +65,37 @@ class ShortsVideoGenerator:
     SHORTS_WIDTH = 1080
     SHORTS_HEIGHT = 1920
 
-    # Max duration for YouTube Shorts
-    MAX_DURATION = 60  # seconds
+    # Duration settings (research: 20-35s optimal for engagement)
+    MAX_DURATION = 60  # YouTube max
+    OPTIMAL_DURATION = 30  # Research-backed sweet spot
     MIN_DURATION = 15  # seconds
 
-    # Faster pacing for Shorts (visual change every 2-3 seconds)
+    # Faster pacing for Shorts (visual change every 2-4 seconds)
     SEGMENT_DURATION = 2.5
 
     # Transition duration (shorter for faster pacing)
     TRANSITION_DURATION = 0.3
 
-    # Minimum font size for mobile readability
-    MIN_FONT_SIZE = 60
-    TITLE_FONT_SIZE = 80
-    SUBTITLE_FONT_SIZE = 48
+    # Hook timing (research: 50-60% drop off in first 3s)
+    HOOK_DURATION = 1.5  # First visual must grab in 1.5s
+
+    # Safe zones to avoid YouTube UI elements (research-backed)
+    # These areas are covered by YouTube UI on mobile
+    SAFE_ZONE = {
+        "top": 288,      # Status bar, back button
+        "bottom": 672,   # Like/comment/share buttons, description
+        "left": 48,      # Small margin
+        "right": 192,    # Follow button area
+    }
+
+    # Text settings (research: 40-56px optimal, min 24px)
+    MIN_FONT_SIZE = 56  # Adjusted per research
+    TITLE_FONT_SIZE = 72  # Slightly smaller for better fit
+    SUBTITLE_FONT_SIZE = 44
+    CAPTION_FONT_SIZE = 48  # For burned-in captions
+
+    # Background music (research: 15% volume under voiceover)
+    MUSIC_VOLUME = 0.15
 
     # More aggressive Ken Burns effect presets for Shorts
     KEN_BURNS_EFFECTS = [
@@ -631,9 +648,12 @@ class ShortsVideoGenerator:
         position: str = "center"  # center, top, bottom
     ) -> Optional[str]:
         """
-        Create a text overlay image for Shorts.
+        Create a text overlay image for Shorts with safe zone awareness.
 
-        Uses large fonts (min 60px) for mobile readability.
+        Research-backed:
+        - Uses 40-56px fonts for mobile readability
+        - Respects YouTube UI safe zones
+        - High contrast text with stroke/shadow
         """
         try:
             # Create transparent image
@@ -643,14 +663,21 @@ class ShortsVideoGenerator:
             primary = style.get("primary_color", "#3498db").lstrip('#')
             primary_rgb = tuple(int(primary[i:i+2], 16) for i in (0, 2, 4))
 
-            # Load font (large for Shorts)
+            # Load font (research: 40-56px optimal)
             try:
                 font = ImageFont.truetype(self.fonts.get("bold", ""), self.MIN_FONT_SIZE)
             except:
                 font = ImageFont.load_default()
 
-            # Wrap text
-            max_width = self.width - 100
+            # Calculate safe area for text (avoiding YouTube UI)
+            safe_left = self.SAFE_ZONE["left"]
+            safe_right = self.width - self.SAFE_ZONE["right"]
+            safe_top = self.SAFE_ZONE["top"]
+            safe_bottom = self.height - self.SAFE_ZONE["bottom"]
+            safe_width = safe_right - safe_left
+
+            # Wrap text within safe zone
+            max_width = safe_width - 60  # 30px padding on each side
             words = text.split()
             lines = []
             current_line = ""
@@ -667,35 +694,44 @@ class ShortsVideoGenerator:
             if current_line:
                 lines.append(current_line)
 
-            # Calculate position
+            # Calculate position within safe zone
             line_height = self.MIN_FONT_SIZE + 15
             total_height = len(lines) * line_height
 
             if position == "top":
-                start_y = 200
+                start_y = safe_top + 50  # Padding from safe zone edge
             elif position == "bottom":
-                start_y = self.height - total_height - 300
+                start_y = safe_bottom - total_height - 50
             else:  # center
-                start_y = (self.height - total_height) // 2
+                center_safe = (safe_top + safe_bottom) // 2
+                start_y = center_safe - (total_height // 2)
 
-            # Draw text background (semi-transparent)
-            padding = 30
+            # Draw text background (semi-transparent, within safe zone)
+            padding = 25
+            bg_left = safe_left + 20
+            bg_right = safe_right - 20
             bg_top = start_y - padding
             bg_bottom = start_y + total_height + padding
             draw.rectangle(
-                [50, bg_top, self.width - 50, bg_bottom],
+                [bg_left, bg_top, bg_right, bg_bottom],
                 fill=(0, 0, 0, 180)
             )
 
-            # Draw text
-            for i, line in enumerate(lines[:5]):  # Max 5 lines
+            # Draw text with high contrast (research: white + black stroke)
+            for i, line in enumerate(lines[:4]):  # Max 4 lines for readability
                 bbox = draw.textbbox((0, 0), line, font=font)
-                x = (self.width - (bbox[2] - bbox[0])) // 2
+                text_width = bbox[2] - bbox[0]
+                x = safe_left + (safe_width - text_width) // 2
                 y = start_y + i * line_height
 
-                # Shadow
-                draw.text((x + 3, y + 3), line, font=font, fill=(0, 0, 0, 255))
-                # Main text
+                # Black stroke for contrast (research: essential for readability)
+                stroke_width = 3
+                for dx in range(-stroke_width, stroke_width + 1):
+                    for dy in range(-stroke_width, stroke_width + 1):
+                        if dx != 0 or dy != 0:
+                            draw.text((x + dx, y + dy), line, font=font, fill=(0, 0, 0, 255))
+
+                # Main white text
                 draw.text((x, y), line, font=font, fill=(255, 255, 255, 255))
 
             img.save(output_path)
@@ -806,6 +842,11 @@ class ShortsVideoGenerator:
             elif audio_duration < self.MIN_DURATION:
                 logger.warning(f"Audio duration ({audio_duration:.1f}s) is below Shorts min ({self.MIN_DURATION}s).")
 
+            # Research: 20-35 seconds is optimal for engagement
+            if audio_duration > self.OPTIMAL_DURATION:
+                logger.info(f"Tip: Research shows {self.OPTIMAL_DURATION}s is optimal for Shorts engagement. "
+                           f"Current: {audio_duration:.1f}s")
+
             # Calculate number of visual segments (faster pacing for Shorts: 2-3 seconds)
             num_segments = int(audio_duration / self.SEGMENT_DURATION) + 1
             logger.info(f"Creating {num_segments} visual segments (fast pacing)")
@@ -868,8 +909,8 @@ class ShortsVideoGenerator:
             segment_files = []
             current_time = 0.0
 
-            # 1. Title card (first 2-3 seconds for Shorts)
-            title_duration = min(2.5, audio_duration * 0.1)
+            # 1. Title card / Hook (research: must grab attention in 1.5s)
+            title_duration = self.HOOK_DURATION  # Fast hook per research
             title_frame = self.temp_dir / "title_frame.png"
             self.create_title_card(
                 title=title[:40],
@@ -1012,6 +1053,98 @@ class ShortsVideoGenerator:
                     f.unlink()
         except:
             pass
+
+    def add_background_music(
+        self,
+        video_file: str,
+        music_file: str,
+        output_file: str,
+        music_volume: float = None
+    ) -> Optional[str]:
+        """
+        Add background music to a video at low volume.
+
+        Research: Background music at 15% volume improves engagement
+        without competing with voiceover.
+
+        Args:
+            video_file: Input video path
+            music_file: Background music path (will be looped if needed)
+            output_file: Output video path
+            music_volume: Volume level (default: 0.15 per research)
+
+        Returns:
+            Path to output video or None
+        """
+        if not self.ffmpeg or not os.path.exists(video_file):
+            return None
+
+        if not os.path.exists(music_file):
+            logger.warning(f"Music file not found: {music_file}")
+            return None
+
+        volume = music_volume or self.MUSIC_VOLUME
+
+        try:
+            # Get video duration
+            duration = self.get_audio_duration(video_file)
+
+            # Mix audio: original at full volume, music at 15%
+            cmd = [
+                self.ffmpeg, '-y',
+                '-i', video_file,
+                '-stream_loop', '-1',  # Loop music if needed
+                '-i', music_file,
+                '-t', str(duration),
+                '-filter_complex',
+                f'[0:a]volume=1.0[a1];'
+                f'[1:a]volume={volume}[a2];'
+                f'[a1][a2]amix=inputs=2:duration=first[aout]',
+                '-map', '0:v',
+                '-map', '[aout]',
+                '-c:v', 'copy',
+                '-c:a', 'aac',
+                '-b:a', '192k',
+                output_file
+            ]
+
+            result = subprocess.run(cmd, capture_output=True, timeout=300)
+
+            if os.path.exists(output_file):
+                logger.info(f"Added background music at {volume*100:.0f}% volume")
+                return output_file
+            else:
+                logger.error(f"Failed to add music: {result.stderr.decode()[:200]}")
+
+        except Exception as e:
+            logger.error(f"Add music failed: {e}")
+
+        return None
+
+    def get_safe_text_area(self) -> Dict[str, int]:
+        """
+        Get the safe area for text placement.
+
+        Returns coordinates where text won't be obscured by YouTube UI.
+
+        Returns:
+            Dict with top, bottom, left, right, width, height of safe area
+        """
+        safe_left = self.SAFE_ZONE["left"]
+        safe_right = self.width - self.SAFE_ZONE["right"]
+        safe_top = self.SAFE_ZONE["top"]
+        safe_bottom = self.height - self.SAFE_ZONE["bottom"]
+
+        return {
+            "top": safe_top,
+            "bottom": safe_bottom,
+            "left": safe_left,
+            "right": safe_right,
+            "width": safe_right - safe_left,
+            "height": safe_bottom - safe_top,
+            "center_x": self.width // 2,
+            "center_y": (safe_top + safe_bottom) // 2,
+        }
 
 
 # Test
