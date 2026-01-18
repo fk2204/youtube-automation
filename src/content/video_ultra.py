@@ -80,6 +80,12 @@ class UltraVideoGenerator:
     # Transition duration
     TRANSITION_DURATION = 0.5
 
+    # Crossfade settings
+    CROSSFADE_DURATION = 0.3  # Smooth blend between segments
+
+    # Background music volume (relative to voice)
+    MUSIC_VOLUME = 0.12  # 12% for main videos (lower than Shorts)
+
     # Niche-specific visual styles
     NICHE_STYLES = {
         "finance": {
@@ -657,47 +663,117 @@ class UltraVideoGenerator:
         self,
         output_path: str,
         style: Dict,
-        duration: float
+        duration: float,
+        animated: bool = True
     ) -> Optional[str]:
-        """Create an animated gradient background."""
+        """
+        Create an animated gradient background.
+
+        Args:
+            output_path: Output video path
+            style: Niche style settings
+            duration: Duration in seconds
+            animated: If True, gradient slowly animates
+
+        Returns:
+            Path to created video or None
+        """
         try:
             secondary = style.get("secondary_color", "#1a1a2e").lstrip('#')
             secondary_rgb = tuple(int(secondary[i:i+2], 16) for i in (0, 2, 4))
             primary = style.get("primary_color", "#3498db").lstrip('#')
             primary_rgb = tuple(int(primary[i:i+2], 16) for i in (0, 2, 4))
+            accent = style.get("accent_color", "#e74c3c").lstrip('#')
+            accent_rgb = tuple(int(accent[i:i+2], 16) for i in (0, 2, 4))
 
+            if animated:
+                # Create animated gradient using FFmpeg gradients filter
+                # This creates a smooth shifting gradient effect
+                fade_frames = int(self.TRANSITION_DURATION * self.fps)
+                frames = int(duration * self.fps)
+
+                # Build FFmpeg filter for animated gradient
+                # Uses geq (generic equation) for animated colors
+                cmd = [
+                    self.ffmpeg, '-y',
+                    '-f', 'lavfi',
+                    '-i', f'color=c=black:s={self.width}x{self.height}:d={duration}:r={self.fps}',
+                    '-vf',
+                    f"geq="
+                    f"r='clip({secondary_rgb[0]}+{primary_rgb[0]-secondary_rgb[0]}*sin(2*PI*N/{frames}+X/{self.width}*PI)*0.3+{accent_rgb[0]-secondary_rgb[0]}*(Y/{self.height})*0.2,0,255)':"
+                    f"g='clip({secondary_rgb[1]}+{primary_rgb[1]-secondary_rgb[1]}*sin(2*PI*N/{frames}+X/{self.width}*PI+1)*0.3+{accent_rgb[1]-secondary_rgb[1]}*(Y/{self.height})*0.2,0,255)':"
+                    f"b='clip({secondary_rgb[2]}+{primary_rgb[2]-secondary_rgb[2]}*sin(2*PI*N/{frames}+X/{self.width}*PI+2)*0.3+{accent_rgb[2]-secondary_rgb[2]}*(Y/{self.height})*0.2,0,255)',"
+                    f"fade=in:0:{fade_frames},fade=out:st={duration - 0.5}:d=0.5",
+                    '-c:v', 'libx264',
+                    '-preset', 'fast',
+                    '-pix_fmt', 'yuv420p',
+                    '-an',
+                    output_path
+                ]
+
+                result = subprocess.run(cmd, capture_output=True, timeout=120)
+
+                if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                    return output_path
+
+                # Fallback to static gradient if animated fails
+                logger.warning("Animated gradient failed, using static")
+
+            # Static gradient fallback
             img = Image.new('RGB', self.resolution, secondary_rgb)
             draw = ImageDraw.Draw(img)
 
-            # Radial gradient
+            # Radial gradient with multiple layers
             center_x, center_y = self.width // 2, self.height // 2
 
-            for r in range(0, max(self.width, self.height), 5):
-                ratio = min(1.0, r / 800)
+            # Draw vertical gradient first
+            for y in range(self.height):
+                ratio = y / self.height
                 color = tuple(
-                    int(secondary_rgb[i] + (primary_rgb[i] - secondary_rgb[i]) * ratio * 0.2)
+                    int(secondary_rgb[i] * (1 - ratio * 0.4) + accent_rgb[i] * ratio * 0.15)
                     for i in range(3)
                 )
+                draw.line([(0, y), (self.width, y)], fill=color)
+
+            # Overlay radial gradient
+            for r in range(0, max(self.width, self.height), 8):
+                ratio = min(1.0, r / 900)
+                alpha = int(255 * (1 - ratio) * 0.15)
+                color = tuple(min(255, c + alpha) for c in primary_rgb)
                 draw.ellipse(
                     [center_x - r, center_y - r, center_x + r, center_y + r],
                     outline=color
                 )
 
+            # Add subtle particles/bokeh effect
+            for _ in range(30):
+                x = random.randint(0, self.width)
+                y = random.randint(0, self.height)
+                size = random.randint(5, 25)
+                alpha = random.randint(10, 40)
+                color = tuple(min(255, primary_rgb[i] + alpha) for i in range(3))
+                draw.ellipse([x, y, x + size, y + size], fill=color)
+
             # Save frame
             frame_path = str(Path(output_path).with_suffix('.png'))
             img.save(frame_path)
 
-            # Create video from frame
+            # Create video with subtle zoom animation
             fade_frames = int(self.TRANSITION_DURATION * self.fps)
+            frames = int(duration * self.fps)
+
             cmd = [
                 self.ffmpeg, '-y',
                 '-loop', '1', '-i', frame_path,
                 '-t', str(duration),
-                '-vf', f"fade=in:0:{fade_frames},fade=out:st={duration - 0.5}:d=0.5",
-                '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-an',
+                '-vf',
+                f"scale=2048:-1,"
+                f"zoompan=z='1.0+0.001*on':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={frames}:s={self.width}x{self.height}:fps={self.fps},"
+                f"fade=in:0:{fade_frames},fade=out:st={duration - 0.5}:d=0.5",
+                '-c:v', 'libx264', '-preset', 'fast', '-pix_fmt', 'yuv420p', '-an',
                 output_path
             ]
-            subprocess.run(cmd, capture_output=True, timeout=60)
+            subprocess.run(cmd, capture_output=True, timeout=120)
 
             # Cleanup
             if os.path.exists(frame_path):
@@ -714,7 +790,9 @@ class UltraVideoGenerator:
         audio_file: str,
         script,
         output_file: str,
-        niche: str = "default"
+        niche: str = "default",
+        background_music: str = None,
+        music_volume: float = None
     ) -> Optional[str]:
         """
         Create a professional video with all effects.
@@ -724,6 +802,8 @@ class UltraVideoGenerator:
             script: VideoScript object or dict with title/sections
             output_file: Output video path
             niche: Content niche for styling
+            background_music: Optional path to background music file
+            music_volume: Optional music volume (0.0-1.0)
 
         Returns:
             Path to created video or None
@@ -888,29 +968,11 @@ class UltraVideoGenerator:
 
             logger.info(f"Created {len(segment_files)} video segments")
 
-            # 3. Concatenate all segments
-            concat_file = self.temp_dir / "concat_list.txt"
-            with open(concat_file, 'w') as f:
-                for seg in segment_files:
-                    # Escape single quotes in path
-                    safe_path = seg.replace("'", "'\\''")
-                    f.write(f"file '{safe_path}'\n")
-
+            # 3. Concatenate all segments with crossfade transitions
             video_only = self.temp_dir / "video_only.mp4"
-            concat_cmd = [
-                self.ffmpeg, '-y',
-                '-f', 'concat',
-                '-safe', '0',
-                '-i', str(concat_file),
-                '-c:v', 'libx264',
-                '-preset', 'fast',
-                '-pix_fmt', 'yuv420p',
-                str(video_only)
-            ]
 
-            result = subprocess.run(concat_cmd, capture_output=True, timeout=600)
-            if result.returncode != 0:
-                logger.error(f"Concat failed: {result.stderr.decode()[:500]}")
+            # Use crossfade for smooth transitions (eliminates black frames)
+            result = self.concatenate_with_crossfade(segment_files, str(video_only))
 
             if not video_only.exists():
                 logger.error("Video concatenation failed")
@@ -933,12 +995,27 @@ class UltraVideoGenerator:
             result = subprocess.run(final_cmd, capture_output=True, timeout=300)
 
             if os.path.exists(output_file):
+                # 5. Add background music if provided
+                music_path = background_music or self.get_niche_music_path(niche)
+                if music_path:
+                    logger.info("Adding background music...")
+                    video_with_music = self.temp_dir / "video_with_music.mp4"
+                    music_result = self.add_background_music(
+                        output_file,
+                        music_path,
+                        str(video_with_music),
+                        music_volume
+                    )
+                    if music_result and str(video_with_music) == music_result:
+                        # Replace output with music version
+                        shutil.move(str(video_with_music), output_file)
+
                 file_size = os.path.getsize(output_file) / (1024 * 1024)
                 logger.success(f"Ultra video created: {output_file} ({file_size:.1f} MB)")
                 self._cleanup()
                 return output_file
             else:
-                logger.error(f"Final video creation failed: {result.stderr.decode()[:500]}")
+                logger.error(f"Final video creation failed: {result.stderr.decode()[:500] if hasattr(result, 'stderr') else 'unknown error'}")
 
         except Exception as e:
             logger.error(f"Video creation failed: {e}")
@@ -955,6 +1032,458 @@ class UltraVideoGenerator:
                     f.unlink()
         except:
             pass
+
+    def concatenate_with_crossfade(
+        self,
+        segment_files: List[str],
+        output_path: str
+    ) -> Optional[str]:
+        """
+        Concatenate video segments with crossfade transitions.
+
+        Uses FFmpeg xfade filter for smooth blending between clips.
+        Eliminates black frames between segments.
+
+        Args:
+            segment_files: List of video segment paths
+            output_path: Output video path
+
+        Returns:
+            Path to output or None
+        """
+        if not segment_files:
+            return None
+
+        if len(segment_files) == 1:
+            # Just copy the single file
+            shutil.copy(segment_files[0], output_path)
+            return output_path
+
+        try:
+            # For 2+ segments, use xfade filter
+            # Build complex filter graph
+            inputs = []
+            filter_parts = []
+            xfade_duration = self.CROSSFADE_DURATION
+
+            # Create input arguments
+            for i, seg in enumerate(segment_files):
+                inputs.extend(['-i', seg])
+
+            # Build xfade filter chain
+            # Each xfade connects previous output to next input
+            # [0][1]xfade -> [v01]
+            # [v01][2]xfade -> [v012]
+            # etc.
+
+            if len(segment_files) == 2:
+                # Simple case: two segments
+                filter_str = f"[0:v][1:v]xfade=transition=fade:duration={xfade_duration}:offset=3.5[outv]"
+            else:
+                # Multiple segments - chain xfades
+                parts = []
+                current_label = "0:v"
+
+                for i in range(1, len(segment_files)):
+                    next_input = f"{i}:v"
+                    out_label = f"v{i}" if i < len(segment_files) - 1 else "outv"
+
+                    # Offset calculation: each clip is ~4s, minus transition overlap
+                    offset = (self.SEGMENT_DURATION - xfade_duration) * i - xfade_duration * (i - 1)
+                    offset = max(0.5, offset)  # Minimum offset
+
+                    parts.append(
+                        f"[{current_label}][{next_input}]xfade=transition=fade:duration={xfade_duration}:offset={offset:.2f}[{out_label}]"
+                    )
+                    current_label = out_label
+
+                filter_str = ";".join(parts)
+
+            # Build FFmpeg command
+            cmd = [self.ffmpeg, '-y'] + inputs + [
+                '-filter_complex', filter_str,
+                '-map', '[outv]',
+                '-c:v', 'libx264',
+                '-preset', 'fast',
+                '-pix_fmt', 'yuv420p',
+                output_path
+            ]
+
+            result = subprocess.run(cmd, capture_output=True, timeout=600)
+
+            if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                return output_path
+
+            # Fallback to simple concat if xfade fails
+            logger.warning("Crossfade failed, falling back to simple concat")
+            return self._simple_concat(segment_files, output_path)
+
+        except Exception as e:
+            logger.error(f"Crossfade concatenation failed: {e}")
+            return self._simple_concat(segment_files, output_path)
+
+    def _simple_concat(self, segment_files: List[str], output_path: str) -> Optional[str]:
+        """Simple concatenation fallback."""
+        concat_file = self.temp_dir / "concat_list.txt"
+        with open(concat_file, 'w') as f:
+            for seg in segment_files:
+                safe_path = seg.replace("'", "'\\''")
+                f.write(f"file '{safe_path}'\n")
+
+        cmd = [
+            self.ffmpeg, '-y',
+            '-f', 'concat',
+            '-safe', '0',
+            '-i', str(concat_file),
+            '-c:v', 'libx264',
+            '-preset', 'fast',
+            '-pix_fmt', 'yuv420p',
+            output_path
+        ]
+
+        subprocess.run(cmd, capture_output=True, timeout=600)
+        return output_path if os.path.exists(output_path) else None
+
+    def add_background_music(
+        self,
+        video_file: str,
+        music_file: str,
+        output_file: str,
+        music_volume: float = None
+    ) -> Optional[str]:
+        """
+        Add background music to a video.
+
+        Args:
+            video_file: Input video path
+            music_file: Background music audio path
+            output_file: Output video path
+            music_volume: Volume level (0.0-1.0), defaults to MUSIC_VOLUME
+
+        Returns:
+            Path to output or None
+        """
+        if not os.path.exists(video_file):
+            logger.error(f"Video not found: {video_file}")
+            return None
+
+        if not os.path.exists(music_file):
+            logger.warning(f"Music file not found: {music_file}")
+            return video_file  # Return original without music
+
+        try:
+            volume = music_volume or self.MUSIC_VOLUME
+
+            # Get video duration
+            video_duration = self.get_audio_duration(video_file)
+
+            # FFmpeg command to mix audio tracks
+            # Stream 0:a is original audio (voice), stream 1:a is music
+            # Fade out music at the end
+            cmd = [
+                self.ffmpeg, '-y',
+                '-i', video_file,
+                '-stream_loop', '-1',  # Loop music if shorter than video
+                '-i', music_file,
+                '-filter_complex',
+                f"[1:a]volume={volume},afade=t=out:st={video_duration - 2}:d=2[music];"
+                f"[0:a][music]amix=inputs=2:duration=first[aout]",
+                '-map', '0:v',
+                '-map', '[aout]',
+                '-c:v', 'copy',
+                '-c:a', 'aac',
+                '-b:a', '192k',
+                output_file
+            ]
+
+            result = subprocess.run(cmd, capture_output=True, timeout=300)
+
+            if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
+                logger.info(f"Added background music at {volume*100:.0f}% volume")
+                return output_file
+
+            logger.warning("Music mixing failed, returning original")
+            return video_file
+
+        except Exception as e:
+            logger.error(f"Background music failed: {e}")
+            return video_file
+
+    def get_niche_music_path(self, niche: str) -> Optional[str]:
+        """
+        Get path to background music file for a niche.
+
+        Looks in assets/music/ directory for niche-specific or generic music.
+
+        Args:
+            niche: Content niche (finance, psychology, storytelling)
+
+        Returns:
+            Path to music file or None
+        """
+        assets_dir = Path(__file__).parent.parent.parent / "assets" / "music"
+
+        # Try niche-specific first
+        niche_music = assets_dir / f"{niche}.mp3"
+        if niche_music.exists():
+            return str(niche_music)
+
+        # Try generic
+        generic_music = assets_dir / "background.mp3"
+        if generic_music.exists():
+            return str(generic_music)
+
+        # Try any mp3 in the directory
+        if assets_dir.exists():
+            for f in assets_dir.glob("*.mp3"):
+                return str(f)
+
+        return None
+
+    def burn_captions(
+        self,
+        video_file: str,
+        captions: List[Dict],
+        output_file: str,
+        style: Dict = None
+    ) -> Optional[str]:
+        """
+        Burn captions/subtitles directly into video.
+
+        Args:
+            video_file: Input video path
+            captions: List of caption dicts with 'start', 'end', 'text' keys
+                     e.g. [{'start': 0.0, 'end': 2.5, 'text': 'Hello world'}]
+            output_file: Output video path
+            style: Optional niche style for caption colors
+
+        Returns:
+            Path to output or None
+        """
+        if not os.path.exists(video_file):
+            logger.error(f"Video not found: {video_file}")
+            return None
+
+        if not captions:
+            logger.warning("No captions provided")
+            return video_file
+
+        try:
+            style = style or self.NICHE_STYLES["default"]
+
+            # Create SRT subtitle file
+            srt_path = self.temp_dir / "captions.srt"
+            self._create_srt_file(captions, str(srt_path))
+
+            if not srt_path.exists():
+                logger.error("Failed to create SRT file")
+                return video_file
+
+            # Get font settings
+            primary = style.get("primary_color", "#ffffff").lstrip('#')
+            font_style = style.get("font_style", "bold")
+
+            # Build subtitle filter
+            # Use drawtext for more control over styling
+            font_path = self.fonts.get(font_style, self.fonts.get("bold", ""))
+
+            # Escape special characters in path for FFmpeg
+            srt_escaped = str(srt_path).replace('\\', '/').replace(':', '\\:')
+
+            # Subtitle filter with styling
+            subtitle_filter = (
+                f"subtitles='{srt_escaped}':"
+                f"force_style='FontSize=24,FontName=Arial,PrimaryColour=&HFFFFFF&,"
+                f"OutlineColour=&H000000&,Outline=2,Shadow=1,MarginV=50'"
+            )
+
+            cmd = [
+                self.ffmpeg, '-y',
+                '-i', video_file,
+                '-vf', subtitle_filter,
+                '-c:v', 'libx264',
+                '-preset', 'fast',
+                '-c:a', 'copy',
+                output_file
+            ]
+
+            result = subprocess.run(cmd, capture_output=True, timeout=600)
+
+            if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
+                logger.info("Captions burned into video")
+                return output_file
+
+            # Fallback: try with drawtext filter if subtitles fails
+            logger.warning("Subtitle filter failed, trying drawtext")
+            return self._burn_captions_drawtext(video_file, captions, output_file, style)
+
+        except Exception as e:
+            logger.error(f"Caption burning failed: {e}")
+            return video_file
+
+    def _create_srt_file(self, captions: List[Dict], output_path: str) -> bool:
+        """Create SRT subtitle file from caption data."""
+        try:
+            with open(output_path, 'w', encoding='utf-8') as f:
+                for i, cap in enumerate(captions, 1):
+                    start = self._seconds_to_srt_time(cap.get('start', 0))
+                    end = self._seconds_to_srt_time(cap.get('end', cap.get('start', 0) + 2))
+                    text = cap.get('text', '')
+
+                    f.write(f"{i}\n")
+                    f.write(f"{start} --> {end}\n")
+                    f.write(f"{text}\n\n")
+
+            return os.path.exists(output_path)
+
+        except Exception as e:
+            logger.error(f"SRT creation failed: {e}")
+            return False
+
+    def _seconds_to_srt_time(self, seconds: float) -> str:
+        """Convert seconds to SRT timestamp format (HH:MM:SS,mmm)."""
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        secs = int(seconds % 60)
+        millis = int((seconds % 1) * 1000)
+        return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+
+    def _burn_captions_drawtext(
+        self,
+        video_file: str,
+        captions: List[Dict],
+        output_file: str,
+        style: Dict
+    ) -> Optional[str]:
+        """Fallback caption burning using drawtext filter."""
+        try:
+            # Build drawtext filters for each caption
+            filters = []
+            font_path = self.fonts.get("bold", "")
+
+            for cap in captions[:50]:  # Limit to prevent command line overflow
+                start = cap.get('start', 0)
+                end = cap.get('end', start + 2)
+                text = cap.get('text', '').replace("'", "\\'").replace(":", "\\:")
+
+                if not text:
+                    continue
+
+                filter_str = (
+                    f"drawtext=text='{text}':"
+                    f"fontsize=48:fontcolor=white:borderw=3:bordercolor=black:"
+                    f"x=(w-text_w)/2:y=h-120:"
+                    f"enable='between(t,{start},{end})'"
+                )
+
+                if font_path:
+                    font_escaped = font_path.replace('\\', '/').replace(':', '\\:')
+                    filter_str = filter_str.replace("fontsize=48", f"fontfile='{font_escaped}':fontsize=48")
+
+                filters.append(filter_str)
+
+            if not filters:
+                return video_file
+
+            # Combine all filters
+            filter_chain = ",".join(filters)
+
+            cmd = [
+                self.ffmpeg, '-y',
+                '-i', video_file,
+                '-vf', filter_chain,
+                '-c:v', 'libx264',
+                '-preset', 'fast',
+                '-c:a', 'copy',
+                output_file
+            ]
+
+            result = subprocess.run(cmd, capture_output=True, timeout=600)
+
+            if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
+                return output_file
+
+            return video_file
+
+        except Exception as e:
+            logger.error(f"Drawtext caption fallback failed: {e}")
+            return video_file
+
+    def generate_captions_from_script(self, script, audio_duration: float) -> List[Dict]:
+        """
+        Generate caption timings from a script object.
+
+        Args:
+            script: VideoScript object with sections
+            audio_duration: Total audio duration for timing
+
+        Returns:
+            List of caption dicts with start, end, text
+        """
+        captions = []
+
+        sections = getattr(script, 'sections', []) if script else []
+        if not sections:
+            return captions
+
+        # Estimate timing based on text length
+        total_text = ""
+        for section in sections:
+            if hasattr(section, 'content'):
+                total_text += section.content + " "
+            elif hasattr(section, 'narration'):
+                total_text += section.narration + " "
+
+        total_words = len(total_text.split())
+        if total_words == 0:
+            return captions
+
+        words_per_second = total_words / audio_duration
+        current_time = 0.0
+
+        for section in sections:
+            content = ""
+            if hasattr(section, 'content'):
+                content = section.content
+            elif hasattr(section, 'narration'):
+                content = section.narration
+
+            if not content:
+                continue
+
+            # Split into sentences for better caption timing
+            sentences = re.split(r'(?<=[.!?])\s+', content)
+
+            for sentence in sentences:
+                if not sentence.strip():
+                    continue
+
+                # Calculate duration based on word count
+                words = len(sentence.split())
+                duration = words / words_per_second
+                duration = max(1.5, min(duration, 6.0))  # 1.5-6 seconds per caption
+
+                # Truncate long sentences
+                display_text = sentence.strip()
+                if len(display_text) > 80:
+                    display_text = display_text[:77] + "..."
+
+                captions.append({
+                    'start': current_time,
+                    'end': current_time + duration,
+                    'text': display_text
+                })
+
+                current_time += duration
+
+                # Don't exceed audio duration
+                if current_time >= audio_duration:
+                    break
+
+            if current_time >= audio_duration:
+                break
+
+        return captions
 
 
 # Test
