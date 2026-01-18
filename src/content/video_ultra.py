@@ -1036,6 +1036,36 @@ class UltraVideoGenerator:
         except (OSError, IOError) as e:
             logger.debug(f"Cleanup failed: {e}")
 
+    def _get_video_duration(self, video_path: str) -> Optional[float]:
+        """
+        Get the actual duration of a video file using ffprobe.
+
+        Args:
+            video_path: Path to video file
+
+        Returns:
+            Duration in seconds or None if failed
+        """
+        if not self.ffprobe or not os.path.exists(video_path):
+            return None
+
+        try:
+            cmd = [
+                self.ffprobe, '-v', 'error',
+                '-show_entries', 'format=duration',
+                '-of', 'default=noprint_wrappers=1:nokey=1',
+                video_path
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            if result.returncode == 0 and result.stdout.strip():
+                duration = float(result.stdout.strip())
+                logger.debug(f"Video duration for {Path(video_path).name}: {duration:.3f}s")
+                return duration
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError, ValueError) as e:
+            logger.warning(f"Failed to get duration for {video_path}: {e}")
+
+        return None
+
     def concatenate_with_crossfade(
         self,
         segment_files: List[str],
@@ -1047,6 +1077,10 @@ class UltraVideoGenerator:
         Uses FFmpeg xfade filter for smooth blending between clips.
         Eliminates black frames between segments.
 
+        For N segments with durations [d1, d2, d3, ...]:
+        - Offset for xfade between segment i and i+1 = sum(d1..di) - (i * crossfade_duration)
+        - This accounts for variable-length segments and overlapping transitions
+
         Args:
             segment_files: List of video segment paths
             output_path: Output video path
@@ -1055,6 +1089,7 @@ class UltraVideoGenerator:
             Path to output or None
         """
         if not segment_files:
+            logger.error("No segment files provided for concatenation")
             return None
 
         if len(segment_files) == 1:
@@ -1063,44 +1098,97 @@ class UltraVideoGenerator:
             return output_path
 
         try:
-            # For 2+ segments, use xfade filter
-            # Build complex filter graph
-            inputs = []
-            filter_parts = []
+            # Get actual durations for all segments using ffprobe
+            durations = []
+            for i, seg in enumerate(segment_files):
+                duration = self._get_video_duration(seg)
+                if duration is None:
+                    # Fallback to assumed duration if ffprobe fails
+                    duration = self.SEGMENT_DURATION
+                    logger.warning(f"Segment {i} ({Path(seg).name}): using fallback duration {duration}s")
+                else:
+                    logger.debug(f"Segment {i} ({Path(seg).name}): actual duration {duration:.3f}s")
+                durations.append(duration)
+
+            logger.info(f"Concatenating {len(segment_files)} segments with crossfade")
+            logger.info(f"Segment durations: {[f'{d:.2f}s' for d in durations]}")
+
             xfade_duration = self.CROSSFADE_DURATION
 
+            # Validate durations - ensure segments are long enough for crossfade
+            min_required_duration = xfade_duration + 0.1  # Need at least crossfade + small buffer
+            for i, d in enumerate(durations):
+                if d < min_required_duration:
+                    logger.warning(
+                        f"Segment {i} duration ({d:.2f}s) is too short for crossfade "
+                        f"(min: {min_required_duration:.2f}s). Falling back to simple concat."
+                    )
+                    return self._simple_concat(segment_files, output_path)
+
             # Create input arguments
-            for i, seg in enumerate(segment_files):
+            inputs = []
+            for seg in segment_files:
                 inputs.extend(['-i', seg])
 
             # Build xfade filter chain
-            # Each xfade connects previous output to next input
-            # [0][1]xfade -> [v01]
-            # [v01][2]xfade -> [v012]
-            # etc.
+            # For xfade, offset is the time in the OUTPUT stream where transition starts
+            # With overlapping transitions:
+            # - First segment plays from 0 to offset1, then fades into second
+            # - offset1 = d1 - xfade_duration
+            # - offset2 = d1 + d2 - 2*xfade_duration (accounting for overlap)
+            # General formula: offset_i = sum(d1..di) - i*xfade_duration
 
             if len(segment_files) == 2:
                 # Simple case: two segments
-                filter_str = f"[0:v][1:v]xfade=transition=fade:duration={xfade_duration}:offset=3.5[outv]"
+                # Offset = first segment duration minus crossfade duration
+                offset = durations[0] - xfade_duration
+                if offset < 0.1:
+                    logger.warning(f"First segment too short for crossfade (offset would be {offset:.2f}s)")
+                    return self._simple_concat(segment_files, output_path)
+
+                filter_str = f"[0:v][1:v]xfade=transition=fade:duration={xfade_duration}:offset={offset:.2f}[outv]"
+                logger.debug(f"Two-segment xfade filter: offset={offset:.2f}s")
             else:
                 # Multiple segments - chain xfades
+                # Each xfade reduces total duration by xfade_duration
                 parts = []
                 current_label = "0:v"
+                cumulative_duration = durations[0]
 
                 for i in range(1, len(segment_files)):
                     next_input = f"{i}:v"
                     out_label = f"v{i}" if i < len(segment_files) - 1 else "outv"
 
-                    # Offset calculation: each clip is ~4s, minus transition overlap
-                    offset = (self.SEGMENT_DURATION - xfade_duration) * i - xfade_duration * (i - 1)
-                    offset = max(0.5, offset)  # Minimum offset
+                    # Offset = cumulative duration of all previous segments in OUTPUT
+                    # minus xfade_duration (because we want transition to start before end)
+                    # Since each previous xfade "ate" xfade_duration, we subtract (i-1)*xfade_duration
+                    # from raw cumulative, then subtract one more xfade_duration for this transition
+                    # Formula: offset_i = sum(d1..di) - i*xfade_duration
+                    offset = cumulative_duration - (i * xfade_duration)
+
+                    # Validate offset
+                    if offset < 0.1:
+                        logger.warning(
+                            f"Invalid offset {offset:.2f}s at segment {i} "
+                            f"(cumulative: {cumulative_duration:.2f}s, transitions: {i}). "
+                            f"Segments may be too short for crossfade."
+                        )
+                        return self._simple_concat(segment_files, output_path)
 
                     parts.append(
                         f"[{current_label}][{next_input}]xfade=transition=fade:duration={xfade_duration}:offset={offset:.2f}[{out_label}]"
                     )
+                    logger.debug(f"Xfade {i}: offset={offset:.2f}s (cumulative={cumulative_duration:.2f}s)")
+
+                    # Add next segment duration to cumulative
+                    cumulative_duration += durations[i]
                     current_label = out_label
 
                 filter_str = ";".join(parts)
+
+            # Calculate expected output duration for logging
+            expected_duration = sum(durations) - (len(segment_files) - 1) * xfade_duration
+            logger.info(f"Expected output duration: {expected_duration:.2f}s")
 
             # Build FFmpeg command
             cmd = [self.ffmpeg, '-y'] + inputs + [
@@ -1112,17 +1200,31 @@ class UltraVideoGenerator:
                 output_path
             ]
 
+            logger.debug(f"FFmpeg xfade command: {' '.join(cmd[:10])}... [filter truncated]")
             result = subprocess.run(cmd, capture_output=True, timeout=600)
 
             if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                actual_duration = self._get_video_duration(output_path)
+                logger.info(
+                    f"Crossfade concatenation successful: {output_path} "
+                    f"(duration: {actual_duration:.2f}s)" if actual_duration else
+                    f"Crossfade concatenation successful: {output_path}"
+                )
                 return output_path
+
+            # Log failure details
+            stderr_output = result.stderr.decode('utf-8', errors='replace') if result.stderr else 'No stderr'
+            logger.error(f"FFmpeg xfade failed (returncode={result.returncode})")
+            logger.error(f"FFmpeg stderr: {stderr_output[:1000]}")
 
             # Fallback to simple concat if xfade fails
             logger.warning("Crossfade failed, falling back to simple concat")
             return self._simple_concat(segment_files, output_path)
 
         except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError) as e:
-            logger.error(f"Crossfade concatenation failed: {e}")
+            logger.error(f"Crossfade concatenation failed with exception: {e}")
+            import traceback
+            logger.debug(f"Traceback: {traceback.format_exc()}")
             return self._simple_concat(segment_files, output_path)
 
     def _simple_concat(self, segment_files: List[str], output_path: str) -> Optional[str]:
