@@ -74,24 +74,33 @@ class TrendResearcher:
                 geo=self.geo
             )
 
-            # Get related queries
-            related = self.pytrends.related_queries()
+            # Get related queries with safe access
             rising_queries = []
             top_queries = []
-
-            if seed_keyword in related:
-                if related[seed_keyword]["rising"] is not None:
-                    rising_queries = related[seed_keyword]["rising"]["query"].tolist()[:10]
-                if related[seed_keyword]["top"] is not None:
-                    top_queries = related[seed_keyword]["top"]["query"].tolist()[:10]
-
-            # Get related topics
-            topics = self.pytrends.related_topics()
             related_topics = []
 
-            if seed_keyword in topics:
-                if topics[seed_keyword]["rising"] is not None:
-                    related_topics = topics[seed_keyword]["rising"]["topic_title"].tolist()[:10]
+            try:
+                related = self.pytrends.related_queries()
+                if related and seed_keyword in related:
+                    rising_data = related[seed_keyword].get("rising")
+                    top_data = related[seed_keyword].get("top")
+
+                    if rising_data is not None and not rising_data.empty:
+                        rising_queries = rising_data["query"].tolist()[:10]
+                    if top_data is not None and not top_data.empty:
+                        top_queries = top_data["query"].tolist()[:10]
+            except Exception:
+                pass  # Continue without related queries
+
+            # Get related topics with safe access
+            try:
+                topics = self.pytrends.related_topics()
+                if topics and seed_keyword in topics:
+                    rising_topics = topics[seed_keyword].get("rising")
+                    if rising_topics is not None and not rising_topics.empty:
+                        related_topics = rising_topics["topic_title"].tolist()[:10]
+            except Exception:
+                pass  # Continue without related topics
 
             # Get interest over time to determine trend direction
             interest = self.pytrends.interest_over_time()

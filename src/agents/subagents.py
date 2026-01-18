@@ -32,6 +32,8 @@ from ..research.idea_generator import IdeaGenerator, ScoredIdea
 from ..content.script_writer import ScriptWriter, VideoScript
 from ..content.tts import TextToSpeech
 from ..content.video_fast import FastVideoGenerator
+from ..content.video_pro import ProVideoGenerator
+from ..content.video_ultra import UltraVideoGenerator
 
 
 @dataclass
@@ -141,20 +143,22 @@ class ScriptAgent:
     def write_script(
         self,
         topic: ScoredIdea,
-        duration_minutes: int = 8,
-        style: str = "educational"
+        duration_minutes: int = 5,
+        style: str = "documentary",
+        niche: str = "default"
     ) -> Optional[VideoScript]:
         """Write a complete video script."""
-        logger.info(f"[{self.name}] Writing script for: {topic.title}")
+        logger.info(f"[{self.name}] Writing {duration_minutes}-min script for: {topic.title}")
 
         try:
             script = self.writer.generate_script(
                 topic=topic.title,
                 style=style,
-                duration_minutes=duration_minutes
+                duration_minutes=duration_minutes,
+                niche=niche
             )
 
-            logger.success(f"[{self.name}] Script complete: {len(script.sections)} sections")
+            logger.success(f"[{self.name}] Script complete: {len(script.sections)} sections, ~{script.total_duration}s")
             return script
 
         except Exception as e:
@@ -180,14 +184,34 @@ class ProductionAgent:
 
     Capabilities:
     - Generate voiceover audio
-    - Create video from audio
+    - Create video from audio (basic, pro, or ULTRA with Ken Burns effects)
     - Generate thumbnails
     """
 
-    def __init__(self, voice: str = "en-US-GuyNeural"):
+    def __init__(self, voice: str = "en-US-GuyNeural", use_ultra: bool = True):
         self.name = "ProductionAgent"
         self.tts = TextToSpeech(default_voice=voice)
         self.video_gen = FastVideoGenerator()
+        self.use_ultra = use_ultra
+
+        # Ultra video generator with Ken Burns, stock footage, animations
+        if use_ultra:
+            try:
+                self.ultra_video_gen = UltraVideoGenerator()
+                logger.info(f"{self.name} initialized with ULTRA video generator (Ken Burns + Stock)")
+            except Exception as e:
+                logger.warning(f"Ultra video generator unavailable: {e}")
+                # Fallback to Pro
+                try:
+                    self.ultra_video_gen = ProVideoGenerator()
+                    logger.info(f"{self.name} falling back to PRO video generator")
+                except Exception as e2:
+                    logger.warning(f"Pro video generator also unavailable: {e2}")
+                    self.ultra_video_gen = None
+                    self.use_ultra = False
+        else:
+            self.ultra_video_gen = None
+
         self.output_dir = Path("output")
         self.output_dir.mkdir(exist_ok=True)
         logger.info(f"{self.name} initialized with voice: {voice}")
@@ -265,7 +289,8 @@ class ProductionAgent:
         self,
         script: VideoScript,
         narration: str,
-        project_id: str
+        project_id: str,
+        niche: str = "default"
     ) -> Dict[str, Optional[str]]:
         """Produce complete video package (audio, video, thumbnail)."""
         logger.info(f"[{self.name}] Starting full production for: {script.title}")
@@ -283,19 +308,49 @@ class ProductionAgent:
         if not audio_file:
             return {"audio": None, "video": None, "thumbnail": None}
 
-        # Create video
-        video_file = self.create_video(
-            audio_file,
-            script.title,
-            f"{safe_name}.mp4"
-        )
+        # Create video (use ULTRA generator with Ken Burns if available)
+        video_path = str(self.output_dir / f"{safe_name}.mp4")
+
+        if self.use_ultra and self.ultra_video_gen:
+            logger.info(f"[{self.name}] Using ULTRA video generator (Ken Burns + Stock Footage)")
+            video_file = self.ultra_video_gen.create_video(
+                audio_file=audio_file,
+                script=script,
+                output_file=video_path,
+                niche=niche
+            )
+        else:
+            # Fallback to basic video generator
+            video_file = self.create_video(
+                audio_file,
+                script.title,
+                f"{safe_name}.mp4"
+            )
 
         # Create thumbnail
-        thumbnail_file = self.create_thumbnail(
-            script.title,
-            f"{safe_name}_thumb.png",
-            subtitle=script.description[:50] if script.description else None
-        )
+        thumb_path = str(self.output_dir / f"{safe_name}_thumb.png")
+
+        if self.use_ultra and hasattr(self.ultra_video_gen, 'create_title_card'):
+            # Use ULTRA title card as thumbnail
+            self.ultra_video_gen.create_title_card(
+                title=script.title,
+                output_path=thumb_path,
+                style=self.ultra_video_gen.NICHE_STYLES.get(niche, self.ultra_video_gen.NICHE_STYLES["default"]),
+                subtitle=script.description[:50] if script.description else None
+            )
+            thumbnail_file = thumb_path if os.path.exists(thumb_path) else None
+        elif self.use_ultra and hasattr(self.ultra_video_gen, 'create_thumbnail_pro'):
+            thumbnail_file = self.ultra_video_gen.create_thumbnail_pro(
+                title=script.title,
+                output_file=thumb_path,
+                niche=niche
+            )
+        else:
+            thumbnail_file = self.create_thumbnail(
+                script.title,
+                f"{safe_name}_thumb.png",
+                subtitle=script.description[:50] if script.description else None
+            )
 
         return {
             "audio": audio_file,
@@ -452,10 +507,25 @@ class AgentOrchestrator:
             project.topic = topic
             logger.info(f"  Selected: {topic.title}")
 
-            # Step 2: Script
+            # Determine niche from channel
+            niche = "default"
+            if channel:
+                niche_map = {
+                    "money_blueprints": "finance",
+                    "mind_unlocked": "psychology",
+                    "untold_stories": "storytelling"
+                }
+                niche = niche_map.get(channel, "default")
+
+            # Step 2: Script (5-6 minute videos)
             logger.info(f"\n[STEP 2/4] Script Agent writing script...")
             project.status = "scripting"
-            script = self.script_agent.write_script(topic)
+            script = self.script_agent.write_script(
+                topic,
+                duration_minutes=5,
+                style="documentary",
+                niche=niche
+            )
 
             if not script:
                 project.status = "failed"
@@ -473,7 +543,7 @@ class AgentOrchestrator:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             result = loop.run_until_complete(
-                self.production_agent.produce_full_video(script, narration, project_id)
+                self.production_agent.produce_full_video(script, narration, project_id, niche=niche)
             )
             loop.close()
 

@@ -121,9 +121,9 @@ class YouTubeAuth:
             self.SCOPES
         )
 
-        # Run local server for OAuth callback
+        # Run local server for OAuth callback (port 0 = auto-pick available port)
         credentials = flow.run_local_server(
-            port=8080,
+            port=0,
             prompt="consent",
             authorization_prompt_message="Please authorize YouTube access in your browser."
         )

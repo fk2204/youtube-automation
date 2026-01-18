@@ -242,8 +242,10 @@ class ScriptSection:
     """Represents a section of the video script."""
     timestamp: str          # e.g., "00:00-00:15"
     section_type: str       # hook, intro, content, outro
+    title: str              # Section title
     narration: str          # What to say
     screen_action: str      # What to show on screen
+    keywords: List[str]     # Keywords for stock footage search
     duration_seconds: int   # Duration of this section
 
 
@@ -272,52 +274,114 @@ class ScriptWriter:
     - OpenAI (GPT-4) - Most popular
     """
 
-    SCRIPT_PROMPT_TEMPLATE = """You are an expert YouTube scriptwriter specializing in educational tutorial content.
+    SCRIPT_PROMPT_TEMPLATE = """You are an expert YouTube scriptwriter creating VIRAL faceless videos.
 
-Write a complete YouTube tutorial script for the following topic:
+Write a complete {duration}-minute YouTube script for:
 
 **Topic:** {topic}
-**Target Duration:** {duration} minutes
 **Style:** {style}
 **Target Audience:** {audience}
 
-## Requirements:
+## VIRAL VIDEO STRUCTURE (IMPORTANT):
 
-1. **HOOK (0-10 seconds):** Start with an attention-grabbing statement or question
-2. **INTRO (10-30 seconds):** Explain what viewers will learn
-3. **MAIN CONTENT:** Step-by-step tutorial with clear explanations
-4. **OUTRO (last 20 seconds):** Call to action, subscribe reminder
+1. **HOOK (0-15 seconds):** Pattern interrupt - shocking fact, question, or bold claim
+2. **PROBLEM (15-45 seconds):** Identify pain point, create curiosity
+3. **PROMISE (45-60 seconds):** Tease what they'll learn
+4. **MAIN CONTENT (3-5 minutes):** 5-7 key points with stories/examples
+5. **PAYOFF (30 seconds):** Deliver the key insight
+6. **CTA (15 seconds):** Subscribe, comment, like
 
-## Output Format:
+## ENGAGEMENT TECHNIQUES:
+- Use "you" frequently to connect with viewer
+- Add cliffhangers between sections ("But here's what most people miss...")
+- Include specific numbers and statistics
+- Tell micro-stories within points
+- Use rhetorical questions
+- Create curiosity loops
 
-Return a JSON object with this exact structure:
+## Output JSON Format:
 ```json
 {{
-    "title": "SEO-optimized video title (under 60 chars)",
-    "description": "YouTube description with timestamps and keywords (200-300 words)",
-    "tags": ["tag1", "tag2", "tag3", "..."],
-    "thumbnail_idea": "Brief description of an eye-catching thumbnail",
+    "title": "VIRAL title with numbers/power words (under 60 chars)",
+    "description": "SEO description with timestamps (200 words)",
+    "tags": ["10-15 relevant tags"],
+    "thumbnail_idea": "Eye-catching thumbnail concept",
     "sections": [
         {{
-            "timestamp": "00:00-00:10",
+            "timestamp": "00:00-00:15",
             "section_type": "hook",
-            "narration": "What to say (spoken text)",
-            "screen_action": "What to show on screen",
-            "duration_seconds": 10
+            "title": "Section Title",
+            "narration": "Spoken text (50-100 words per section)",
+            "screen_action": "Visual description for B-roll",
+            "keywords": ["3-5 keywords for stock footage"],
+            "duration_seconds": 15
         }}
     ]
 }}
 ```
 
-## Guidelines:
-- Use conversational, engaging language
-- Include specific examples and code snippets where relevant
-- Break complex concepts into simple steps
-- Add personality but stay professional
-- Mention subscribing and liking naturally
-- Include timestamps in the description
+## CRITICAL REQUIREMENTS:
+- Generate 8-12 sections for {duration} minute video
+- Each section needs KEYWORDS for stock footage matching
+- Narration should total {word_count} words (~{duration} minutes when spoken)
+- Make it feel like a documentary, not a lecture
+- Include emotional hooks and power words
 
-Write the complete script now:"""
+Write the COMPLETE viral script now:"""
+
+    # Longer detailed prompt for better videos
+    VIRAL_SCRIPT_PROMPT = """You are a viral content strategist creating faceless YouTube videos that get millions of views.
+
+Create a {duration}-MINUTE script about: {topic}
+
+## NICHE-SPECIFIC GUIDELINES:
+{niche_guide}
+
+## VIRAL FORMULA:
+The first 15 seconds determine if someone watches. Use pattern interrupts:
+- Start mid-thought: "...and that's exactly why most people fail"
+- Bold claim: "This one strategy made me $X in Y days"
+- Question: "What if everything you knew about X was wrong?"
+
+## STORY STRUCTURE:
+Every point should follow: HOOK → TENSION → RESOLUTION
+- Hook: Grab attention with a surprising fact
+- Tension: Build curiosity, create stakes
+- Resolution: Deliver the insight
+
+## SECTIONS REQUIRED:
+1. HOOK (15s) - Pattern interrupt, shocking opener
+2. CONTEXT (30s) - Set up the problem/topic
+3. POINT 1 (45-60s) - First major insight with story
+4. POINT 2 (45-60s) - Second insight with example
+5. POINT 3 (45-60s) - Third insight with proof
+6. POINT 4 (45-60s) - Fourth insight (optional for longer videos)
+7. POINT 5 (45-60s) - Fifth insight (optional)
+8. TWIST (30s) - Unexpected perspective or revelation
+9. CONCLUSION (30s) - Tie it all together
+10. CTA (15s) - Call to action
+
+## OUTPUT FORMAT:
+Return ONLY valid JSON:
+{{
+    "title": "VIRAL title - numbers, power words, curiosity gap",
+    "description": "YouTube description with timestamps and keywords",
+    "tags": ["list", "of", "15", "SEO", "tags"],
+    "thumbnail_idea": "High-contrast, faces/emotions, bold text overlay",
+    "sections": [
+        {{
+            "timestamp": "00:00-00:15",
+            "section_type": "hook",
+            "title": "The Hidden Truth",
+            "narration": "Full spoken text for this section...",
+            "screen_action": "Dramatic footage of...",
+            "keywords": ["keyword1", "keyword2", "keyword3"],
+            "duration_seconds": 15
+        }}
+    ]
+}}
+
+Generate the full {duration}-minute script now:"""
 
     def __init__(
         self,
@@ -347,37 +411,75 @@ Write the complete script now:"""
         self.ai = get_provider(provider=provider, api_key=api_key, model=model)
         logger.info(f"ScriptWriter initialized with provider: {provider}")
 
+    # Niche-specific content guidelines
+    NICHE_GUIDES = {
+        "finance": """
+- Use specific dollar amounts and percentages
+- Reference real investment strategies
+- Mention common money mistakes people make
+- Include actionable steps viewers can take today
+- Tone: Authoritative but approachable""",
+        "psychology": """
+- Reference psychological studies and experiments
+- Use terms like "cognitive bias", "subconscious", "manipulation"
+- Include real-world examples of psychological principles
+- Make viewers feel like insiders learning secrets
+- Tone: Mysterious, intriguing, slightly dark""",
+        "storytelling": """
+- Build suspense and tension throughout
+- Use vivid sensory details
+- Include unexpected twists
+- Create emotional connection to characters
+- Tone: Dramatic, immersive, documentary-style""",
+        "default": """
+- Use clear, engaging language
+- Include specific examples
+- Build curiosity throughout
+- End with a satisfying payoff
+- Tone: Professional but conversational"""
+    }
+
     def generate_script(
         self,
         topic: str,
-        duration_minutes: int = 10,
+        duration_minutes: int = 5,
         style: str = "educational",
-        audience: str = "beginners"
+        audience: str = "general",
+        niche: str = "default"
     ) -> VideoScript:
         """
         Generate a complete YouTube video script.
 
         Args:
-            topic: The tutorial topic
-            duration_minutes: Target video duration in minutes
-            style: Script style (educational, casual, professional)
-            audience: Target audience (beginners, intermediate, advanced)
+            topic: The video topic
+            duration_minutes: Target video duration (5-6 minutes recommended)
+            style: Script style (educational, documentary, storytelling)
+            audience: Target audience
+            niche: Content niche (finance, psychology, storytelling)
 
         Returns:
             VideoScript object with all sections
         """
-        logger.info(f"Generating script for: {topic}")
+        logger.info(f"Generating {duration_minutes}-min script for: {topic}")
+
+        # Calculate target word count (150 words per minute for natural speech)
+        word_count = duration_minutes * 150
+
+        # Get niche-specific guidance
+        niche_guide = self.NICHE_GUIDES.get(niche, self.NICHE_GUIDES["default"])
 
         prompt = self.SCRIPT_PROMPT_TEMPLATE.format(
             topic=topic,
             duration=duration_minutes,
             style=style,
-            audience=audience
+            audience=audience,
+            word_count=word_count,
+            niche_guide=niche_guide
         )
 
         try:
             # Use the AI provider to generate content
-            content = self.ai.generate(prompt, max_tokens=4096)
+            content = self.ai.generate(prompt, max_tokens=6000)
 
             # Parse JSON from response
             script_data = self._parse_json_response(content)
@@ -389,7 +491,99 @@ Write the complete script now:"""
             return video_script
 
         except Exception as e:
-            logger.error(f"Script generation failed: {e}")
+            logger.warning(f"Complex script failed, trying simple format: {e}")
+
+            # Fallback to simpler prompt for smaller models
+            return self._generate_simple_script(topic, duration_minutes, niche)
+
+    def _generate_simple_script(
+        self,
+        topic: str,
+        duration_minutes: int,
+        niche: str
+    ) -> VideoScript:
+        """Generate a simpler script format for smaller LLMs."""
+        logger.info(f"Using simple script generator for: {topic}")
+
+        # Simple prompt that smaller models can handle
+        prompt = f"""Write a {duration_minutes}-minute YouTube video script about: {topic}
+
+Write 5-8 paragraphs of narration text. Each paragraph should be about 50-80 words.
+
+Include:
+1. An attention-grabbing opening
+2. 3-5 main points with examples
+3. A conclusion with call to action
+
+Just write the narration text, no JSON or formatting needed. Write naturally as if speaking to the viewer."""
+
+        try:
+            content = self.ai.generate(prompt, max_tokens=3000)
+
+            # Create sections from paragraphs
+            paragraphs = [p.strip() for p in content.split('\n\n') if p.strip() and len(p.strip()) > 50]
+
+            if not paragraphs:
+                paragraphs = [content]
+
+            sections = []
+            time_offset = 0
+
+            # Section types based on position
+            section_types = ['hook', 'intro'] + ['content'] * (len(paragraphs) - 3) + ['conclusion', 'outro']
+
+            for i, para in enumerate(paragraphs[:10]):  # Max 10 sections
+                # Estimate duration (150 words per minute)
+                word_count = len(para.split())
+                duration = max(15, int(word_count / 2.5))  # ~150 wpm
+
+                section_type = section_types[i] if i < len(section_types) else 'content'
+
+                # Extract keywords from paragraph
+                words = para.lower().split()
+                stop_words = {'the', 'a', 'an', 'is', 'are', 'was', 'were', 'and', 'or', 'but',
+                             'in', 'on', 'at', 'to', 'for', 'of', 'with', 'you', 'your', 'this',
+                             'that', 'it', 'they', 'we', 'i', 'my', 'be', 'have', 'has', 'can'}
+                keywords = list(set([w for w in words if len(w) > 4 and w not in stop_words]))[:5]
+
+                # Add niche-related keywords
+                niche_keywords = {
+                    'finance': ['money', 'wealth', 'invest', 'income', 'financial'],
+                    'psychology': ['mind', 'brain', 'behavior', 'psychology', 'mental'],
+                    'storytelling': ['mystery', 'story', 'crime', 'investigation', 'truth']
+                }
+                keywords.extend(niche_keywords.get(niche, ['documentary', 'educational'])[:2])
+
+                start_time = time_offset
+                end_time = time_offset + duration
+                time_offset = end_time
+
+                sections.append(ScriptSection(
+                    timestamp=f"{start_time//60:02d}:{start_time%60:02d}-{end_time//60:02d}:{end_time%60:02d}",
+                    section_type=section_type,
+                    title=f"Section {i+1}",
+                    narration=para,
+                    screen_action=f"B-roll footage related to: {', '.join(keywords[:3])}",
+                    keywords=keywords,
+                    duration_seconds=duration
+                ))
+
+            total_duration = sum(s.duration_seconds for s in sections)
+
+            # Generate simple title
+            title = topic[:55] + "..." if len(topic) > 55 else topic
+
+            return VideoScript(
+                title=title,
+                description=f"In this video, we explore {topic}. Subscribe for more content!",
+                tags=topic.lower().split()[:10] + [niche, 'educational', 'tutorial'],
+                sections=sections,
+                total_duration=total_duration,
+                thumbnail_idea=f"Bold text with '{topic[:20]}' overlay"
+            )
+
+        except Exception as e:
+            logger.error(f"Simple script generation also failed: {e}")
             raise
 
     def _fix_json(self, json_str: str) -> str:
@@ -445,11 +639,25 @@ Write the complete script now:"""
         sections = []
 
         for section_data in data.get("sections", []):
+            # Extract keywords or generate from narration
+            keywords = section_data.get("keywords", [])
+            if not keywords and section_data.get("narration"):
+                # Auto-generate keywords from narration
+                narration = section_data.get("narration", "")
+                words = narration.lower().split()
+                # Filter common words and get unique keywords
+                stop_words = {'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been',
+                             'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with',
+                             'you', 'your', 'this', 'that', 'it', 'they', 'we', 'i', 'my'}
+                keywords = [w for w in words if len(w) > 4 and w not in stop_words][:5]
+
             section = ScriptSection(
                 timestamp=section_data.get("timestamp", "00:00-00:00"),
                 section_type=section_data.get("section_type", "content"),
+                title=section_data.get("title", ""),
                 narration=section_data.get("narration", ""),
                 screen_action=section_data.get("screen_action", ""),
+                keywords=keywords,
                 duration_seconds=section_data.get("duration_seconds", 30)
             )
             sections.append(section)
