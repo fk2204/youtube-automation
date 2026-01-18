@@ -23,13 +23,44 @@ Usage:
 """
 
 import os
+import re
 import json
 import requests
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
+from datetime import datetime
 from loguru import logger
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+
+
+# ============================================================
+# Title Optimization Constants (for YouTube CTR improvement)
+# ============================================================
+
+# Power words that increase click-through rates
+POWER_WORDS = [
+    "Ultimate", "Secret", "Proven", "Shocking", "Hidden", "Unbelievable",
+    "Essential", "Critical", "Powerful", "Incredible", "Amazing", "Expert",
+    "Complete", "Definitive", "Revolutionary", "Guaranteed", "Instant",
+    "Exclusive", "Breakthrough", "Massive", "Surprising"
+]
+
+# Convert number words to digits (digits perform better in titles)
+NUMBER_WORDS_TO_DIGITS = {
+    "zero": "0", "one": "1", "two": "2", "three": "3", "four": "4",
+    "five": "5", "six": "6", "seven": "7", "eight": "8", "nine": "9",
+    "ten": "10", "eleven": "11", "twelve": "12", "thirteen": "13",
+    "fourteen": "14", "fifteen": "15", "sixteen": "16", "seventeen": "17",
+    "eighteen": "18", "nineteen": "19", "twenty": "20"
+}
+
+# Topics that benefit from having the current year in the title
+YEAR_RELEVANT_TOPICS = [
+    "best", "top", "guide", "tutorial", "how to", "tips", "tricks",
+    "strategy", "strategies", "review", "comparison", "vs", "trends",
+    "update", "new", "latest", "current", "modern", "today"
+]
 
 
 # ============================================================
@@ -697,6 +728,11 @@ DEFAULT NICHE - ENGAGEMENT REQUIREMENTS:
             # Convert to VideoScript object
             video_script = self._create_video_script(script_data)
 
+            # BUG FIX #2: Validate that script has at least 1 section
+            if len(video_script.sections) == 0:
+                logger.warning("Script generated with 0 sections, retrying with simple format")
+                return self._generate_simple_script(topic, duration_minutes, niche)
+
             logger.success(f"Script generated: {len(video_script.sections)} sections")
             return video_script
 
@@ -801,6 +837,11 @@ Write the narration text now. No JSON or formatting needed. Write naturally as i
                     duration_seconds=duration
                 ))
 
+            # BUG FIX #2: Validate that we have at least 1 section
+            if len(sections) == 0:
+                logger.error("Simple script generation produced 0 sections")
+                raise ValueError("Failed to generate any script sections")
+
             total_duration = sum(s.duration_seconds for s in sections)
 
             # Generate simple title
@@ -821,10 +862,25 @@ Write the narration text now. No JSON or formatting needed. Write naturally as i
 
     def _fix_json(self, json_str: str) -> str:
         """Fix common JSON issues from LLM outputs."""
-        import re
         # Remove trailing commas before ] or }
         json_str = re.sub(r',\s*]', ']', json_str)
         json_str = re.sub(r',\s*}', '}', json_str)
+
+        # Fix single quotes used instead of double quotes for keys
+        json_str = re.sub(r'(?<=[{,\s])(\w+)(?=\s*:)', r'""', json_str)
+
+        # Remove any duplicate double quotes that may have been introduced
+        json_str = re.sub(r'""(\w+)""', r'""', json_str)
+
+        # Try to fix common truncation - add missing closing brackets
+        open_braces = json_str.count('{') - json_str.count('}')
+        open_brackets = json_str.count('[') - json_str.count(']')
+
+        if open_braces > 0:
+            json_str = json_str.rstrip() + '}' * open_braces
+        if open_brackets > 0:
+            json_str = json_str.rstrip() + ']' * open_brackets
+
         return json_str
 
     def _parse_json_response(self, content: str) -> Dict[str, Any]:
@@ -979,6 +1035,194 @@ Please provide an improved version of the script in the same JSON format, addres
         improved_data["thumbnail_idea"] = script.thumbnail_idea
 
         return self._create_video_script(improved_data)
+
+    def optimize_title(self, title: str, primary_keyword: str = "") -> str:
+        """
+        Optimize a title for YouTube CTR and SEO.
+
+        Best practices applied:
+        - Primary keyword at the beginning (if provided)
+        - Convert number words to digits ("Seven Tips" -> "7 Tips")
+        - Add current year when topic is relevant
+        - Add power words when title lacks impact
+        - Keep titles within 50-60 character optimal range
+
+        Args:
+            title: The original title
+            primary_keyword: Optional keyword to put at the start
+
+        Returns:
+            Optimized title string
+        """
+        optimized = title.strip()
+        current_year = str(datetime.now().year)
+
+        # Convert number words to digits (digits get higher CTR)
+        title_lower = optimized.lower()
+        for word, digit in NUMBER_WORDS_TO_DIGITS.items():
+            # Match whole words only
+            pattern = r'\b' + word + r'\b'
+            if re.search(pattern, title_lower, re.IGNORECASE):
+                optimized = re.sub(pattern, digit, optimized, flags=re.IGNORECASE)
+
+        # Add current year if topic is relevant and year not already present
+        if current_year not in optimized:
+            topic_lower = optimized.lower()
+            if any(topic in topic_lower for topic in YEAR_RELEVANT_TOPICS):
+                # Add year at the end in brackets if there's room
+                if len(optimized) <= 50:
+                    optimized = f"{optimized} [{current_year}]"
+
+        # Put primary keyword at the beginning if provided
+        if primary_keyword and not optimized.lower().startswith(primary_keyword.lower()):
+            # Check if keyword is in the title already
+            if primary_keyword.lower() in optimized.lower():
+                # Remove it and prepend
+                pattern = re.compile(re.escape(primary_keyword), re.IGNORECASE)
+                optimized = pattern.sub('', optimized).strip()
+                optimized = re.sub(r'\s+', ' ', optimized)  # Clean up double spaces
+                optimized = re.sub(r'^[:\-–—]\s*', '', optimized)  # Clean up leading punctuation
+            optimized = f"{primary_keyword}: {optimized}"
+
+        # Add a power word if title seems weak (no power words and no numbers)
+        has_power_word = any(pw.lower() in optimized.lower() for pw in POWER_WORDS)
+        has_number = any(c.isdigit() for c in optimized)
+        if not has_power_word and not has_number and len(optimized) < 45:
+            # Add "Ultimate" at the start
+            optimized = f"The Ultimate {optimized}"
+
+        # Truncate intelligently to 60 characters (don't cut mid-word)
+        if len(optimized) > 60:
+            optimized = optimized[:57].rsplit(' ', 1)[0] + "..."
+
+        logger.debug(f"Title optimized: '{title}' -> '{optimized}'")
+        return optimized
+
+    def generate_timestamps(self, script: VideoScript) -> str:
+        """
+        Generate YouTube chapters/timestamps from script sections.
+
+        YouTube requires:
+        - First timestamp must be 00:00
+        - At least 3 timestamps
+        - Each chapter at least 10 seconds
+
+        Args:
+            script: VideoScript object with sections
+
+        Returns:
+            Formatted timestamp string for video description
+        """
+        if not script.sections:
+            return ""
+
+        timestamps = []
+        current_time = 0
+
+        # Map section types to friendly labels
+        section_labels = {
+            "hook": "Hook",
+            "intro": "Introduction",
+            "introduction": "Introduction",
+            "problem": "The Problem",
+            "promise": "What You'll Learn",
+            "content": "Main Content",
+            "point": "Key Point",
+            "example": "Example",
+            "story": "Story",
+            "payoff": "Key Insight",
+            "cta": "Final Thoughts",
+            "outro": "Outro",
+            "conclusion": "Conclusion"
+        }
+
+        for i, section in enumerate(script.sections):
+            minutes = current_time // 60
+            seconds = current_time % 60
+
+            # Get a friendly label
+            section_type = section.section_type.lower()
+            label = section_labels.get(section_type, section.title or f"Part {i+1}")
+
+            # Use section title if it's more descriptive
+            if section.title and len(section.title) > 3:
+                label = section.title
+
+            timestamps.append(f"{minutes:02d}:{seconds:02d} - {label}")
+            current_time += section.duration_seconds
+
+        return "\n".join(timestamps)
+
+    def generate_optimized_description(
+        self,
+        script: VideoScript,
+        primary_keyword: str = "",
+        niche: str = "default"
+    ) -> str:
+        """
+        Generate an SEO-optimized YouTube description.
+
+        Best practices applied:
+        - Primary keyword in first 200 characters
+        - Auto-generated timestamps/chapters
+        - 3 relevant hashtags at the end
+        - Clear call-to-action
+
+        Args:
+            script: VideoScript object
+            primary_keyword: Main keyword for SEO
+            niche: Content niche for relevant hashtags
+
+        Returns:
+            Optimized description string
+        """
+        # Start with a keyword-rich hook (first 200 chars are critical)
+        keyword = primary_keyword or script.title.split(':')[0].strip()
+        hook = f"Discover {keyword} in this comprehensive guide. "
+
+        # Add the original description if it exists
+        if script.description:
+            hook += script.description[:150]
+
+        # Ensure we have content in first 200 chars
+        if len(hook) < 100:
+            hook += f" Learn everything you need to know about {keyword}."
+
+        # Generate timestamps
+        timestamps = self.generate_timestamps(script)
+
+        # Build the description
+        parts = [hook.strip()]
+
+        # Add timestamps section
+        if timestamps and len(script.sections) >= 3:
+            parts.append("\n\n📋 TIMESTAMPS:")
+            parts.append(timestamps)
+
+        # Add call-to-action
+        parts.append("\n\n🔔 Don't forget to LIKE, COMMENT, and SUBSCRIBE for more content!")
+        parts.append("💬 Tell me in the comments: What topic should I cover next?")
+
+        # Add niche-specific hashtags (YouTube shows up to 3 above title)
+        niche_hashtags = {
+            "finance": ["#Finance", "#MoneyTips", "#WealthBuilding"],
+            "psychology": ["#Psychology", "#MindHacks", "#SelfImprovement"],
+            "storytelling": ["#TrueStory", "#Documentary", "#Storytelling"],
+            "programming": ["#Programming", "#Coding", "#Tech"],
+            "default": ["#Tutorial", "#HowTo", "#Education"]
+        }
+
+        hashtags = niche_hashtags.get(niche, niche_hashtags["default"])
+        parts.append("\n\n" + " ".join(hashtags))
+
+        description = "\n".join(parts)
+
+        # YouTube description limit is 5000 characters
+        if len(description) > 5000:
+            description = description[:4997] + "..."
+
+        logger.debug(f"Generated optimized description ({len(description)} chars)")
+        return description
 
     def get_full_narration(self, script: VideoScript) -> str:
         """Extract just the narration text for TTS."""

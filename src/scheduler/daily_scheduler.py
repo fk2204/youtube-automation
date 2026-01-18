@@ -60,10 +60,13 @@ logger.add(
 # SCHEDULE CONFIGURATION
 # ============================================================
 
-# 3 posts per channel, spaced throughout the day (UTC times)
+# OPTIMIZED for YouTube Views:
+# - Best upload window: 3-5 PM EST (19:00-21:00 UTC)
+# - Best days: Wednesday-Friday for highest engagement
+# - 3 posts per channel, spaced throughout the day (UTC times)
 POSTING_SCHEDULE = {
     "money_blueprints": {
-        "times": ["06:00", "14:00", "20:00"],
+        "times": ["15:00", "19:00", "21:00"],  # Optimized: afternoon + prime time EST
         "topics": [
             "passive income ideas for beginners",
             "how to save money fast",
@@ -77,7 +80,7 @@ POSTING_SCHEDULE = {
         "voice": "en-US-GuyNeural"
     },
     "mind_unlocked": {
-        "times": ["08:00", "15:00", "21:00"],
+        "times": ["16:00", "19:30", "21:30"],  # Optimized: staggered from money_blueprints
         "topics": [
             "dark psychology tricks",
             "stoicism life lessons",
@@ -91,7 +94,7 @@ POSTING_SCHEDULE = {
         "voice": "en-US-JennyNeural"
     },
     "untold_stories": {
-        "times": ["10:00", "16:00", "22:00"],
+        "times": ["17:00", "20:00", "22:00"],  # Optimized: evening prime time EST
         "topics": [
             "unsolved mysteries",
             "true crime documentary",

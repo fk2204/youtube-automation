@@ -70,11 +70,15 @@ youtube:
     language: "en"
 
   # Upload schedule (24-hour format)
+  # OPTIMIZED: Best upload window is 3-5 PM EST (19:00-21:00 UTC)
+  # Best days are Wednesday-Friday for highest engagement
   schedule:
     timezone: "UTC"
     upload_times:
-      - "14:00"
-      - "18:00"
+      - "19:00"  # 3 PM EST - Optimal upload window start
+      - "20:00"  # 4 PM EST - Peak engagement time
+      - "21:00"  # 5 PM EST - Optimal upload window end
+    # Note: Wednesday-Friday are best days for uploads
 
 # Scheduler Settings
 scheduler:

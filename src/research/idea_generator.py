@@ -13,6 +13,7 @@ import os
 import json
 from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, asdict
+from datetime import datetime
 from loguru import logger
 from dotenv import load_dotenv
 
@@ -212,9 +213,9 @@ Generate the ideas now:"""
                 "reasoning": "List-based content performs well and is easy to consume."
             },
             {
-                "title": f"{niche} in 2024: What's Changed",
+                "title": f"{niche} in {datetime.now().year}: What's Changed",
                 "description": f"Discover the latest updates and trends in {niche} for the current year.",
-                "keywords": [niche, "2024", "trends", "updates", "new"],
+                "keywords": [niche, str(datetime.now().year), "trends", "updates", "new"],
                 "trend_score": 75,
                 "competition_score": 50,
                 "engagement_score": 65,

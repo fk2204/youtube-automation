@@ -65,10 +65,12 @@ class ShortsVideoGenerator:
     SHORTS_WIDTH = 1080
     SHORTS_HEIGHT = 1920
 
-    # Duration settings (research: 20-35s optimal for engagement)
+    # Duration settings (OPTIMIZED: 20-30s is optimal for engagement)
     MAX_DURATION = 60  # YouTube max
-    OPTIMAL_DURATION = 30  # Research-backed sweet spot
-    MIN_DURATION = 15  # seconds
+    OPTIMAL_DURATION = 25  # OPTIMIZED: 20-30 second sweet spot
+    MIN_DURATION = 20  # OPTIMIZED: Minimum 20 seconds (was 15)
+    TARGET_DURATION_MIN = 20  # Target range minimum
+    TARGET_DURATION_MAX = 30  # Target range maximum
 
     # Faster pacing for Shorts (visual change every 2-4 seconds)
     SEGMENT_DURATION = 2.5
@@ -76,8 +78,8 @@ class ShortsVideoGenerator:
     # Transition duration (shorter for faster pacing)
     TRANSITION_DURATION = 0.3
 
-    # Hook timing (research: 50-60% drop off in first 3s)
-    HOOK_DURATION = 1.5  # First visual must grab in 1.5s
+    # Hook timing (OPTIMIZED: must grab attention in first second)
+    HOOK_DURATION = 0.8  # OPTIMIZED: 0.8s hook (was 1.5s) - faster grab
 
     # Safe zones to avoid YouTube UI elements (research-backed)
     # These areas are covered by YouTube UI on mobile

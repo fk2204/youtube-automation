@@ -37,7 +37,7 @@ FALLBACK_TOPICS: Dict[str, List[Dict[str, any]]] = {
         {"keyword": "python game development", "interest": 70, "direction": "stable"},
     ],
     "programming": [
-        {"keyword": "learn to code 2024", "interest": 80, "direction": "rising"},
+        {"keyword": f"learn to code {datetime.now().year}", "interest": 80, "direction": "rising"},
         {"keyword": "best programming language", "interest": 75, "direction": "stable"},
         {"keyword": "coding interview tips", "interest": 82, "direction": "rising"},
         {"keyword": "web development tutorial", "interest": 85, "direction": "stable"},
@@ -49,7 +49,7 @@ FALLBACK_TOPICS: Dict[str, List[Dict[str, any]]] = {
         {"keyword": "javascript tutorial", "interest": 85, "direction": "stable"},
         {"keyword": "react js tutorial", "interest": 88, "direction": "rising"},
         {"keyword": "node js backend", "interest": 80, "direction": "stable"},
-        {"keyword": "javascript frameworks 2024", "interest": 75, "direction": "rising"},
+        {"keyword": f"javascript frameworks {datetime.now().year}", "interest": 75, "direction": "rising"},
         {"keyword": "typescript tutorial", "interest": 82, "direction": "rising"},
         {"keyword": "next js tutorial", "interest": 85, "direction": "rising"},
     ],
@@ -62,7 +62,7 @@ FALLBACK_TOPICS: Dict[str, List[Dict[str, any]]] = {
         {"keyword": "ai coding assistant", "interest": 87, "direction": "rising"},
     ],
     "tech": [
-        {"keyword": "best laptops 2024", "interest": 80, "direction": "rising"},
+        {"keyword": f"best laptops {datetime.now().year}", "interest": 80, "direction": "rising"},
         {"keyword": "tech tips and tricks", "interest": 75, "direction": "stable"},
         {"keyword": "smartphone comparison", "interest": 78, "direction": "stable"},
         {"keyword": "gadget reviews", "interest": 72, "direction": "stable"},
@@ -71,7 +71,7 @@ FALLBACK_TOPICS: Dict[str, List[Dict[str, any]]] = {
     "gaming": [
         {"keyword": "gaming setup tour", "interest": 80, "direction": "stable"},
         {"keyword": "best gaming pc build", "interest": 82, "direction": "rising"},
-        {"keyword": "game reviews 2024", "interest": 78, "direction": "stable"},
+        {"keyword": f"game reviews {datetime.now().year}", "interest": 78, "direction": "stable"},
         {"keyword": "gaming tips and tricks", "interest": 75, "direction": "stable"},
         {"keyword": "esports highlights", "interest": 70, "direction": "stable"},
     ],

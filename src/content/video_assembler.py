@@ -118,7 +118,8 @@ class VideoAssembler:
         # Try to use a system font
         try:
             font = ImageFont.truetype("arial.ttf", fontsize)
-        except:
+        except (OSError, IOError) as e:
+            logger.debug(f"Could not load arial.ttf font: {e}, using default")
             font = ImageFont.load_default()
 
         # Calculate text position
@@ -146,8 +147,8 @@ class VideoAssembler:
         # Clean up temp file
         try:
             os.remove(img_path)
-        except:
-            pass
+        except (OSError, PermissionError) as e:
+            logger.debug(f"Could not remove temp file {img_path}: {e}")
 
         return clip
 
@@ -344,7 +345,8 @@ class VideoAssembler:
         try:
             title_font = ImageFont.truetype("arial.ttf", 72)
             sub_font = ImageFont.truetype("arial.ttf", 36)
-        except:
+        except (OSError, IOError) as e:
+            logger.debug(f"Could not load fonts for thumbnail: {e}, using defaults")
             title_font = ImageFont.load_default()
             sub_font = ImageFont.load_default()
 
