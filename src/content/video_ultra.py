@@ -40,15 +40,15 @@ from dataclasses import dataclass, field
 from loguru import logger
 from dotenv import load_dotenv
 
-# Load environment variables from multiple possible locations
+# Load environment variables from relative paths (portable)
 _env_paths = [
-    "config/.env",
-    os.path.join(os.path.dirname(__file__), "../../config/.env"),
-    "C:/Users/fkozi/youtube-automation/config/.env"
+    Path(__file__).parent.parent.parent / "config" / ".env",  # src/content -> root/config
+    Path.cwd() / "config" / ".env",  # Current working directory
 ]
 for _env_path in _env_paths:
-    if os.path.exists(_env_path):
+    if _env_path.exists():
         load_dotenv(_env_path)
+        logger.debug(f"Loaded .env from: {_env_path}")
         break
 
 try:
