@@ -40,6 +40,227 @@ try:
 except ImportError:
     raise ImportError("Please install edge-tts: pip install edge-tts")
 
+import random
+
+
+class NaturalVoiceVariation:
+    """
+    Adds micro-variations to TTS output to reduce AI detection and make speech sound more natural.
+
+    Uses SSML prosody tags to vary rate and pitch at sentence and phrase levels,
+    mimicking natural human speech patterns where pace and tone fluctuate slightly.
+
+    Usage:
+        variation = NaturalVoiceVariation()
+        ssml_text = variation.apply_natural_variation("Hello world. How are you today?")
+    """
+
+    # Default variation ranges
+    DEFAULT_RATE_VARIATION_PERCENT = 8  # +/- 8% rate variation
+    DEFAULT_PITCH_VARIATION_HZ = 5       # +/- 5Hz pitch variation
+
+    def __init__(
+        self,
+        rate_variation_percent: int = None,
+        pitch_variation_hz: int = None,
+        seed: int = None
+    ):
+        """
+        Initialize voice variation settings.
+
+        Args:
+            rate_variation_percent: Maximum rate variation percentage (+/-). Default: 8%
+            pitch_variation_hz: Maximum pitch variation in Hz (+/-). Default: 5Hz
+            seed: Random seed for reproducible variations (optional)
+        """
+        self.rate_variation = rate_variation_percent or self.DEFAULT_RATE_VARIATION_PERCENT
+        self.pitch_variation = pitch_variation_hz or self.DEFAULT_PITCH_VARIATION_HZ
+
+        if seed is not None:
+            random.seed(seed)
+
+        logger.debug(f"NaturalVoiceVariation initialized: rate=+/-{self.rate_variation}%, pitch=+/-{self.pitch_variation}Hz")
+
+    def _parse_base_value(self, base_value: str, unit: str) -> float:
+        """
+        Parse a base value string like '+0%' or '+5Hz' into a float.
+
+        Args:
+            base_value: String like '+0%', '-5Hz', '+10%'
+            unit: Expected unit ('%' or 'Hz')
+
+        Returns:
+            Float value extracted from string
+        """
+        try:
+            # Remove unit and parse
+            cleaned = base_value.replace(unit, '').replace('+', '').strip()
+            return float(cleaned)
+        except (ValueError, AttributeError):
+            return 0.0
+
+    def _split_into_sentences(self, text: str) -> List[str]:
+        """
+        Split text into sentences for rate variation.
+
+        Args:
+            text: Input text
+
+        Returns:
+            List of sentences
+        """
+        # Split on sentence-ending punctuation followed by space or end
+        sentence_pattern = r'(?<=[.!?])\s+'
+        sentences = re.split(sentence_pattern, text.strip())
+        return [s.strip() for s in sentences if s.strip()]
+
+    def _split_into_phrases(self, text: str) -> List[str]:
+        """
+        Split text into phrases for pitch variation.
+
+        Phrases are separated by commas, semicolons, colons, and dashes.
+
+        Args:
+            text: Input text
+
+        Returns:
+            List of phrases
+        """
+        # Split on phrase-separating punctuation
+        phrase_pattern = r'(?<=[,;:\-])\s*'
+        phrases = re.split(phrase_pattern, text.strip())
+        return [p.strip() for p in phrases if p.strip()]
+
+    def add_rate_variation(self, text: str, base_rate: str = "+0%") -> str:
+        """
+        Add rate variation to text using SSML prosody tags.
+
+        Varies the speech rate by +/- the configured percentage per sentence,
+        creating natural-sounding pace fluctuations.
+
+        Args:
+            text: Plain text or text with existing SSML
+            base_rate: Base rate adjustment (e.g., "+0%", "+10%", "-5%")
+
+        Returns:
+            SSML text with rate variations applied per sentence
+        """
+        base_rate_value = self._parse_base_value(base_rate, '%')
+        sentences = self._split_into_sentences(text)
+
+        if not sentences:
+            return text
+
+        varied_parts = []
+        for sentence in sentences:
+            # Generate random variation within range
+            variation = random.uniform(-self.rate_variation, self.rate_variation)
+            final_rate = base_rate_value + variation
+
+            # Format the rate value
+            rate_str = f"+{final_rate:.1f}%" if final_rate >= 0 else f"{final_rate:.1f}%"
+
+            # Wrap sentence in prosody tag
+            varied_sentence = f'<prosody rate="{rate_str}">{sentence}</prosody>'
+            varied_parts.append(varied_sentence)
+
+        result = ' '.join(varied_parts)
+        logger.debug(f"Added rate variation to {len(sentences)} sentences")
+        return result
+
+    def add_pitch_variation(self, text: str, base_pitch: str = "+0Hz") -> str:
+        """
+        Add pitch variation to text using SSML prosody tags.
+
+        Varies the pitch by +/- the configured Hz value per phrase,
+        creating natural intonation patterns.
+
+        Args:
+            text: Plain text or text with existing SSML
+            base_pitch: Base pitch adjustment (e.g., "+0Hz", "+5Hz", "-3Hz")
+
+        Returns:
+            SSML text with pitch variations applied per phrase
+        """
+        base_pitch_value = self._parse_base_value(base_pitch, 'Hz')
+        phrases = self._split_into_phrases(text)
+
+        if not phrases:
+            return text
+
+        varied_parts = []
+        for phrase in phrases:
+            # Generate random variation within range
+            variation = random.uniform(-self.pitch_variation, self.pitch_variation)
+            final_pitch = base_pitch_value + variation
+
+            # Format the pitch value
+            pitch_str = f"+{final_pitch:.1f}Hz" if final_pitch >= 0 else f"{final_pitch:.1f}Hz"
+
+            # Wrap phrase in prosody tag
+            varied_phrase = f'<prosody pitch="{pitch_str}">{phrase}</prosody>'
+            varied_parts.append(varied_phrase)
+
+        result = ' '.join(varied_parts)
+        logger.debug(f"Added pitch variation to {len(phrases)} phrases")
+        return result
+
+    def apply_natural_variation(
+        self,
+        text: str,
+        base_rate: str = "+0%",
+        base_pitch: str = "+0Hz"
+    ) -> str:
+        """
+        Apply both rate and pitch variations for maximum naturalness.
+
+        This method combines sentence-level rate variation with phrase-level
+        pitch variation to create speech that sounds more human and less
+        robotic/AI-generated.
+
+        Args:
+            text: Plain text to process
+            base_rate: Base rate adjustment (e.g., "+0%", "+10%")
+            base_pitch: Base pitch adjustment (e.g., "+0Hz", "+5Hz")
+
+        Returns:
+            SSML text with both rate and pitch variations
+        """
+        # First apply rate variation at sentence level
+        rate_varied = self.add_rate_variation(text, base_rate)
+
+        # Then apply pitch variation at phrase level
+        # This creates nested prosody which is valid SSML
+        fully_varied = self.add_pitch_variation(rate_varied, base_pitch)
+
+        logger.info("Applied natural voice variation (rate + pitch)")
+        return fully_varied
+
+    def add_natural_pauses(self, text: str) -> str:
+        """
+        Add subtle breath pauses after long sentences for more natural pacing.
+
+        Args:
+            text: Input text
+
+        Returns:
+            Text with breath pause markers added
+        """
+        sentences = self._split_into_sentences(text)
+        result_parts = []
+
+        for sentence in sentences:
+            word_count = len(sentence.split())
+            result_parts.append(sentence)
+
+            # Add a short breath pause after sentences > 15 words
+            if word_count > 15:
+                # Vary the pause duration slightly
+                pause_ms = random.randint(150, 300)
+                result_parts.append(f'<break time="{pause_ms}ms"/>')
+
+        return ' '.join(result_parts)
+
 
 class TextToSpeech:
     """Text-to-Speech generator using Microsoft Edge TTS (FREE)"""
@@ -272,6 +493,159 @@ class TextToSpeech:
         except (ConnectionError, TimeoutError, OSError, IOError) as e:
             logger.error(f"SSML TTS generation failed: {e}")
             raise
+
+    async def generate_natural(
+        self,
+        text: str,
+        output_file: str,
+        voice: Optional[str] = None,
+        rate: str = "+0%",
+        pitch: str = "+0Hz",
+        volume: str = "+0%",
+        rate_variation_percent: int = 8,
+        pitch_variation_hz: int = 5,
+        add_pauses: bool = True,
+        add_breath_pauses: bool = True,
+        enhance: bool = False,
+        noise_reduction: bool = True,
+        normalize_lufs: float = -14.0
+    ) -> str:
+        """
+        Generate natural-sounding speech with AI authenticity features.
+
+        This method applies micro-variations to rate and pitch to make TTS output
+        sound more human and less AI-generated. It helps reduce AI detection by:
+        - Varying speech rate +/- 8% per sentence (mimics natural pacing)
+        - Varying pitch +/- 5Hz per phrase (mimics natural intonation)
+        - Adding breath pauses after long sentences
+        - Optionally adding dramatic pauses at punctuation
+
+        Args:
+            text: Text to convert to speech
+            output_file: Output audio file path (mp3)
+            voice: Voice to use (default: self.default_voice)
+            rate: Base speech rate adjustment (e.g., "+0%", "+10%")
+            pitch: Base pitch adjustment (e.g., "+0Hz", "+5Hz")
+            volume: Volume adjustment (e.g., "+10%", "-10%")
+            rate_variation_percent: Max rate variation percentage (+/-). Default: 8%
+            pitch_variation_hz: Max pitch variation in Hz (+/-). Default: 5Hz
+            add_pauses: Add dramatic pauses at punctuation. Default: True
+            add_breath_pauses: Add breath pauses after long sentences. Default: True
+            enhance: Apply professional audio enhancement. Default: False
+            noise_reduction: Apply noise reduction (if enhance=True). Default: True
+            normalize_lufs: Target loudness (if enhance=True). Default: -14 LUFS
+
+        Returns:
+            Path to the generated audio file
+
+        Example:
+            tts = TextToSpeech()
+            # Generate natural-sounding speech for YouTube
+            await tts.generate_natural(
+                text="Hello everyone! Welcome to this tutorial.",
+                output_file="output/natural_voice.mp3",
+                rate_variation_percent=8,
+                pitch_variation_hz=5
+            )
+        """
+        voice = voice or self.default_voice
+
+        # Apply natural voice variation
+        variation = NaturalVoiceVariation(
+            rate_variation_percent=rate_variation_percent,
+            pitch_variation_hz=pitch_variation_hz
+        )
+
+        # Apply breath pauses first (for long sentences)
+        processed_text = text
+        if add_breath_pauses:
+            processed_text = variation.add_natural_pauses(processed_text)
+            logger.debug("Added breath pauses for natural pacing")
+
+        # Apply rate and pitch variations
+        processed_text = variation.apply_natural_variation(
+            processed_text,
+            base_rate=rate,
+            base_pitch=pitch
+        )
+
+        # Add dramatic pauses at punctuation if requested
+        if add_pauses:
+            processed_text = self.add_dramatic_pauses(processed_text)
+            logger.debug("Added dramatic pauses at punctuation")
+
+        # Ensure output directory exists
+        output_path = Path(output_file)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        logger.info(f"Generating natural speech with AI authenticity features: {len(text)} chars -> {output_file}")
+        logger.debug(f"Voice: {voice}, Rate variation: +/-{rate_variation_percent}%, Pitch variation: +/-{pitch_variation_hz}Hz")
+
+        # Generate with or without enhancement
+        if enhance:
+            # Generate to temp file, then enhance
+            temp_file = str(output_path.parent / f"_natural_raw_{output_path.name}")
+
+            try:
+                communicate = edge_tts.Communicate(
+                    text=processed_text,
+                    voice=voice,
+                    volume=volume
+                )
+                await communicate.save(temp_file)
+
+                # Import audio processor and enhance
+                try:
+                    from src.content.audio_processor import AudioProcessor
+                except ImportError:
+                    from .audio_processor import AudioProcessor
+
+                processor = AudioProcessor()
+                enhanced = processor.enhance_voice_professional(
+                    input_file=temp_file,
+                    output_file=output_file,
+                    noise_reduction=noise_reduction,
+                    normalize_lufs=normalize_lufs
+                )
+
+                if enhanced:
+                    # Cleanup temp file
+                    try:
+                        os.remove(temp_file)
+                    except OSError:
+                        pass
+                    logger.success(f"Natural enhanced audio saved: {output_file}")
+                    return enhanced
+                else:
+                    # Enhancement failed, keep raw audio
+                    logger.warning("Enhancement failed, using raw natural TTS output")
+                    os.rename(temp_file, output_file)
+                    return output_file
+
+            except ImportError as e:
+                logger.warning(f"AudioProcessor not available: {e}. Using raw natural TTS output.")
+                try:
+                    os.rename(temp_file, output_file)
+                except OSError:
+                    pass
+                return output_file
+
+        else:
+            # Generate without enhancement
+            try:
+                communicate = edge_tts.Communicate(
+                    text=processed_text,
+                    voice=voice,
+                    volume=volume
+                )
+                await communicate.save(str(output_path))
+
+                logger.success(f"Natural audio saved: {output_file}")
+                return str(output_path)
+
+            except (ConnectionError, TimeoutError, OSError, IOError) as e:
+                logger.error(f"Natural TTS generation failed: {e}")
+                raise
 
     async def generate_with_subtitles(
         self,

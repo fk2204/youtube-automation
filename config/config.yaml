@@ -138,3 +138,43 @@ output:
   thumbnails: "output/thumbnails"
   audio: "output/audio"
   scripts: "output/scripts"
+
+# Quality Gates Configuration
+quality_gates:
+  enabled: true
+  strict_mode: true                    # Higher threshold (75 vs 70)
+  pre_publish_checklist: true          # Run checklist before upload
+  block_on_fail: true                  # Block upload if quality fails
+
+# Retention Optimization Configuration
+retention:
+  enabled: true
+  auto_open_loops: true                # Auto-inject open loops
+  open_loop_count: 3                   # Minimum open loops per video
+  micro_payoff_interval: 60            # Seconds between micro-payoffs
+  pattern_interrupts: true             # Enable pattern interrupts
+
+# Visual Enhancement Configuration
+visual:
+  ken_burns_variety: 15                # Number of Ken Burns presets
+  effect_repeat_prevention: 3          # Min segments before effect repeats
+  adaptive_pacing: true                # Enable dynamic segment timing
+  min_visual_changes_per_minute: 15    # Target visual changes
+
+# Advanced Audio Configuration
+audio_advanced:
+  multiband_eq: true                   # Enable 6-band EQ
+  sidechain_ducking: true              # Auto-duck music when voice present
+  ducking_threshold: -35               # dB threshold for ducking
+  ducking_ratio: 0.3                   # 30% ducking ratio
+  broadcast_compression: true          # Two-stage compression
+  compression_threshold: -24           # dB threshold
+  compression_ratio: 4                 # 4:1 ratio
+
+# AI Authenticity Configuration
+ai_authenticity:
+  voice_variation: true                # Enable rate/pitch micro-variations
+  rate_variation_range: 8              # ±8% rate variation
+  pitch_variation_range: 5             # ±5Hz pitch variation
+  natural_pacing: true                 # Add breath markers and pauses
+  breath_markers: true                 # Add <breath/> after long sentences

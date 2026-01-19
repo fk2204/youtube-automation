@@ -40,6 +40,14 @@ from src.utils.token_manager import (
     load_budget_config
 )
 
+# Import best practices for pre-publish checklist
+try:
+    from src.utils.best_practices import pre_publish_checklist, PrePublishChecklist
+    BEST_PRACTICES_AVAILABLE = True
+except ImportError:
+    BEST_PRACTICES_AVAILABLE = False
+    logger.debug("Best practices module not available - pre-publish checklist disabled")
+
 # Configure logging
 logger.remove()
 logger.add(sys.stderr, level="INFO", format="<green>{time:HH:mm:ss}</green> | <level>{message}</level>")
@@ -636,11 +644,110 @@ def task_quality_check(
     }
 
 
+def task_pre_publish_checklist(
+    script_data: Dict[str, Any],
+    niche: str = "default",
+    strict_mode: bool = False
+) -> Dict[str, Any]:
+    """
+    TASK: Run pre-publish checklist to validate content quality.
+
+    Validates content against 2026 YouTube best practices:
+    - Title optimization (CTR patterns, length, power words)
+    - Hook quality (first 5 seconds)
+    - Retention techniques (open loops, micro-payoffs)
+    - SEO compliance (tags, description)
+    - Visual quality indicators
+
+    Args:
+        script_data: Dict with title, description, tags, sections, full_narration
+        niche: Content niche (finance, psychology, storytelling)
+        strict_mode: If True, requires higher score threshold (75 vs 70)
+
+    Returns:
+        Dict with checklist results, score, and ready_to_publish status
+    """
+    if not BEST_PRACTICES_AVAILABLE:
+        logger.warning("Best practices module not available - skipping pre-publish checklist")
+        return {
+            "success": True,
+            "ready_to_publish": True,
+            "score": 100,
+            "skipped": True,
+            "reason": "Best practices module not available"
+        }
+
+    logger.info("Running pre-publish checklist...")
+
+    # Build script object for checklist
+    from src.content.script_writer import VideoScript, ScriptSection
+
+    sections = []
+    for s in script_data.get("sections", []):
+        sections.append(ScriptSection(
+            timestamp=s.get("timestamp", "00:00"),
+            section_type=s.get("section_type", "content"),
+            title=s.get("title", ""),
+            narration=s.get("narration", ""),
+            screen_action=s.get("screen_action", ""),
+            keywords=s.get("keywords", []),
+            duration_seconds=s.get("duration_seconds", 10)
+        ))
+
+    script = VideoScript(
+        title=script_data.get("title", "Video"),
+        description=script_data.get("description", ""),
+        tags=script_data.get("tags", []),
+        sections=sections,
+        total_duration=script_data.get("total_duration", 60),
+        thumbnail_idea="",
+        hook_text=script_data.get("hook_text", "")
+    )
+
+    # Run checklist
+    checklist = pre_publish_checklist(script, niche)
+
+    # Determine threshold
+    threshold = 75 if strict_mode else 70
+    passed = checklist.overall_score >= threshold
+
+    # Log results
+    if passed:
+        logger.success(f"Pre-publish checklist PASSED ({checklist.overall_score:.0%})")
+    else:
+        logger.warning(f"Pre-publish checklist FAILED ({checklist.overall_score:.0%})")
+        for item in checklist.items:
+            if not item.passed:
+                logger.warning(f"  - FAIL: {item.name}: {item.details}")
+
+    return {
+        "success": True,
+        "ready_to_publish": passed,
+        "score": int(checklist.overall_score * 100),
+        "threshold": threshold,
+        "strict_mode": strict_mode,
+        "items": [
+            {
+                "name": item.name,
+                "passed": item.passed,
+                "score": item.score,
+                "details": item.details
+            }
+            for item in checklist.items
+        ],
+        "critical_issues": [
+            item.details for item in checklist.items
+            if not item.passed and item.score < 0.5
+        ]
+    }
+
+
 def task_full_with_upload(channel_id: str, topic: str = None) -> Dict[str, Any]:
     """
     TASK: Run full pipeline and upload to YouTube.
 
-    Includes quality check before upload if enabled in channel config.
+    Includes pre-publish checklist and quality check before upload.
+    Quality gates enforce content standards based on 2026 YouTube best practices.
     """
     import yaml
 
@@ -661,8 +768,19 @@ def task_full_with_upload(channel_id: str, topic: str = None) -> Dict[str, Any]:
             channel_config = ch
             break
 
-    # Get quality check settings (from channel or global)
+    niche = channel_config.get("settings", {}).get("niche", "default")
+
+    # Get quality gate settings (from channel or global)
     global_settings = config.get("global", {})
+
+    # Load quality gates config
+    try:
+        with open(PROJECT_ROOT / "config" / "config.yaml") as f:
+            app_config = yaml.safe_load(f)
+        quality_gates = app_config.get("quality_gates", {})
+    except (FileNotFoundError, yaml.YAMLError):
+        quality_gates = {}
+
     quality_check_enabled = channel_config.get("settings", {}).get(
         "quality_check_enabled",
         global_settings.get("quality_check_enabled", False)
@@ -676,18 +794,49 @@ def task_full_with_upload(channel_id: str, topic: str = None) -> Dict[str, Any]:
         global_settings.get("skip_upload_on_quality_fail", False)
     )
 
+    # Quality gates: strict mode and pre-publish checklist
+    strict_mode = quality_gates.get("strict_mode", False)
+    pre_publish_enabled = quality_gates.get("pre_publish_checklist", True)
+    block_on_fail = quality_gates.get("block_on_fail", skip_upload_on_fail)
+
+    # Build script_data for checks
+    script_data = {
+        "title": result["results"]["title"],
+        "description": result["results"]["description"],
+        "tags": result["results"]["tags"],
+        "sections": result["results"]["steps"].get("script", {}).get("sections", []),
+        "full_narration": result["results"]["steps"].get("script", {}).get("full_narration", ""),
+        "hook_text": result["results"]["steps"].get("script", {}).get("hook_text", "")
+    }
+
+    # PRE-PUBLISH CHECKLIST (Phase 1.1 - Quality Gate Enforcement)
+    if pre_publish_enabled and BEST_PRACTICES_AVAILABLE:
+        logger.info("\n[5/7] PRE-PUBLISH CHECKLIST")
+
+        checklist_result = task_pre_publish_checklist(
+            script_data=script_data,
+            niche=niche,
+            strict_mode=strict_mode
+        )
+
+        result["results"]["steps"]["pre_publish_checklist"] = checklist_result
+        result["results"]["checklist_score"] = checklist_result["score"]
+
+        if not checklist_result["ready_to_publish"]:
+            logger.warning(f"Pre-publish checklist failed: {checklist_result['score']}/{'75' if strict_mode else '70'}")
+            if block_on_fail:
+                logger.warning("Blocking upload due to failed pre-publish checklist")
+                result["results"]["upload_skipped"] = True
+                result["results"]["upload_skip_reason"] = "Pre-publish checklist failed"
+                result["results"]["critical_issues"] = checklist_result.get("critical_issues", [])
+                return result
+            else:
+                logger.warning("Proceeding with upload despite failed checklist (block_on_fail=false)")
+
     # Quality check
     if quality_check_enabled:
-        logger.info("\n[5/6] QUALITY CHECK")
-
-        # Build script_data for quality check
-        script_data = {
-            "title": result["results"]["title"],
-            "description": result["results"]["description"],
-            "tags": result["results"]["tags"],
-            "sections": result["results"]["steps"].get("script", {}).get("sections", []),
-            "full_narration": result["results"]["steps"].get("script", {}).get("full_narration", "")
-        }
+        step_label = "[6/7] QUALITY CHECK" if pre_publish_enabled else "[5/6] QUALITY CHECK"
+        logger.info(f"\n{step_label}")
 
         quality_result = task_quality_check(
             video_file=result["results"]["video_file"],
@@ -712,7 +861,12 @@ def task_full_with_upload(channel_id: str, topic: str = None) -> Dict[str, Any]:
         logger.info("\n[Quality check disabled]")
 
     # Upload
-    step_num = "6/6" if quality_check_enabled else "5/5"
+    if pre_publish_enabled and quality_check_enabled:
+        step_num = "7/7"
+    elif pre_publish_enabled or quality_check_enabled:
+        step_num = "6/6"
+    else:
+        step_num = "5/5"
     logger.info(f"\n[{step_num}] UPLOAD")
     upload_result = task_upload(
         video_file=result["results"]["video_file"],
@@ -890,7 +1044,8 @@ def task_short_with_upload(channel_id: str, topic: str = None) -> Dict[str, Any]
     """
     TASK: Run full Shorts pipeline and upload to YouTube.
 
-    Includes quality check before upload if enabled in channel config.
+    Includes pre-publish checklist and quality check before upload.
+    Quality gates enforce content standards based on 2026 YouTube best practices.
     """
     import yaml
 
@@ -911,8 +1066,19 @@ def task_short_with_upload(channel_id: str, topic: str = None) -> Dict[str, Any]
             channel_config = ch
             break
 
-    # Get quality check settings (from channel or global)
+    niche = channel_config.get("settings", {}).get("niche", "default")
+
+    # Get quality gate settings (from channel or global)
     global_settings = config.get("global", {})
+
+    # Load quality gates config
+    try:
+        with open(PROJECT_ROOT / "config" / "config.yaml") as f:
+            app_config = yaml.safe_load(f)
+        quality_gates = app_config.get("quality_gates", {})
+    except (FileNotFoundError, yaml.YAMLError):
+        quality_gates = {}
+
     quality_check_enabled = channel_config.get("settings", {}).get(
         "quality_check_enabled",
         global_settings.get("quality_check_enabled", False)
@@ -926,18 +1092,49 @@ def task_short_with_upload(channel_id: str, topic: str = None) -> Dict[str, Any]
         global_settings.get("skip_upload_on_quality_fail", False)
     )
 
+    # Quality gates: strict mode and pre-publish checklist
+    strict_mode = quality_gates.get("strict_mode", False)
+    pre_publish_enabled = quality_gates.get("pre_publish_checklist", True)
+    block_on_fail = quality_gates.get("block_on_fail", skip_upload_on_fail)
+
+    # Build script_data for checks
+    script_data = {
+        "title": result["results"]["title"],
+        "description": result["results"]["description"],
+        "tags": result["results"]["tags"],
+        "sections": result["results"]["steps"].get("script", {}).get("sections", []),
+        "full_narration": result["results"]["steps"].get("script", {}).get("full_narration", ""),
+        "hook_text": result["results"]["steps"].get("script", {}).get("hook_text", "")
+    }
+
+    # PRE-PUBLISH CHECKLIST (Phase 1.1 - Quality Gate Enforcement)
+    if pre_publish_enabled and BEST_PRACTICES_AVAILABLE:
+        logger.info("\n[5/7] PRE-PUBLISH CHECKLIST (Shorts)")
+
+        checklist_result = task_pre_publish_checklist(
+            script_data=script_data,
+            niche=niche,
+            strict_mode=strict_mode
+        )
+
+        result["results"]["steps"]["pre_publish_checklist"] = checklist_result
+        result["results"]["checklist_score"] = checklist_result["score"]
+
+        if not checklist_result["ready_to_publish"]:
+            logger.warning(f"Pre-publish checklist failed: {checklist_result['score']}/{'75' if strict_mode else '70'}")
+            if block_on_fail:
+                logger.warning("Blocking upload due to failed pre-publish checklist")
+                result["results"]["upload_skipped"] = True
+                result["results"]["upload_skip_reason"] = "Pre-publish checklist failed"
+                result["results"]["critical_issues"] = checklist_result.get("critical_issues", [])
+                return result
+            else:
+                logger.warning("Proceeding with upload despite failed checklist (block_on_fail=false)")
+
     # Quality check
     if quality_check_enabled:
-        logger.info("\n[5/6] QUALITY CHECK (Shorts)")
-
-        # Build script_data for quality check
-        script_data = {
-            "title": result["results"]["title"],
-            "description": result["results"]["description"],
-            "tags": result["results"]["tags"],
-            "sections": result["results"]["steps"].get("script", {}).get("sections", []),
-            "full_narration": result["results"]["steps"].get("script", {}).get("full_narration", "")
-        }
+        step_label = "[6/7] QUALITY CHECK (Shorts)" if pre_publish_enabled else "[5/6] QUALITY CHECK (Shorts)"
+        logger.info(f"\n{step_label}")
 
         quality_result = task_quality_check(
             video_file=result["results"]["video_file"],
@@ -962,7 +1159,12 @@ def task_short_with_upload(channel_id: str, topic: str = None) -> Dict[str, Any]
         logger.info("\n[Quality check disabled]")
 
     # Upload
-    step_num = "6/6" if quality_check_enabled else "5/5"
+    if pre_publish_enabled and quality_check_enabled:
+        step_num = "7/7"
+    elif pre_publish_enabled or quality_check_enabled:
+        step_num = "6/6"
+    else:
+        step_num = "5/5"
     logger.info(f"\n[{step_num}] UPLOAD (Shorts)")
     upload_result = task_upload(
         video_file=result["results"]["video_file"],

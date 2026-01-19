@@ -205,6 +205,227 @@ YEAR_RELEVANT_TOPICS = [
 
 
 # ============================================================
+# Natural Pacing Injector for AI Authenticity
+# ============================================================
+
+class NaturalPacingInjector:
+    """
+    Injects natural pacing elements into scripts to make TTS sound more human.
+
+    This class adds breath markers, pauses after transition words, and emphasis
+    markers to create more natural-sounding speech that is less likely to be
+    detected as AI-generated.
+
+    Features:
+    - Breath markers after long sentences (> 20 words)
+    - Pauses after transition words (however, therefore, but, so, now, finally)
+    - Emphasis markers for key words
+
+    Usage:
+        injector = NaturalPacingInjector()
+        natural_script = injector.inject_natural_pacing("Your script text here...")
+    """
+
+    # Transition words that benefit from a pause after them
+    TRANSITION_WORDS = [
+        "however", "therefore", "but", "so", "now", "finally",
+        "furthermore", "moreover", "meanwhile", "consequently",
+        "nevertheless", "nonetheless", "additionally", "subsequently",
+        "accordingly", "hence", "thus", "indeed", "certainly",
+        "first", "second", "third", "lastly", "ultimately"
+    ]
+
+    # Words that often deserve emphasis in educational/informational content
+    EMPHASIS_WORDS = [
+        "critical", "crucial", "essential", "important", "key",
+        "never", "always", "must", "only", "exactly",
+        "secret", "hidden", "shocking", "surprising", "incredible",
+        "revolutionary", "breakthrough", "powerful", "guaranteed"
+    ]
+
+    # Pause durations in milliseconds
+    PAUSE_BREATH = 250       # Short breath pause
+    PAUSE_TRANSITION = 350   # After transition words
+    PAUSE_EMPHASIS = 200     # Before emphasized words
+
+    def __init__(
+        self,
+        long_sentence_threshold: int = 20,
+        enable_breath_markers: bool = True,
+        enable_transition_pauses: bool = True,
+        enable_emphasis_markers: bool = True
+    ):
+        """
+        Initialize the NaturalPacingInjector.
+
+        Args:
+            long_sentence_threshold: Number of words after which to add breath pause. Default: 20
+            enable_breath_markers: Add breath pauses after long sentences. Default: True
+            enable_transition_pauses: Add pauses after transition words. Default: True
+            enable_emphasis_markers: Add emphasis to key words. Default: True
+        """
+        self.long_sentence_threshold = long_sentence_threshold
+        self.enable_breath_markers = enable_breath_markers
+        self.enable_transition_pauses = enable_transition_pauses
+        self.enable_emphasis_markers = enable_emphasis_markers
+
+        logger.debug(f"NaturalPacingInjector initialized: threshold={long_sentence_threshold} words")
+
+    def _split_into_sentences(self, text: str) -> list:
+        """Split text into sentences."""
+        sentence_pattern = r'(?<=[.!?])\s+'
+        sentences = re.split(sentence_pattern, text.strip())
+        return [s.strip() for s in sentences if s.strip()]
+
+    def add_breath_markers(self, text: str) -> str:
+        """
+        Add breath pause markers after sentences longer than threshold.
+
+        Sentences with more than 20 words (default) get a short breath pause
+        at the end to allow for natural breathing rhythm.
+
+        Args:
+            text: Input script text
+
+        Returns:
+            Text with breath markers (SSML break tags) inserted
+        """
+        if not self.enable_breath_markers:
+            return text
+
+        sentences = self._split_into_sentences(text)
+        result_parts = []
+
+        for sentence in sentences:
+            word_count = len(sentence.split())
+            result_parts.append(sentence)
+
+            # Add breath pause after long sentences
+            if word_count > self.long_sentence_threshold:
+                result_parts.append(f' <break time="{self.PAUSE_BREATH}ms"/>')
+
+        result = ''.join(result_parts)
+        logger.debug(f"Added breath markers to sentences > {self.long_sentence_threshold} words")
+        return result
+
+    def add_transition_pauses(self, text: str) -> str:
+        """
+        Add pauses after transition words.
+
+        Transition words like "however", "therefore", "but" naturally
+        have a brief pause after them in human speech.
+
+        Args:
+            text: Input script text
+
+        Returns:
+            Text with pause markers after transition words
+        """
+        if not self.enable_transition_pauses:
+            return text
+
+        result = text
+
+        for word in self.TRANSITION_WORDS:
+            # Match the transition word followed by a comma or space
+            # Case-insensitive match but preserve original case
+            patterns = [
+                # "However," -> "However,<break>"
+                (rf'\b({word})\s*,\s*', rf'\1, <break time="{self.PAUSE_TRANSITION}ms"/> '),
+                # "However " at sentence start -> "However<break>"
+                (rf'^({word})\s+', rf'\1 <break time="{self.PAUSE_TRANSITION}ms"/> '),
+                # ". However " -> ". However<break>"
+                (rf'([.!?]\s+)({word})\s+', rf'\1\2 <break time="{self.PAUSE_TRANSITION}ms"/> '),
+            ]
+
+            for pattern, replacement in patterns:
+                result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
+
+        logger.debug("Added pauses after transition words")
+        return result
+
+    def add_emphasis_markers(self, text: str) -> str:
+        """
+        Add emphasis markers before key words.
+
+        Adds SSML emphasis tags around words that should be stressed
+        to convey importance or emotion.
+
+        Args:
+            text: Input script text
+
+        Returns:
+            Text with emphasis markers around key words
+        """
+        if not self.enable_emphasis_markers:
+            return text
+
+        result = text
+
+        for word in self.EMPHASIS_WORDS:
+            # Wrap the word in emphasis tags (preserve original case)
+            # Only match whole words not already in SSML tags
+            pattern = rf'\b({word})\b(?![^<]*>)'
+            replacement = rf'<emphasis level="moderate">\1</emphasis>'
+            result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
+
+        logger.debug("Added emphasis markers to key words")
+        return result
+
+    def inject_natural_pacing(self, text: str) -> str:
+        """
+        Apply all natural pacing injections to the text.
+
+        This method combines:
+        1. Breath markers after long sentences
+        2. Pauses after transition words
+        3. Emphasis markers for key words
+
+        Args:
+            text: Input script text
+
+        Returns:
+            Text with all natural pacing elements injected
+        """
+        result = text
+
+        # Apply in order: breath markers -> transition pauses -> emphasis
+        if self.enable_breath_markers:
+            result = self.add_breath_markers(result)
+
+        if self.enable_transition_pauses:
+            result = self.add_transition_pauses(result)
+
+        if self.enable_emphasis_markers:
+            result = self.add_emphasis_markers(result)
+
+        logger.info("Injected natural pacing elements into script")
+        return result
+
+    def process_script_sections(self, sections: list) -> list:
+        """
+        Process all sections of a script and inject natural pacing.
+
+        Args:
+            sections: List of ScriptSection objects
+
+        Returns:
+            List of ScriptSection objects with natural pacing in narration
+        """
+        from copy import deepcopy
+
+        processed_sections = []
+        for section in sections:
+            new_section = deepcopy(section)
+            if new_section.narration:
+                new_section.narration = self.inject_natural_pacing(new_section.narration)
+            processed_sections.append(new_section)
+
+        logger.info(f"Processed {len(processed_sections)} sections with natural pacing")
+        return processed_sections
+
+
+# ============================================================
 # AI Provider Backends
 # ============================================================
 
@@ -2715,6 +2936,714 @@ Please provide an improved version of the script in the same JSON format, addres
             }
 
         return get_best_practices(niche)
+
+    def optimize_script_retention(
+        self,
+        script: VideoScript,
+        add_pacing: bool = True
+    ) -> VideoScript:
+        """
+        Optimize a script for maximum viewer retention using rule-based techniques.
+
+        This method applies retention optimization (open loops, micro-payoffs,
+        pattern interrupts) and natural pacing (breath markers, pause markers)
+        to all sections of the script. Uses zero AI tokens - purely regex/string
+        based.
+
+        Args:
+            script: VideoScript object to optimize
+            add_pacing: If True, also add natural pacing markers for TTS
+
+        Returns:
+            New VideoScript with optimized narration in all sections
+
+        Example:
+            writer = ScriptWriter(provider="groq")
+            script = writer.generate_script("How AI Works", duration_minutes=8)
+            optimized = writer.optimize_script_retention(script)
+            print(writer.get_full_narration(optimized))
+        """
+        from copy import deepcopy
+
+        # Create a deep copy to avoid modifying the original
+        optimized_script = deepcopy(script)
+
+        # Initialize optimizers
+        retention_optimizer = RetentionOptimizer()
+        pacing_injector = NaturalPacingInjector()
+
+        # Get full narration for optimization
+        full_narration = '\n\n'.join(
+            section.narration for section in optimized_script.sections
+            if section.narration
+        )
+
+        # Apply retention optimization to full narration
+        optimized_narration = retention_optimizer.optimize_retention(
+            full_narration,
+            duration_seconds=optimized_script.total_duration
+        )
+
+        # Apply natural pacing if requested
+        if add_pacing:
+            optimized_narration = pacing_injector.add_natural_pacing(optimized_narration)
+
+        # Split optimized narration back into paragraphs
+        paragraphs = [p.strip() for p in optimized_narration.split('\n\n') if p.strip()]
+
+        # Distribute optimized paragraphs back to sections
+        # Match by proportion of original content
+        original_lengths = [len(s.narration) for s in optimized_script.sections if s.narration]
+        total_original = sum(original_lengths)
+
+        if total_original > 0 and paragraphs:
+            para_idx = 0
+            for section in optimized_script.sections:
+                if section.narration and para_idx < len(paragraphs):
+                    # Calculate how many paragraphs this section should get
+                    proportion = len(section.narration) / total_original
+                    para_count = max(1, int(len(paragraphs) * proportion))
+
+                    # Assign paragraphs to this section
+                    section_paras = paragraphs[para_idx:para_idx + para_count]
+                    section.narration = '\n\n'.join(section_paras) if section_paras else section.narration
+                    para_idx += para_count
+
+            # Assign any remaining paragraphs to the last section with narration
+            if para_idx < len(paragraphs):
+                for section in reversed(optimized_script.sections):
+                    if section.narration:
+                        remaining = paragraphs[para_idx:]
+                        section.narration += '\n\n' + '\n\n'.join(remaining)
+                        break
+
+        # Update hook text if it exists
+        if optimized_script.hook_text and optimized_script.sections:
+            first_section = optimized_script.sections[0]
+            if first_section.narration:
+                # Get first ~15 seconds worth (~40 words)
+                words = first_section.narration.split()[:40]
+                optimized_script.hook_text = ' '.join(words)
+
+        # Add retention points for the new content
+        new_retention_points = []
+        current_time = 0
+
+        for section in optimized_script.sections:
+            # Check for open loops in this section
+            if any(phrase.lower() in section.narration.lower()
+                   for phrase in RetentionOptimizer.OPEN_LOOP_PHRASES):
+                new_retention_points.append(RetentionPoint(
+                    timestamp_seconds=current_time,
+                    retention_type="open_loop",
+                    description=f"Open loop in {section.section_type}",
+                    expected_impact="high"
+                ))
+
+            # Check for micro-payoffs
+            if any(phrase.lower() in section.narration.lower()
+                   for phrase in RetentionOptimizer.MICRO_PAYOFF_PHRASES):
+                new_retention_points.append(RetentionPoint(
+                    timestamp_seconds=current_time + section.duration_seconds // 2,
+                    retention_type="micro_payoff",
+                    description=f"Micro-payoff in {section.section_type}",
+                    expected_impact="medium"
+                ))
+
+            # Check for pattern interrupts
+            if any(phrase.lower() in section.narration.lower()
+                   for phrase in RetentionOptimizer.PATTERN_INTERRUPT_PHRASES):
+                new_retention_points.append(RetentionPoint(
+                    timestamp_seconds=current_time,
+                    retention_type="pattern_interrupt",
+                    description=f"Pattern interrupt in {section.section_type}",
+                    expected_impact="medium"
+                ))
+
+            current_time += section.duration_seconds
+
+        # Merge with existing retention points
+        existing_timestamps = {rp.timestamp_seconds for rp in optimized_script.estimated_retention_points}
+        for rp in new_retention_points:
+            if rp.timestamp_seconds not in existing_timestamps:
+                optimized_script.estimated_retention_points.append(rp)
+
+        # Sort retention points by timestamp
+        optimized_script.estimated_retention_points.sort(key=lambda rp: rp.timestamp_seconds)
+
+        logger.success(
+            f"Script retention optimized: {len(new_retention_points)} new retention points added"
+        )
+
+        return optimized_script
+
+
+# ============================================================
+# Retention Optimization Classes (Rule-Based, Zero Token Cost)
+# ============================================================
+
+class RetentionOptimizer:
+    """
+    Rule-based retention optimizer that auto-injects retention techniques into scripts.
+
+    This class uses regex and string manipulation (zero AI token cost) to add:
+    - Open loops (curiosity gaps that keep viewers watching)
+    - Micro-payoffs (small rewards/revelations to maintain engagement)
+    - Pattern interrupts (unexpected elements to re-engage attention)
+
+    Usage:
+        optimizer = RetentionOptimizer()
+        optimized_narration = optimizer.optimize_retention(narration, duration_seconds=300)
+    """
+
+    # Open loop phrases to tease upcoming content
+    OPEN_LOOP_PHRASES = [
+        "But first, there's something you need to understand...",
+        "We'll get to that in a moment, but first...",
+        "I'll reveal the most important part at the end...",
+        "But wait - there's something even more crucial coming up...",
+        "The real secret? I'll share it after we cover the basics...",
+        "Stay with me - the best part is still coming...",
+        "What I'm about to show you next changes everything...",
+        "But there's a twist you won't see coming...",
+        "Keep watching - the payoff is worth it...",
+        "I saved the most important insight for later...",
+    ]
+
+    # Micro-payoff phrases to deliver value throughout
+    MICRO_PAYOFF_PHRASES = [
+        "Here's a quick insight most people miss: ",
+        "This is exactly why ",
+        "Here's the key takeaway: ",
+        "What this really means for you: ",
+        "The important thing to remember: ",
+        "Here's the truth: ",
+        "This is the breakthrough moment: ",
+        "Pay attention to this: ",
+        "Here's what makes the difference: ",
+        "The real insight here: ",
+    ]
+
+    # Pattern interrupt phrases to re-engage attention
+    PATTERN_INTERRUPT_PHRASES = [
+        "But here's where it gets interesting...",
+        "Now, this is where most people go wrong...",
+        "Stop and think about this for a second...",
+        "Here's what nobody tells you...",
+        "Wait - this changes everything...",
+        "And this is the part that surprises everyone...",
+        "But there's a catch...",
+        "Here's the twist...",
+        "Now pay close attention to this...",
+        "This is the game-changer...",
+    ]
+
+    # Transition words that signal good injection points
+    TRANSITION_WORDS = [
+        'however', 'therefore', 'furthermore', 'moreover', 'additionally',
+        'consequently', 'nevertheless', 'meanwhile', 'subsequently', 'thus',
+        'hence', 'accordingly', 'similarly', 'likewise', 'indeed',
+    ]
+
+    def __init__(self):
+        """Initialize the retention optimizer."""
+        self._open_loop_index = 0
+        self._payoff_index = 0
+        self._interrupt_index = 0
+
+    def _get_next_open_loop(self) -> str:
+        """Get the next open loop phrase (cycles through available phrases)."""
+        phrase = self.OPEN_LOOP_PHRASES[self._open_loop_index % len(self.OPEN_LOOP_PHRASES)]
+        self._open_loop_index += 1
+        return phrase
+
+    def _get_next_payoff(self) -> str:
+        """Get the next micro-payoff phrase."""
+        phrase = self.MICRO_PAYOFF_PHRASES[self._payoff_index % len(self.MICRO_PAYOFF_PHRASES)]
+        self._payoff_index += 1
+        return phrase
+
+    def _get_next_interrupt(self) -> str:
+        """Get the next pattern interrupt phrase."""
+        phrase = self.PATTERN_INTERRUPT_PHRASES[self._interrupt_index % len(self.PATTERN_INTERRUPT_PHRASES)]
+        self._interrupt_index += 1
+        return phrase
+
+    def _split_into_sentences(self, text: str) -> List[str]:
+        """Split text into sentences while preserving structure."""
+        # Split on sentence-ending punctuation followed by space or newline
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        return [s.strip() for s in sentences if s.strip()]
+
+    def _estimate_word_position_for_time(self, text: str, target_seconds: int, words_per_minute: int = 150) -> int:
+        """Estimate the word position that corresponds to a target time in seconds."""
+        words_per_second = words_per_minute / 60
+        target_words = int(target_seconds * words_per_second)
+        return target_words
+
+    def inject_open_loops(self, narration: str, count: int = 3) -> str:
+        """
+        Inject open loop phrases into the narration to keep viewers watching.
+
+        Open loops create curiosity gaps by teasing upcoming content.
+        They are strategically placed to encourage viewers to keep watching.
+
+        Args:
+            narration: The original narration text
+            count: Number of open loops to inject (default: 3, minimum recommended)
+
+        Returns:
+            Narration with open loops injected
+        """
+        if not narration or count <= 0:
+            return narration
+
+        sentences = self._split_into_sentences(narration)
+        if len(sentences) < count * 2:
+            # Not enough sentences to inject loops meaningfully
+            return narration
+
+        # Calculate injection points (evenly distributed, avoiding first and last 10%)
+        total_sentences = len(sentences)
+        start_idx = max(1, int(total_sentences * 0.1))
+        end_idx = int(total_sentences * 0.9)
+
+        if end_idx <= start_idx:
+            return narration
+
+        # Calculate even spacing for injection points
+        span = end_idx - start_idx
+        spacing = span // (count + 1)
+
+        injection_points = []
+        for i in range(1, count + 1):
+            point = start_idx + (spacing * i)
+            if point < end_idx:
+                injection_points.append(point)
+
+        # Inject open loops at calculated points (in reverse to maintain indices)
+        for point in sorted(injection_points, reverse=True):
+            if point < len(sentences):
+                open_loop = self._get_next_open_loop()
+                sentences.insert(point, open_loop)
+
+        return ' '.join(sentences)
+
+    def inject_micro_payoffs(self, narration: str, interval_seconds: int = 60) -> str:
+        """
+        Inject micro-payoff phrases to deliver value throughout the script.
+
+        Micro-payoffs are small rewards/revelations that maintain engagement.
+        They give viewers a sense of getting value, encouraging continued watching.
+
+        Args:
+            narration: The original narration text
+            interval_seconds: Inject payoffs approximately every N seconds (default: 60)
+
+        Returns:
+            Narration with micro-payoffs injected
+        """
+        if not narration or interval_seconds <= 0:
+            return narration
+
+        words = narration.split()
+        total_words = len(words)
+
+        if total_words < 50:
+            # Script too short for meaningful payoff injection
+            return narration
+
+        # Estimate words per interval (150 words/minute = 2.5 words/second)
+        words_per_interval = int(interval_seconds * 2.5)
+
+        # Find good injection points (after sentences near target word counts)
+        injection_points = []
+        current_target = words_per_interval
+
+        # Track sentence boundaries
+        word_count = 0
+        sentence_ends = []
+
+        for i, word in enumerate(words):
+            word_count += 1
+            # Sentence ends with . ! or ?
+            if word.rstrip(',').endswith(('.', '!', '?')):
+                sentence_ends.append(i)
+
+        # Find sentence ends closest to target intervals
+        while current_target < total_words - words_per_interval:
+            # Find the closest sentence end to current target
+            best_point = None
+            best_distance = float('inf')
+
+            for end_idx in sentence_ends:
+                distance = abs(end_idx - current_target)
+                if distance < best_distance and end_idx not in injection_points:
+                    best_distance = distance
+                    best_point = end_idx
+
+            if best_point is not None and best_distance < words_per_interval // 2:
+                injection_points.append(best_point)
+
+            current_target += words_per_interval
+
+        # Inject payoffs (in reverse order to maintain indices)
+        for point in sorted(injection_points, reverse=True):
+            if point < len(words) - 1:
+                payoff = self._get_next_payoff()
+                # Insert after the sentence end
+                words.insert(point + 1, payoff)
+
+        return ' '.join(words)
+
+    def inject_pattern_interrupts(self, narration: str) -> str:
+        """
+        Inject pattern interrupt phrases to re-engage wandering attention.
+
+        Pattern interrupts are unexpected elements that break viewer autopilot
+        and re-capture attention. They work by introducing novelty.
+
+        Args:
+            narration: The original narration text
+
+        Returns:
+            Narration with pattern interrupts injected
+        """
+        if not narration:
+            return narration
+
+        # Find transition points where pattern interrupts work well
+        # Look for transition words and inject interrupts before/after them
+
+        result = narration
+        interrupts_added = 0
+        max_interrupts = 5  # Don't over-interrupt
+
+        # Pattern: Replace some transition words with interrupt + transition
+        for trans_word in self.TRANSITION_WORDS:
+            if interrupts_added >= max_interrupts:
+                break
+
+            # Case-insensitive search for transition word at sentence start
+            pattern = rf'(?<=[.!?]\s)({trans_word})\b'
+            matches = list(re.finditer(pattern, result, re.IGNORECASE))
+
+            # Only process first occurrence to avoid over-injection
+            if matches:
+                match = matches[0]
+                interrupt = self._get_next_interrupt()
+                # Insert interrupt before the transition word
+                result = result[:match.start()] + interrupt + ' ' + result[match.start():]
+                interrupts_added += 1
+
+        # If we haven't added many interrupts, add some at paragraph breaks
+        if interrupts_added < 3:
+            paragraphs = result.split('\n\n')
+            if len(paragraphs) > 2:
+                new_paragraphs = [paragraphs[0]]
+                for i, para in enumerate(paragraphs[1:-1], 1):
+                    if interrupts_added < max_interrupts and len(para) > 100:
+                        interrupt = self._get_next_interrupt()
+                        new_paragraphs.append(interrupt + '\n\n' + para)
+                        interrupts_added += 1
+                    else:
+                        new_paragraphs.append(para)
+                new_paragraphs.append(paragraphs[-1])
+                result = '\n\n'.join(new_paragraphs)
+
+        return result
+
+    def optimize_retention(self, narration: str, duration_seconds: int) -> str:
+        """
+        Main optimization method that combines all retention techniques.
+
+        Applies open loops, micro-payoffs, and pattern interrupts in a
+        coordinated way to maximize viewer retention.
+
+        Args:
+            narration: The original narration text
+            duration_seconds: Expected video duration in seconds
+
+        Returns:
+            Fully optimized narration with all retention techniques applied
+        """
+        if not narration:
+            return narration
+
+        # Reset indices for fresh optimization
+        self._open_loop_index = 0
+        self._payoff_index = 0
+        self._interrupt_index = 0
+
+        # Calculate optimal number of open loops based on duration
+        # Minimum 3, add 1 for every additional 2 minutes over 5 minutes
+        base_loops = 3
+        extra_loops = max(0, (duration_seconds - 300) // 120)
+        open_loop_count = base_loops + extra_loops
+
+        # Calculate micro-payoff interval based on duration
+        # Shorter videos: every 45-60 seconds
+        # Longer videos: every 60-90 seconds
+        if duration_seconds < 300:
+            payoff_interval = 45
+        elif duration_seconds < 600:
+            payoff_interval = 60
+        else:
+            payoff_interval = 75
+
+        # Apply optimizations in order
+        optimized = narration
+
+        # 1. Inject open loops first (structural changes)
+        optimized = self.inject_open_loops(optimized, count=open_loop_count)
+
+        # 2. Inject micro-payoffs (value delivery)
+        optimized = self.inject_micro_payoffs(optimized, interval_seconds=payoff_interval)
+
+        # 3. Inject pattern interrupts (attention recapture)
+        optimized = self.inject_pattern_interrupts(optimized)
+
+        logger.info(
+            f"Retention optimization applied: {open_loop_count} open loops, "
+            f"payoffs every {payoff_interval}s, pattern interrupts added"
+        )
+
+        return optimized
+
+
+class NaturalPacingInjector:
+    """
+    Adds natural pacing markers to scripts for more human-like TTS delivery.
+
+    Injects:
+    - Breath markers <breath/> after long sentences
+    - Pause markers after transition words
+    - Natural rhythm variations through punctuation
+
+    Usage:
+        pacer = NaturalPacingInjector()
+        paced_narration = pacer.add_natural_pacing(narration)
+    """
+
+    # Transition words that benefit from a pause
+    PAUSE_AFTER_WORDS = [
+        'however', 'therefore', 'furthermore', 'moreover', 'additionally',
+        'consequently', 'nevertheless', 'meanwhile', 'but', 'so', 'and',
+        'now', 'first', 'second', 'third', 'finally', 'next', 'then',
+        'importantly', 'interestingly', 'surprisingly', 'actually',
+    ]
+
+    # Words that signal emphasis (benefit from slight pause before)
+    EMPHASIS_WORDS = [
+        'never', 'always', 'every', 'absolutely', 'completely', 'totally',
+        'exactly', 'precisely', 'definitely', 'certainly', 'critical',
+        'essential', 'crucial', 'important', 'key', 'major', 'significant',
+    ]
+
+    def __init__(self,
+                 breath_marker: str = "<breath/>",
+                 short_pause_marker: str = "<pause:short/>",
+                 medium_pause_marker: str = "<pause:medium/>"):
+        """
+        Initialize the natural pacing injector.
+
+        Args:
+            breath_marker: Marker for breath pauses (default: <breath/>)
+            short_pause_marker: Marker for short pauses (default: <pause:short/>)
+            medium_pause_marker: Marker for medium pauses (default: <pause:medium/>)
+        """
+        self.breath_marker = breath_marker
+        self.short_pause_marker = short_pause_marker
+        self.medium_pause_marker = medium_pause_marker
+
+    def _count_words(self, text: str) -> int:
+        """Count words in text."""
+        return len(text.split())
+
+    def _is_long_sentence(self, sentence: str, threshold: int = 25) -> bool:
+        """Check if a sentence is long enough to need a breath marker."""
+        return self._count_words(sentence) >= threshold
+
+    def inject_breath_markers(self, narration: str, word_threshold: int = 25) -> str:
+        """
+        Add breath markers after long sentences.
+
+        Long sentences (25+ words by default) get a breath marker at the end
+        to create natural pauses in TTS delivery.
+
+        Args:
+            narration: The original narration text
+            word_threshold: Sentences with this many or more words get breath markers
+
+        Returns:
+            Narration with breath markers added
+        """
+        if not narration:
+            return narration
+
+        # Split into sentences
+        sentences = re.split(r'(?<=[.!?])\s+', narration)
+        result_sentences = []
+
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+
+            if self._is_long_sentence(sentence, word_threshold):
+                # Add breath marker after the sentence
+                result_sentences.append(f"{sentence} {self.breath_marker}")
+            else:
+                result_sentences.append(sentence)
+
+        return ' '.join(result_sentences)
+
+    def inject_pause_markers(self, narration: str) -> str:
+        """
+        Add pause markers after transition words.
+
+        Transition words like 'however', 'therefore', 'but', 'so' benefit
+        from a slight pause to improve comprehension and natural rhythm.
+
+        Args:
+            narration: The original narration text
+
+        Returns:
+            Narration with pause markers added
+        """
+        if not narration:
+            return narration
+
+        result = narration
+
+        # Add pauses after transition words at sentence starts
+        for word in self.PAUSE_AFTER_WORDS:
+            # Pattern: word at start of sentence or after punctuation
+            # Add comma if not already present (creates natural pause)
+            pattern = rf'(?<=[.!?]\s)({word})\s+(?!,)'
+            result = re.sub(
+                pattern,
+                rf'\1, ',
+                result,
+                flags=re.IGNORECASE
+            )
+
+            # Also handle sentence starts
+            pattern = rf'^({word})\s+(?!,)'
+            result = re.sub(
+                pattern,
+                rf'\1, ',
+                result,
+                flags=re.IGNORECASE | re.MULTILINE
+            )
+
+        return result
+
+    def inject_rhythm_variations(self, narration: str) -> str:
+        """
+        Add natural rhythm variations through punctuation and markers.
+
+        Creates more dynamic pacing by:
+        - Adding emphasis pauses before important words
+        - Breaking up monotonous sequences
+        - Adding natural comma pauses in long clauses
+
+        Args:
+            narration: The original narration text
+
+        Returns:
+            Narration with rhythm variations added
+        """
+        if not narration:
+            return narration
+
+        result = narration
+
+        # Add short pauses before emphasis words (if no comma already)
+        for word in self.EMPHASIS_WORDS:
+            # Pattern: space before emphasis word (not at sentence start)
+            pattern = rf'(?<=[a-z])\s+({word})\b'
+            replacement = rf' - \1'  # Em-dash creates natural pause
+            result = re.sub(pattern, replacement, result, flags=re.IGNORECASE, count=3)
+
+        # Break up long clauses with commas
+        # Pattern: long sequence without punctuation (30+ chars between punctuation)
+        def add_clause_break(match):
+            text = match.group(0)
+            words = text.split()
+            if len(words) > 8:
+                # Add comma after ~half the words
+                mid = len(words) // 2
+                words[mid] = words[mid] + ','
+                return ' '.join(words)
+            return text
+
+        # Find long stretches without punctuation
+        pattern = r'[^.!?,;:]{80,}'
+        result = re.sub(pattern, add_clause_break, result)
+
+        return result
+
+    def add_natural_pacing(self, narration: str) -> str:
+        """
+        Main method that applies all pacing improvements.
+
+        Combines breath markers, pause markers, and rhythm variations
+        for natural-sounding TTS delivery.
+
+        Args:
+            narration: The original narration text
+
+        Returns:
+            Narration with full natural pacing applied
+        """
+        if not narration:
+            return narration
+
+        # Apply pacing techniques in order
+        paced = narration
+
+        # 1. Add pause markers after transition words
+        paced = self.inject_pause_markers(paced)
+
+        # 2. Add rhythm variations
+        paced = self.inject_rhythm_variations(paced)
+
+        # 3. Add breath markers after long sentences (do this last)
+        paced = self.inject_breath_markers(paced)
+
+        logger.debug("Natural pacing markers added to narration")
+
+        return paced
+
+    def remove_pacing_markers(self, narration: str) -> str:
+        """
+        Remove all pacing markers from narration.
+
+        Useful if you need clean text for display or other processing.
+
+        Args:
+            narration: Narration with pacing markers
+
+        Returns:
+            Clean narration without markers
+        """
+        if not narration:
+            return narration
+
+        result = narration
+
+        # Remove breath markers
+        result = result.replace(self.breath_marker, '')
+
+        # Remove pause markers
+        result = result.replace(self.short_pause_marker, '')
+        result = result.replace(self.medium_pause_marker, '')
+
+        # Clean up any double spaces
+        result = re.sub(r'\s+', ' ', result)
+
+        return result.strip()
 
 
 # Example usage

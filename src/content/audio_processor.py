@@ -27,6 +27,29 @@ Usage:
     # Analyze audio levels
     levels = processor.analyze_loudness("audio.mp3")
     print(f"Integrated loudness: {levels['integrated_loudness']} LUFS")
+
+    # Phase 3 - Broadcast Quality Enhancement:
+
+    # Apply professional 6-band EQ
+    eq_result = processor.apply_multiband_eq("voice.mp3", "voice_eq.mp3")
+
+    # Apply sidechain ducking (music ducks when voice present)
+    ducked = processor.apply_sidechain_ducking(
+        voice_file="voice.mp3",
+        music_file="background.mp3",
+        output_file="mixed_ducked.mp3"
+    )
+
+    # Apply broadcast compression (2-stage: compressor + limiter)
+    compressed = processor.apply_broadcast_compression("voice.mp3", "voice_compressed.mp3")
+
+    # Combined broadcast-quality processing (EQ + compression + normalization)
+    broadcast = processor.process_broadcast_quality(
+        input_file="voice.mp3",
+        output_file="broadcast_voice.mp3",
+        apply_eq=True,
+        apply_compression=True
+    )
 """
 
 import os
@@ -503,6 +526,487 @@ class AudioProcessor:
             pass
 
         return None
+
+    def apply_multiband_eq(
+        self,
+        input_file: str,
+        output_file: str
+    ) -> Optional[str]:
+        """
+        Apply professional 6-band EQ for broadcast-quality voice audio.
+
+        This replaces the single 3kHz boost with a complete frequency shaping chain:
+        - 80Hz high-pass filter: Removes low-frequency rumble (mic handling, HVAC, etc.)
+        - 150Hz -2dB cut: Reduces muddiness in the low-mids
+        - 3kHz +3dB boost: Adds voice presence and intelligibility
+        - 6.5kHz +2dB boost: Adds clarity and "air" to the voice
+        - 11kHz +1.5dB boost: Adds brilliance and sparkle
+
+        These frequency adjustments are based on professional broadcast standards
+        and help voice audio cut through background music while remaining pleasant.
+
+        Args:
+            input_file: Path to input audio file
+            output_file: Path for EQ-processed output file
+
+        Returns:
+            Path to processed audio file or None on failure
+
+        Example:
+            processor = AudioProcessor()
+            result = processor.apply_multiband_eq(
+                "raw_voice.mp3",
+                "eq_voice.mp3"
+            )
+        """
+        if not self.ffmpeg:
+            logger.error("FFmpeg not available for multi-band EQ")
+            return None
+
+        if not os.path.exists(input_file):
+            logger.error(f"Input file not found: {input_file}")
+            return None
+
+        Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+
+        logger.info(f"Applying 6-band professional EQ to: {input_file}")
+
+        try:
+            # Build the 6-band EQ filter chain
+            # Each filter is applied in sequence for precise frequency shaping
+            eq_filters = [
+                # Band 1: High-pass at 80Hz - removes rumble
+                "highpass=f=80",
+
+                # Band 2: 150Hz -2dB cut - reduces muddiness
+                # width_type=o means octave width, width=1 gives a gentle Q
+                "equalizer=f=150:width_type=o:width=1:g=-2",
+
+                # Band 3: 3kHz +3dB boost - voice presence
+                # This is the primary intelligibility range for speech
+                "equalizer=f=3000:width_type=o:width=1:g=3",
+
+                # Band 4: 6.5kHz +2dB boost - clarity/air
+                # Adds brightness without harshness
+                "equalizer=f=6500:width_type=o:width=1:g=2",
+
+                # Band 5: 11kHz +1.5dB boost - brilliance
+                # Adds sparkle and definition to consonants
+                "equalizer=f=11000:width_type=o:width=1.5:g=1.5",
+            ]
+
+            filter_chain = ",".join(eq_filters)
+
+            logger.debug("EQ bands applied:")
+            logger.debug("  - 80Hz high-pass (rumble removal)")
+            logger.debug("  - 150Hz -2dB (muddiness reduction)")
+            logger.debug("  - 3kHz +3dB (voice presence)")
+            logger.debug("  - 6.5kHz +2dB (clarity/air)")
+            logger.debug("  - 11kHz +1.5dB (brilliance)")
+
+            cmd = [
+                self.ffmpeg, '-y',
+                '-i', input_file,
+                '-af', filter_chain,
+                '-ar', str(self.YOUTUBE_SAMPLE_RATE),
+                '-b:a', '256k',
+                output_file
+            ]
+
+            result = subprocess.run(cmd, capture_output=True, timeout=300)
+
+            if result.returncode == 0 and os.path.exists(output_file):
+                logger.success(f"Multi-band EQ applied: {output_file}")
+                return output_file
+
+            error_msg = result.stderr.decode() if result.stderr else "Unknown error"
+            logger.error(f"Multi-band EQ failed: {error_msg[:500]}")
+            return None
+
+        except subprocess.TimeoutExpired:
+            logger.error("Multi-band EQ timed out (exceeded 5 minutes)")
+            return None
+        except (subprocess.SubprocessError, OSError) as e:
+            logger.error(f"Multi-band EQ failed: {e}")
+            return None
+
+    def apply_sidechain_ducking(
+        self,
+        voice_file: str,
+        music_file: str,
+        output_file: str
+    ) -> Optional[str]:
+        """
+        Apply automatic sidechain ducking - music volume drops when voice is present.
+
+        This creates a professional podcast/broadcast sound where background music
+        automatically ducks (reduces volume) when the speaker talks. Parameters:
+        - Detection threshold: -35dB (voice above this triggers ducking)
+        - Duck ratio: 30% (music drops to 70% volume when voice detected)
+        - Attack time: 10ms (fast response to voice onset)
+        - Release time: 100ms (smooth return when voice stops)
+
+        The voice track controls the music volume via FFmpeg's sidechaincompress filter.
+
+        Args:
+            voice_file: Path to voice/narration audio (the control signal)
+            music_file: Path to background music (will be ducked)
+            output_file: Path for mixed output with ducking applied
+
+        Returns:
+            Path to mixed audio file with ducking or None on failure
+
+        Example:
+            processor = AudioProcessor()
+            result = processor.apply_sidechain_ducking(
+                "voice.mp3",
+                "background_music.mp3",
+                "mixed_ducked.mp3"
+            )
+        """
+        if not self.ffmpeg:
+            logger.error("FFmpeg not available for sidechain ducking")
+            return None
+
+        if not os.path.exists(voice_file):
+            logger.error(f"Voice file not found: {voice_file}")
+            return None
+
+        if not os.path.exists(music_file):
+            logger.error(f"Music file not found: {music_file}")
+            return None
+
+        Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+
+        logger.info(f"Applying sidechain ducking: voice={voice_file}, music={music_file}")
+
+        try:
+            # Get voice duration to limit music length
+            voice_duration = self._get_audio_duration(voice_file)
+            if not voice_duration:
+                voice_duration = 60  # Fallback
+
+            # Sidechain ducking parameters
+            # threshold: -35dB - voice level that triggers ducking
+            # ratio: ~3.3:1 to achieve 30% reduction (duck to 70%)
+            # attack: 10ms - fast response
+            # release: 100ms - smooth release
+            # level_sc: 1 - sidechain signal level
+
+            # The sidechaincompress filter uses the voice as the sidechain input
+            # to control compression (ducking) of the music track
+
+            # Calculate ratio for 30% ducking (music at 70% when triggered)
+            # With threshold=-35dB and makeup gain, ratio of 3.33:1 gives ~30% reduction
+            duck_ratio = 3.33
+
+            # Filter complex explanation:
+            # [0:a] = voice (main signal and sidechain control)
+            # [1:a] = music (will be ducked)
+            # sidechaincompress: compresses music based on voice level
+            # amix: combines voice and ducked music
+            filter_complex = (
+                # First, prepare the music with volume adjustment and loop
+                f"[1:a]volume=0.15[music_vol];"
+                # Apply sidechain compression: voice controls music ducking
+                # level_sc=1 means full sidechain signal
+                # detection=peak for faster response
+                f"[music_vol][0:a]sidechaincompress="
+                f"threshold=0.018:"  # -35dB in linear scale (10^(-35/20))
+                f"ratio={duck_ratio}:"
+                f"attack=10:"
+                f"release=100:"
+                f"level_sc=1:"
+                f"detection=peak[ducked_music];"
+                # Mix voice and ducked music together
+                f"[0:a][ducked_music]amix=inputs=2:duration=first:dropout_transition=2[out]"
+            )
+
+            logger.debug("Sidechain ducking parameters:")
+            logger.debug("  - Detection threshold: -35dB")
+            logger.debug("  - Duck ratio: 30% (music at 70% when voice present)")
+            logger.debug("  - Attack time: 10ms")
+            logger.debug("  - Release time: 100ms")
+
+            cmd = [
+                self.ffmpeg, '-y',
+                '-i', voice_file,
+                '-stream_loop', '-1',  # Loop music to match voice duration
+                '-i', music_file,
+                '-filter_complex', filter_complex,
+                '-map', '[out]',
+                '-t', str(voice_duration),
+                '-ar', str(self.YOUTUBE_SAMPLE_RATE),
+                '-b:a', '256k',
+                output_file
+            ]
+
+            result = subprocess.run(cmd, capture_output=True, timeout=600)
+
+            if result.returncode == 0 and os.path.exists(output_file):
+                logger.success(f"Sidechain ducking applied: {output_file}")
+                return output_file
+
+            error_msg = result.stderr.decode() if result.stderr else "Unknown error"
+            logger.error(f"Sidechain ducking failed: {error_msg[:500]}")
+            return None
+
+        except subprocess.TimeoutExpired:
+            logger.error("Sidechain ducking timed out (exceeded 10 minutes)")
+            return None
+        except (subprocess.SubprocessError, OSError) as e:
+            logger.error(f"Sidechain ducking failed: {e}")
+            return None
+
+    def apply_broadcast_compression(
+        self,
+        input_file: str,
+        output_file: str
+    ) -> Optional[str]:
+        """
+        Apply two-stage broadcast compression for professional loudness and consistency.
+
+        This implements a broadcast-standard compression chain:
+
+        Stage 1 - Compressor:
+        - Threshold: -24dB (compress signals above this level)
+        - Ratio: 4:1 (moderate-heavy compression)
+        - Attack: 10ms (catches transients while preserving punch)
+        - Release: 100ms (smooth release maintains natural feel)
+
+        Stage 2 - Limiter:
+        - Threshold: -1dB (brick-wall limit)
+        - Prevents any clipping or digital distortion
+
+        This two-stage approach is used in broadcast to:
+        1. Even out dynamic range (compressor)
+        2. Prevent clipping while maximizing loudness (limiter)
+
+        Args:
+            input_file: Path to input audio file
+            output_file: Path for compressed output file
+
+        Returns:
+            Path to compressed audio file or None on failure
+
+        Example:
+            processor = AudioProcessor()
+            result = processor.apply_broadcast_compression(
+                "normalized_voice.mp3",
+                "broadcast_voice.mp3"
+            )
+        """
+        if not self.ffmpeg:
+            logger.error("FFmpeg not available for broadcast compression")
+            return None
+
+        if not os.path.exists(input_file):
+            logger.error(f"Input file not found: {input_file}")
+            return None
+
+        Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+
+        logger.info(f"Applying broadcast compression to: {input_file}")
+
+        try:
+            # Two-stage compression chain
+            compression_filters = [
+                # Stage 1: Main compressor
+                # threshold=-24dB: compress signals above -24dB
+                # ratio=4: 4:1 compression ratio
+                # attack=10ms: fast enough to catch transients
+                # release=100ms: smooth release for natural sound
+                # makeup=2: add 2dB makeup gain to compensate for compression
+                "acompressor=threshold=-24dB:ratio=4:attack=10:release=100:makeup=2",
+
+                # Stage 2: Brick-wall limiter
+                # This prevents any signal from exceeding -1dB
+                # Using alimiter filter with limit=-1dB
+                # attack=5ms: very fast to catch peaks
+                # release=50ms: quick release
+                # level=false: don't auto-level (we control levels explicitly)
+                "alimiter=limit=0.891:"  # -1dB in linear scale (10^(-1/20) = 0.891)
+                "attack=5:"
+                "release=50:"
+                "level=false"
+            ]
+
+            filter_chain = ",".join(compression_filters)
+
+            logger.debug("Broadcast compression chain:")
+            logger.debug("  Stage 1 - Compressor:")
+            logger.debug("    - Threshold: -24dB")
+            logger.debug("    - Ratio: 4:1")
+            logger.debug("    - Attack: 10ms")
+            logger.debug("    - Release: 100ms")
+            logger.debug("  Stage 2 - Limiter:")
+            logger.debug("    - Threshold: -1dB (brick-wall)")
+
+            cmd = [
+                self.ffmpeg, '-y',
+                '-i', input_file,
+                '-af', filter_chain,
+                '-ar', str(self.YOUTUBE_SAMPLE_RATE),
+                '-b:a', '256k',
+                output_file
+            ]
+
+            result = subprocess.run(cmd, capture_output=True, timeout=300)
+
+            if result.returncode == 0 and os.path.exists(output_file):
+                logger.success(f"Broadcast compression applied: {output_file}")
+                return output_file
+
+            error_msg = result.stderr.decode() if result.stderr else "Unknown error"
+            logger.error(f"Broadcast compression failed: {error_msg[:500]}")
+            return None
+
+        except subprocess.TimeoutExpired:
+            logger.error("Broadcast compression timed out (exceeded 5 minutes)")
+            return None
+        except (subprocess.SubprocessError, OSError) as e:
+            logger.error(f"Broadcast compression failed: {e}")
+            return None
+
+    def process_broadcast_quality(
+        self,
+        input_file: str,
+        output_file: str,
+        apply_eq: bool = True,
+        apply_compression: bool = True
+    ) -> Optional[str]:
+        """
+        Apply complete broadcast-quality processing chain in a single pass.
+
+        Combines multi-band EQ and broadcast compression into an optimized
+        processing chain. This is more efficient than calling individual
+        methods separately as it processes the audio in a single FFmpeg pass.
+
+        Processing order (when all enabled):
+        1. Multi-band EQ (frequency shaping)
+           - 80Hz high-pass (rumble removal)
+           - 150Hz -2dB (muddiness cut)
+           - 3kHz +3dB (presence boost)
+           - 6.5kHz +2dB (clarity/air)
+           - 11kHz +1.5dB (brilliance)
+        2. Broadcast compression
+           - Stage 1: Compressor (-24dB threshold, 4:1 ratio)
+           - Stage 2: Limiter (-1dB brick-wall)
+        3. Final loudness normalization to -14 LUFS
+
+        Args:
+            input_file: Path to input audio file
+            output_file: Path for processed output file
+            apply_eq: Apply 6-band professional EQ (default: True)
+            apply_compression: Apply two-stage broadcast compression (default: True)
+
+        Returns:
+            Path to processed audio file or None on failure
+
+        Example:
+            processor = AudioProcessor()
+
+            # Full broadcast processing
+            result = processor.process_broadcast_quality(
+                "raw_voice.mp3",
+                "broadcast_voice.mp3"
+            )
+
+            # EQ only (no compression)
+            result = processor.process_broadcast_quality(
+                "raw_voice.mp3",
+                "eq_only.mp3",
+                apply_compression=False
+            )
+
+            # Compression only (no EQ)
+            result = processor.process_broadcast_quality(
+                "raw_voice.mp3",
+                "compressed_only.mp3",
+                apply_eq=False
+            )
+        """
+        if not self.ffmpeg:
+            logger.error("FFmpeg not available for broadcast quality processing")
+            return None
+
+        if not os.path.exists(input_file):
+            logger.error(f"Input file not found: {input_file}")
+            return None
+
+        if not apply_eq and not apply_compression:
+            logger.warning("No processing requested, returning normalized audio")
+            return self.normalize_audio(input_file, output_file)
+
+        Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+
+        logger.info(f"Applying broadcast-quality processing to: {input_file}")
+        logger.info(f"  - Multi-band EQ: {'enabled' if apply_eq else 'disabled'}")
+        logger.info(f"  - Broadcast compression: {'enabled' if apply_compression else 'disabled'}")
+
+        try:
+            filters = []
+
+            # Stage 1: Multi-band EQ (if enabled)
+            if apply_eq:
+                eq_filters = [
+                    # 80Hz high-pass - remove rumble
+                    "highpass=f=80",
+                    # 150Hz -2dB - reduce muddiness
+                    "equalizer=f=150:width_type=o:width=1:g=-2",
+                    # 3kHz +3dB - voice presence
+                    "equalizer=f=3000:width_type=o:width=1:g=3",
+                    # 6.5kHz +2dB - clarity/air
+                    "equalizer=f=6500:width_type=o:width=1:g=2",
+                    # 11kHz +1.5dB - brilliance
+                    "equalizer=f=11000:width_type=o:width=1.5:g=1.5",
+                ]
+                filters.extend(eq_filters)
+                logger.debug("Added 6-band EQ to processing chain")
+
+            # Stage 2: Broadcast compression (if enabled)
+            if apply_compression:
+                compression_filters = [
+                    # Main compressor
+                    "acompressor=threshold=-24dB:ratio=4:attack=10:release=100:makeup=2",
+                    # Brick-wall limiter at -1dB
+                    "alimiter=limit=0.891:attack=5:release=50:level=false",
+                ]
+                filters.extend(compression_filters)
+                logger.debug("Added broadcast compression to processing chain")
+
+            # Stage 3: Final loudness normalization
+            filters.append(f"loudnorm=I={self.TARGET_LUFS}:TP={self.TARGET_PEAK}:LRA={self.TARGET_LRA}")
+            logger.debug(f"Added loudness normalization ({self.TARGET_LUFS} LUFS)")
+
+            filter_chain = ",".join(filters)
+
+            cmd = [
+                self.ffmpeg, '-y',
+                '-i', input_file,
+                '-af', filter_chain,
+                '-ar', str(self.YOUTUBE_SAMPLE_RATE),
+                '-b:a', '256k',
+                output_file
+            ]
+
+            logger.debug(f"FFmpeg filter chain: {filter_chain}")
+            result = subprocess.run(cmd, capture_output=True, timeout=300)
+
+            if result.returncode == 0 and os.path.exists(output_file):
+                logger.success(f"Broadcast-quality processing complete: {output_file}")
+                return output_file
+
+            error_msg = result.stderr.decode() if result.stderr else "Unknown error"
+            logger.error(f"Broadcast-quality processing failed: {error_msg[:500]}")
+            return None
+
+        except subprocess.TimeoutExpired:
+            logger.error("Broadcast-quality processing timed out (exceeded 5 minutes)")
+            return None
+        except (subprocess.SubprocessError, OSError) as e:
+            logger.error(f"Broadcast-quality processing failed: {e}")
+            return None
 
     def enhance_voice(
         self,

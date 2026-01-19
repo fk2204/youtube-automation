@@ -285,6 +285,341 @@ class VisualSegment:
     transition_out: str = "crossfade"
 
 
+class EffectTracker:
+    """
+    Tracks which Ken Burns effects have been used recently to prevent repetition.
+
+    Ensures visual variety by preventing the same effect from being used
+    within a configurable number of segments (default: 3).
+
+    Usage:
+        tracker = EffectTracker(effects_list, history_size=3)
+        effect = tracker.get_next_effect()  # Returns best available effect
+    """
+
+    def __init__(self, effects: List[Dict], history_size: int = 3):
+        """
+        Initialize the effect tracker.
+
+        Args:
+            effects: List of Ken Burns effect dictionaries
+            history_size: Number of segments to prevent repetition within (default: 3)
+        """
+        self.effects = effects
+        self.history_size = history_size
+        self.recent_effects: List[int] = []  # Indices of recently used effects
+
+    def get_next_effect(self) -> Dict:
+        """
+        Get the next effect that hasn't been used recently.
+
+        Returns the best available effect that hasn't been used within
+        the last `history_size` segments. If all effects have been used
+        recently, returns the least recently used one.
+
+        Returns:
+            Dict: Ken Burns effect parameters
+        """
+        # Get indices of available effects (not in recent history)
+        available_indices = [
+            i for i in range(len(self.effects))
+            if i not in self.recent_effects
+        ]
+
+        if available_indices:
+            # Pick a random effect from available ones
+            chosen_index = random.choice(available_indices)
+        else:
+            # All effects recently used - pick least recently used
+            # (the first one in recent_effects is the oldest)
+            chosen_index = self.recent_effects[0] if self.recent_effects else 0
+
+        # Update history
+        self.recent_effects.append(chosen_index)
+        if len(self.recent_effects) > self.history_size:
+            self.recent_effects.pop(0)
+
+        return self.effects[chosen_index]
+
+    def reset(self):
+        """Reset the effect history."""
+        self.recent_effects = []
+
+    def get_effect_name(self, effect: Dict) -> str:
+        """Get the name of an effect if available."""
+        return effect.get("name", f"effect_{self.effects.index(effect) if effect in self.effects else 'unknown'}")
+
+    def get_usage_stats(self) -> Dict[str, int]:
+        """
+        Get statistics on effect usage.
+
+        Returns:
+            Dict mapping effect names to usage counts
+        """
+        stats = {}
+        for idx in self.recent_effects:
+            if idx < len(self.effects):
+                name = self.get_effect_name(self.effects[idx])
+                stats[name] = stats.get(name, 0) + 1
+        return stats
+
+
+class DynamicSegmentController:
+    """
+    Adaptive visual pacing controller for content-aware segment timing.
+
+    Manages segment durations based on content type to optimize viewer retention:
+    - Hook segments: 1.5s (fast pacing to grab attention)
+    - Content segments: 3.5s (standard pacing for information delivery)
+    - Emphasis segments: 2.0s (medium pacing for key points)
+
+    Target: 15+ visual changes per minute for optimal engagement.
+
+    Usage:
+        controller = DynamicSegmentController()
+        duration = controller.get_segment_duration("hook")
+        optimized = controller.optimize_segment_timing(script_sections)
+    """
+
+    # Segment duration presets (in seconds)
+    SEGMENT_DURATIONS = {
+        "hook": 1.5,      # Fast pacing - grab attention quickly
+        "content": 3.5,   # Standard pacing - deliver information
+        "emphasis": 2.0,  # Medium pacing - highlight key points
+        "transition": 1.0, # Quick transition moments
+        "climax": 2.5,    # Slightly longer for dramatic moments
+        "default": 3.0    # Fallback duration
+    }
+
+    # Target visual changes per minute for optimal retention
+    TARGET_VISUAL_CHANGES_PER_MINUTE = 15
+
+    def __init__(self, custom_durations: Dict[str, float] = None):
+        """
+        Initialize the segment controller.
+
+        Args:
+            custom_durations: Optional dict to override default segment durations
+        """
+        self.durations = self.SEGMENT_DURATIONS.copy()
+        if custom_durations:
+            self.durations.update(custom_durations)
+
+    def get_segment_duration(self, segment_type: str) -> float:
+        """
+        Get the duration for a specific segment type.
+
+        Args:
+            segment_type: Type of segment ("hook", "content", "emphasis", etc.)
+
+        Returns:
+            Duration in seconds
+        """
+        return self.durations.get(segment_type, self.durations["default"])
+
+    def calculate_visual_changes_per_minute(
+        self,
+        total_duration: float,
+        segments: List[Dict]
+    ) -> int:
+        """
+        Calculate the number of visual changes per minute.
+
+        Args:
+            total_duration: Total video duration in seconds
+            segments: List of segment dicts with 'duration' key
+
+        Returns:
+            Visual changes per minute (integer)
+        """
+        if total_duration <= 0:
+            return 0
+
+        num_segments = len(segments)
+        minutes = total_duration / 60.0
+
+        if minutes <= 0:
+            return 0
+
+        return int(num_segments / minutes)
+
+    def optimize_segment_timing(
+        self,
+        script_sections: List,
+        target_changes_per_minute: int = None
+    ) -> List[Dict]:
+        """
+        Optimize segment timing based on script content.
+
+        Analyzes script sections and assigns appropriate segment types
+        and durations to achieve optimal visual pacing.
+
+        Args:
+            script_sections: List of script section objects
+            target_changes_per_minute: Override target (default: 15)
+
+        Returns:
+            List of optimized segment dictionaries with:
+            - segment_type: Type classification
+            - duration: Optimized duration
+            - section_index: Reference to original section
+        """
+        target = target_changes_per_minute or self.TARGET_VISUAL_CHANGES_PER_MINUTE
+        optimized_segments = []
+
+        for i, section in enumerate(script_sections):
+            # Determine segment type based on section characteristics
+            segment_type = self._classify_section(section, i, len(script_sections))
+            duration = self.get_segment_duration(segment_type)
+
+            # Check if section has keywords indicating emphasis
+            if self._is_emphasis_section(section):
+                segment_type = "emphasis"
+                duration = self.get_segment_duration("emphasis")
+
+            optimized_segments.append({
+                "segment_type": segment_type,
+                "duration": duration,
+                "section_index": i,
+                "section": section
+            })
+
+        # Adjust durations if we're far from target visual changes
+        optimized_segments = self._balance_pacing(optimized_segments, target)
+
+        return optimized_segments
+
+    def _classify_section(
+        self,
+        section,
+        index: int,
+        total_sections: int
+    ) -> str:
+        """
+        Classify a section based on its position and content.
+
+        Args:
+            section: Script section object
+            index: Section index
+            total_sections: Total number of sections
+
+        Returns:
+            Segment type string
+        """
+        # First section is always a hook
+        if index == 0:
+            return "hook"
+
+        # Last section often has a climax/conclusion
+        if index == total_sections - 1:
+            return "climax"
+
+        # Second section often continues the hook momentum
+        if index == 1:
+            return "emphasis"
+
+        # Default to content for middle sections
+        return "content"
+
+    def _is_emphasis_section(self, section) -> bool:
+        """
+        Check if a section should be emphasized based on content.
+
+        Args:
+            section: Script section object
+
+        Returns:
+            True if section should be emphasized
+        """
+        # Check for emphasis indicators in section
+        emphasis_keywords = [
+            "important", "key", "crucial", "remember", "critical",
+            "secret", "hack", "tip", "trick", "surprising"
+        ]
+
+        # Get section text content
+        text = ""
+        if hasattr(section, 'title'):
+            text += str(section.title).lower()
+        if hasattr(section, 'content'):
+            text += str(section.content).lower()
+        if hasattr(section, 'narration'):
+            text += str(section.narration).lower()
+
+        return any(keyword in text for keyword in emphasis_keywords)
+
+    def _balance_pacing(
+        self,
+        segments: List[Dict],
+        target_changes_per_minute: int
+    ) -> List[Dict]:
+        """
+        Balance segment durations to achieve target visual changes per minute.
+
+        Args:
+            segments: List of segment dicts
+            target_changes_per_minute: Target visual changes
+
+        Returns:
+            Adjusted segment list
+        """
+        if not segments:
+            return segments
+
+        # Calculate current total duration
+        total_duration = sum(seg["duration"] for seg in segments)
+        current_rate = self.calculate_visual_changes_per_minute(total_duration, segments)
+
+        # If we're close enough to target, return as-is
+        if abs(current_rate - target_changes_per_minute) <= 2:
+            return segments
+
+        # Calculate adjustment factor
+        # More segments = shorter durations needed, fewer = longer
+        if current_rate < target_changes_per_minute:
+            # Need more visual changes - shorten durations slightly
+            factor = 0.9
+        else:
+            # Too many changes - lengthen durations slightly
+            factor = 1.1
+
+        # Apply adjustment to content segments (preserve hooks and emphasis timing)
+        for seg in segments:
+            if seg["segment_type"] == "content":
+                seg["duration"] = max(2.0, min(5.0, seg["duration"] * factor))
+
+        return segments
+
+    def get_pacing_summary(self, segments: List[Dict]) -> Dict:
+        """
+        Get a summary of pacing statistics.
+
+        Args:
+            segments: List of segment dicts
+
+        Returns:
+            Dict with pacing statistics
+        """
+        if not segments:
+            return {"total_duration": 0, "segment_count": 0, "changes_per_minute": 0}
+
+        total_duration = sum(seg["duration"] for seg in segments)
+        segment_count = len(segments)
+
+        type_counts = {}
+        for seg in segments:
+            seg_type = seg.get("segment_type", "unknown")
+            type_counts[seg_type] = type_counts.get(seg_type, 0) + 1
+
+        return {
+            "total_duration": total_duration,
+            "segment_count": segment_count,
+            "changes_per_minute": self.calculate_visual_changes_per_minute(total_duration, segments),
+            "type_distribution": type_counts,
+            "average_duration": total_duration / segment_count if segment_count > 0 else 0
+        }
+
+
 class UltraVideoGenerator:
     """
     Ultra-professional video generator for faceless YouTube content.
@@ -362,14 +697,37 @@ class UltraVideoGenerator:
         }
     }
 
-    # Ken Burns effect presets
+    # Ken Burns effect presets (expanded from 6 to 18 effects)
     KEN_BURNS_EFFECTS = [
-        {"start_scale": 1.0, "end_scale": 1.15, "start_x": 0, "end_x": 0, "start_y": 0, "end_y": 0},  # Slow zoom in
-        {"start_scale": 1.15, "end_scale": 1.0, "start_x": 0, "end_x": 0, "start_y": 0, "end_y": 0},  # Slow zoom out
-        {"start_scale": 1.1, "end_scale": 1.1, "start_x": -50, "end_x": 50, "start_y": 0, "end_y": 0},  # Pan right
-        {"start_scale": 1.1, "end_scale": 1.1, "start_x": 50, "end_x": -50, "start_y": 0, "end_y": 0},  # Pan left
-        {"start_scale": 1.0, "end_scale": 1.2, "start_x": -30, "end_x": 30, "start_y": -20, "end_y": 20},  # Zoom + pan
-        {"start_scale": 1.2, "end_scale": 1.0, "start_x": 30, "end_x": -30, "start_y": 20, "end_y": -20},  # Zoom out + pan
+        # Basic zooms
+        {"start_scale": 1.0, "end_scale": 1.15, "start_x": 0, "end_x": 0, "start_y": 0, "end_y": 0, "name": "slow_zoom_in"},
+        {"start_scale": 1.15, "end_scale": 1.0, "start_x": 0, "end_x": 0, "start_y": 0, "end_y": 0, "name": "slow_zoom_out"},
+        {"start_scale": 1.0, "end_scale": 1.25, "start_x": 0, "end_x": 0, "start_y": 0, "end_y": 0, "name": "dramatic_zoom_in"},
+
+        # Basic pans
+        {"start_scale": 1.1, "end_scale": 1.1, "start_x": -50, "end_x": 50, "start_y": 0, "end_y": 0, "name": "pan_right"},
+        {"start_scale": 1.1, "end_scale": 1.1, "start_x": 50, "end_x": -50, "start_y": 0, "end_y": 0, "name": "pan_left"},
+        {"start_scale": 1.1, "end_scale": 1.1, "start_x": 0, "end_x": 0, "start_y": -40, "end_y": 40, "name": "pan_down"},
+        {"start_scale": 1.1, "end_scale": 1.1, "start_x": 0, "end_x": 0, "start_y": 40, "end_y": -40, "name": "pan_up"},
+
+        # Zoom + pan combinations
+        {"start_scale": 1.0, "end_scale": 1.2, "start_x": -30, "end_x": 30, "start_y": -20, "end_y": 20, "name": "zoom_pan_diagonal_right"},
+        {"start_scale": 1.2, "end_scale": 1.0, "start_x": 30, "end_x": -30, "start_y": 20, "end_y": -20, "name": "zoom_out_pan_diagonal_left"},
+
+        # Diagonal movements (corner to corner)
+        {"start_scale": 1.15, "end_scale": 1.15, "start_x": -60, "end_x": 60, "start_y": -40, "end_y": 40, "name": "diagonal_top_left_to_bottom_right"},
+        {"start_scale": 1.15, "end_scale": 1.15, "start_x": 60, "end_x": -60, "start_y": -40, "end_y": 40, "name": "diagonal_top_right_to_bottom_left"},
+        {"start_scale": 1.15, "end_scale": 1.15, "start_x": -60, "end_x": 60, "start_y": 40, "end_y": -40, "name": "diagonal_bottom_left_to_top_right"},
+        {"start_scale": 1.15, "end_scale": 1.15, "start_x": 60, "end_x": -60, "start_y": 40, "end_y": -40, "name": "diagonal_bottom_right_to_top_left"},
+
+        # Focus pull effects (zoom to specific regions)
+        {"start_scale": 1.0, "end_scale": 1.3, "start_x": 0, "end_x": -40, "start_y": 0, "end_y": -30, "name": "focus_top_left"},
+        {"start_scale": 1.0, "end_scale": 1.3, "start_x": 0, "end_x": 40, "start_y": 0, "end_y": -30, "name": "focus_top_right"},
+        {"start_scale": 1.0, "end_scale": 1.3, "start_x": 0, "end_x": 0, "start_y": 0, "end_y": 30, "name": "focus_center_bottom"},
+
+        # Multi-stage / spiral-like movements (simulated with strong diagonal + zoom)
+        {"start_scale": 1.0, "end_scale": 1.2, "start_x": -40, "end_x": 40, "start_y": -30, "end_y": 30, "name": "spiral_zoom_clockwise"},
+        {"start_scale": 1.2, "end_scale": 1.0, "start_x": 40, "end_x": -40, "start_y": 30, "end_y": -30, "name": "spiral_zoom_counter_clockwise"},
     ]
 
     def __init__(
@@ -445,6 +803,14 @@ class UltraVideoGenerator:
             logger.info(f"GPU acceleration enabled: {self.encoder_info['gpu_type'].upper()} ({self.encoder_info['encoder']})")
         else:
             logger.info("Using CPU encoding (libx264)")
+
+        # Initialize effect tracker for preventing Ken Burns effect repetition
+        self.effect_tracker = EffectTracker(self.KEN_BURNS_EFFECTS, history_size=3)
+        logger.debug("EffectTracker initialized (prevents effect repetition within 3 segments)")
+
+        # Initialize dynamic segment controller for adaptive visual pacing
+        self.segment_controller = DynamicSegmentController()
+        logger.debug(f"DynamicSegmentController initialized (target: {self.segment_controller.TARGET_VISUAL_CHANGES_PER_MINUTE} changes/min)")
 
         logger.info(f"UltraVideoGenerator initialized ({self.width}x{self.height} @ {self.fps}fps)")
 
@@ -576,8 +942,8 @@ class UltraVideoGenerator:
             return None
 
         try:
-            # Choose random effect if not specified
-            effect = effect_preset or random.choice(self.KEN_BURNS_EFFECTS)
+            # Use effect tracker if no preset specified (prevents repetition)
+            effect = effect_preset or self.effect_tracker.get_next_effect()
             style = style or self.NICHE_STYLES["default"]
 
             # Get input info
@@ -1389,15 +1755,39 @@ class UltraVideoGenerator:
                         segment_files.append(str(title_video))
                         current_time += title_duration
 
-            # 2. Main content segments
+            # 2. Main content segments with adaptive pacing
             media_index = 0
             all_media = downloaded_paths + stock_images  # Mix videos and images
             random.shuffle(all_media)  # Randomize for variety
 
+            # Reset effect tracker for fresh video
+            self.effect_tracker.reset()
+
+            # Use DynamicSegmentController to optimize segment timing if sections available
+            optimized_segments = []
+            if sections:
+                optimized_segments = self.segment_controller.optimize_segment_timing(sections)
+                pacing_summary = self.segment_controller.get_pacing_summary(optimized_segments)
+                logger.info(
+                    f"Adaptive pacing enabled: {pacing_summary['changes_per_minute']} visual changes/min "
+                    f"(target: {self.segment_controller.TARGET_VISUAL_CHANGES_PER_MINUTE})"
+                )
+
             segment_num = 0
+            optimized_index = 0  # Track position in optimized segments
             while current_time < audio_duration - 0.5:
                 remaining = audio_duration - current_time
-                seg_duration = min(self.SEGMENT_DURATION, remaining)
+
+                # Use adaptive segment duration if available, otherwise use default
+                if optimized_segments and optimized_index < len(optimized_segments):
+                    seg_type = optimized_segments[optimized_index].get("segment_type", "content")
+                    seg_duration = min(
+                        self.segment_controller.get_segment_duration(seg_type),
+                        remaining
+                    )
+                    optimized_index += 1
+                else:
+                    seg_duration = min(self.SEGMENT_DURATION, remaining)
 
                 if seg_duration < 1:
                     break
@@ -1409,8 +1799,11 @@ class UltraVideoGenerator:
                     media_path = all_media[media_index]
                     media_index += 1
 
-                    # Apply Ken Burns effect
-                    effect = random.choice(self.KEN_BURNS_EFFECTS)
+                    # Apply Ken Burns effect using EffectTracker (prevents repetition)
+                    effect = self.effect_tracker.get_next_effect()
+                    effect_name = effect.get("name", f"effect_{segment_num}")
+                    logger.debug(f"Segment {segment_num}: Using effect '{effect_name}' ({seg_duration:.1f}s)")
+
                     result = self.create_ken_burns_clip(
                         media_path,
                         str(segment_path),
@@ -1464,7 +1857,12 @@ class UltraVideoGenerator:
                 logger.error("No video segments created")
                 return None
 
+            # Log segment creation summary with effect usage stats
+            effect_stats = self.effect_tracker.get_usage_stats()
             logger.info(f"Created {len(segment_files)} video segments ({segment_num - gradient_fallback_count} stock, {gradient_fallback_count} gradient)")
+            if effect_stats:
+                unique_effects = len(effect_stats)
+                logger.debug(f"Effect variety: {unique_effects} unique effects used in recent segments")
 
             # 3. Concatenate all segments with crossfade transitions
             video_only = self.temp_dir / "video_only.mp4"
