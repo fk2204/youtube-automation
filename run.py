@@ -673,7 +673,8 @@ def _handle_safety_agent(args, kwargs, positional, output_json, verbose):
     command = args[0]
 
     if command == "check":
-        file_path = positional[0] if positional else kwargs.get("file")
+        # File path is in args[1] (after "check")
+        file_path = args[1] if len(args) > 1 else kwargs.get("file")
         if not file_path:
             print("Error: File path required")
             return
@@ -736,7 +737,8 @@ def _handle_compliance_agent(args, kwargs, positional, output_json, verbose):
     command = args[0]
 
     if command == "check":
-        file_path = positional[0] if positional else kwargs.get("file")
+        # File path is in args[1] (after "check")
+        file_path = args[1] if len(args) > 1 else kwargs.get("file")
         if not file_path:
             print("Error: File path required")
             return
