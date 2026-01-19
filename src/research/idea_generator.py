@@ -39,8 +39,288 @@ class ScoredIdea:
     reasoning: str          # Why this is a good idea
 
 
+# ============================================================
+# VIRAL TOPIC TEMPLATES (From Competitor Analysis - January 2026)
+# ============================================================
+# Based on analysis of top faceless YouTube channels:
+# Finance: The Swedish Investor, Practical Wisdom, Two Cents
+# Psychology: Psych2Go (12.7M subs), Brainy Dose (10M views), The Infographics Show (15M subs)
+# Storytelling: JCS Criminal Psychology, Truly Criminal, Lazy Masquerade (1.7M subs), Mr. Nightmare (6M subs)
+
+VIRAL_TOPIC_TEMPLATES = {
+    # money_blueprints channel (Finance)
+    # Key insight: "Documentary-business hybrids" perform exceptionally well
+    # Avg video length: 8-15 minutes | Best performing: Business explainers with charts
+    "finance": {
+        "templates": [
+            # Business Model Explainers (The Swedish Investor style - 1M+ subs)
+            "How {company} Makes Money (Business Model Explained)",
+            "The Genius Strategy Behind {company}'s Success",
+            "{company} vs {competitor}: Who Will Win?",
+            # Stock Analysis (high engagement, visual evidence)
+            "Why {stock} Will {multiplier}x in {year}",
+            "{company} Stock: Buy, Sell, or Hold in {year}?",
+            "I Analyzed {number} {investment_type} - Here's What I Found",
+            # Passive Income (high search volume - Practical Wisdom style)
+            "{number} Passive Income Ideas That Actually Work in {year}",
+            "{number} Passive Income Streams I Use to Make ${amount}/Month",
+            "The ${amount} Side Hustle Nobody Talks About",
+            # Loss Aversion (highest CTR trigger)
+            "{number} Money Mistakes Costing You ${amount}/Year",
+            "Why {percentage}% of Investors Lose Money (And How to Win)",
+            "The Hidden Fees Costing You ${amount} Over Your Lifetime",
+            # Documentary-Business Hybrids
+            "The Truth About {financial_trend}",
+            "How Warren Buffett Built His ${amount} Fortune",
+            "The Man Who Predicted the {year} {event}",
+            # Wealth Building Guides
+            "How to Turn ${small_amount} Into ${large_amount} ({timeframe})",
+            "How I Made ${amount} in {time_period} With {strategy}",
+            "Why {percentage}% of People Never Build Wealth",
+            # New trending templates
+            "The Real Reason {company} Is Worth ${valuation}",
+            "What Billionaires Know That You Don't About {financial_trend}",
+            "{number} Investing Rules That Changed My Life",
+        ],
+        "variables": {
+            "company": ["Apple", "Tesla", "Amazon", "Microsoft", "Netflix", "Nvidia", "Meta", "Google", "Costco", "Berkshire Hathaway"],
+            "competitor": ["Apple", "Microsoft", "Amazon", "Google", "Tesla", "Meta"],
+            "stock": ["NVIDIA", "TSMC", "AMD", "Tesla", "Amazon", "Apple", "Microsoft", "Palantir", "Snowflake"],
+            "financial_trend": ["Dividend Investing", "Index Funds", "Real Estate", "Crypto", "AI Stocks", "ETFs", "Bonds", "REITs"],
+            "investment_type": ["Stocks", "ETFs", "REITs", "Dividend Stocks", "Growth Stocks", "Blue Chip Stocks"],
+            "strategy": ["Dividend Investing", "Index Funds", "Real Estate Crowdfunding", "Side Hustles", "Value Investing"],
+            "number": ["3", "5", "7", "10", "12"],
+            "multiplier": ["2", "3", "5", "10"],
+            "amount": ["1,000", "5,000", "10,000", "50,000", "100,000"],
+            "small_amount": ["100", "500", "1,000", "5,000"],
+            "large_amount": ["10,000", "50,000", "100,000", "1,000,000"],
+            "percentage": ["73", "87", "92", "96", "78", "84"],
+            "time_period": ["30 Days", "6 Months", "1 Year", "5 Years"],
+            "timeframe": ["3 Years", "5 Years", "10 Years", "20 Years"],
+            "year": [str(datetime.now().year), str(datetime.now().year + 1)],
+            "event": ["Crash", "Recession", "Bull Run", "Market Correction"],
+            "valuation": ["100 Billion", "500 Billion", "1 Trillion", "2 Trillion"],
+        },
+        "content_types": [
+            "Stock analysis with charts/timelines",
+            "Passive income explainers",
+            "Business model documentaries (documentary-business hybrids)",
+            "Budgeting tutorials with specific numbers",
+            "Side hustle guides with proof",
+            "Investing rule breakdowns (Warren Buffett, Charlie Munger)",
+        ],
+        # Competitor insights
+        "competitor_channels": [
+            "The Swedish Investor - Whiteboard animation, 1M+ subs, book summaries",
+            "Practical Wisdom - Stock footage + clear narration, 10M views on best videos",
+            "Two Cents - Animated explainers, personal finance focus",
+        ],
+        "best_practices": [
+            "Use visual evidence (charts, timelines, citations)",
+            "Include specific dollar amounts, not vague terms",
+            "Reference credible sources (Buffett, academic studies)",
+            "Documentary-business hybrid format performs best",
+            "Target 8-15 minute videos for optimal retention",
+        ],
+    },
+
+    # mind_unlocked channel (Psychology)
+    # Key insight: "What if" hooks and dark psychology content drive highest engagement
+    # Avg video length: 8-12 minutes | Best performing: Personality type content, manipulation awareness
+    "psychology": {
+        "templates": [
+            # Personality Types (Psych2Go style - 12.7M subs, 18M views on "8 Toxic Things Parents Say")
+            "{number} Signs of {personality_type}",
+            "{number} Things Only {personality_type} Will Understand",
+            "How to Spot a {personality_type} Instantly",
+            "{number} Toxic Things {group} Say to {target}",
+            # Brain Facts (high curiosity, Brainy Dose style - 10M views on best)
+            "Why Your Brain {brain_action}",
+            "The Science Behind {behavior}",
+            "What Happens to Your Brain When You {action}",
+            # Dark Psychology (manipulation awareness - highest engagement)
+            "Dark Psychology Tricks {group} Uses Against You",
+            "{number} Manipulation Tactics {group} Uses (And How to Defend)",
+            "Why {percentage}% of People Fall for This Manipulation",
+            "{number} Signs You're Being Manipulated",
+            # Cognitive Biases (practical value)
+            "The {cognitive_bias} That's Ruining Your Life",
+            "{number} Cognitive Biases That Control Your Decisions",
+            "How {group} Exploits the {cognitive_bias}",
+            # Body Language (evergreen content)
+            "{number} Body Language Signs Someone Is {emotion}",
+            "How to Read Anyone in {number} Seconds",
+            "FBI Techniques to Detect When Someone Is {emotion}",
+            # Psychology Tricks (The Infographics Show style - 15M subs)
+            "{number} Psychological Tricks That Work on Everyone",
+            "The Psychology of {topic}: Why You {action}",
+            "What Your {trait} Says About You (Psychology)",
+            # New trending templates
+            "Why Intelligent People {action}",
+            "The Real Reason You {action} (Psychology Explained)",
+            "{number} Habits of Highly Manipulative People",
+        ],
+        "variables": {
+            "personality_type": ["a Narcissist", "a Manipulator", "High Intelligence", "an Introvert", "a Psychopath", "an Empath", "Emotional Intelligence", "a Covert Narcissist", "an INFJ", "a Sociopath"],
+            "brain_action": ["Hates Change", "Remembers Embarrassing Moments", "Sabotages Your Success", "Fears Rejection", "Creates False Memories", "Craves Validation", "Procrastinates", "Gets Addicted"],
+            "group": ["Salespeople", "Politicians", "Advertisers", "Narcissists", "Manipulators", "Social Media Companies", "Toxic Parents", "Gaslighters", "Marketing Teams"],
+            "target": ["You", "Their Children", "Their Partners", "Their Employees", "Customers"],
+            "behavior": ["Procrastination", "Jealousy", "Attraction", "Fear", "Addiction", "Motivation", "Anxiety", "Depression", "Love Bombing"],
+            "cognitive_bias": ["Confirmation Bias", "Sunk Cost Fallacy", "Anchoring Effect", "Halo Effect", "Dunning-Kruger Effect", "Negativity Bias", "Availability Heuristic"],
+            "trait": ["Handwriting", "Eye Color", "Sleep Position", "Favorite Color", "Walking Style", "Laugh", "Phone Wallpaper", "Music Taste"],
+            "action": ["Remember Embarrassing Moments", "Procrastinate", "Fear Success", "Self-Sabotage", "Compare Yourself to Others", "Overthink", "People Please", "Avoid Conflict"],
+            "emotion": ["Lying", "Attracted to You", "Hiding Something", "Nervous", "Confident", "Insecure", "Jealous", "Guilty"],
+            "topic": ["Success", "Money", "Attraction", "Influence", "Fear", "Persuasion", "Charisma", "Power"],
+            "number": ["3", "5", "7", "10", "8", "12"],
+            "percentage": ["73", "87", "92", "96", "85", "78"],
+        },
+        "content_types": [
+            "Personality type content (narcissist, empath, introvert)",
+            "Brain facts and cognitive biases",
+            "Dark psychology / manipulation awareness",
+            "Psychology tricks used in marketing",
+            "Behavior science explainers",
+            "Body language analysis",
+            "Toxic relationship red flags",
+        ],
+        # Competitor insights
+        "competitor_channels": [
+            "Psych2Go - Cute animations, 12.7M subs, personality content, merchandise",
+            "Brainy Dose - Stock footage, 10M views, 'People Who Like To Be Alone' viral",
+            "The Infographics Show - 15M subs, animated explainers, broad psychology topics",
+            "The Art of Improvement - 1M subs, actionable advice format",
+        ],
+        "best_practices": [
+            "Use 'What if' and curiosity-driven hooks",
+            "Reference specific studies (Stanford, Milgram, Cialdini)",
+            "Dark psychology content drives highest engagement",
+            "Make viewers feel like they're learning 'forbidden knowledge'",
+            "Animation or stock footage with calm voiceover works best",
+        ],
+    },
+
+    # untold_stories channel (Storytelling)
+    # Key insight: Documentary-style with dramatic tension, 30+ min episodes perform well
+    # Best performing: Company rise/fall, true crime adjacent, unsolved mysteries
+    "storytelling": {
+        "templates": [
+            # Company Documentaries (high watch time - Truly Criminal style)
+            "The Untold Story of {company_person}",
+            "How {company} Went From $0 to ${valuation}",
+            "The Rise and Fall of {brand}",
+            "What Happened to {forgotten_entity}?",
+            "{company}'s Biggest Mistake Ever",
+            "The Dark Side of {successful_entity}",
+            # Person Stories (JCS Criminal Psychology style - interrogation analysis)
+            "The {person} Who {achievement}",
+            "How {person} Built a ${amount} Empire (Then Lost It All)",
+            "Inside the Mind of {famous_person}",
+            "What Really Happened to {famous_person}",
+            # Business Scandals (high engagement)
+            "Why {company} Is Secretly {adjective}",
+            "The {year} {event} That Changed Everything",
+            "The True Story Behind {famous_thing}",
+            "Inside {company}'s Secret {noun}",
+            # Mystery/Tension (Lazy Masquerade style - 1.7M subs)
+            "The Mystery That Still Haunts {location}",
+            "Why Everyone Was Wrong About {subject}",
+            "The Case That Shocked the World",
+            "Nobody Knows Why This Happened",
+            # Crime/Investigation (Mr. Nightmare style - 6M subs)
+            "The Criminal Who {achievement}",
+            "The Heist That Went Horribly Wrong",
+            "How They Caught {famous_criminal}",
+            # New trending templates
+            "The {time_period} That Destroyed {company}",
+            "Why {company} Will Never Recover",
+            "The Genius Strategy That Backfired",
+            "The Truth They Don't Want You to Know About {subject}",
+        ],
+        "variables": {
+            "company_person": ["Enron", "WeWork", "Theranos", "Bernie Madoff", "Elon Musk", "Steve Jobs", "FTX", "Lehman Brothers", "Elizabeth Holmes", "Sam Bankman-Fried", "Adam Neumann"],
+            "company": ["Amazon", "Apple", "Netflix", "Google", "Tesla", "Uber", "Airbnb", "SpaceX", "Meta", "Twitter", "TikTok"],
+            "brand": ["Blockbuster", "Kodak", "Nokia", "BlackBerry", "Toys R Us", "Sears", "RadioShack", "Vine", "MySpace", "Yahoo"],
+            "forgotten_entity": ["MySpace", "AOL", "Yahoo", "Vine", "Palm", "Compaq", "Circuit City", "Borders", "Tower Records"],
+            "person": ["Man", "Woman", "Teenager", "Dropout", "Immigrant", "Founder", "Genius", "Scammer", "Whistleblower"],
+            "famous_person": ["Elon Musk", "Jeff Bezos", "Mark Zuckerberg", "Steve Jobs", "Elizabeth Holmes", "Adam Neumann"],
+            "famous_criminal": ["Bernie Madoff", "Elizabeth Holmes", "The Zodiac Killer", "D.B. Cooper"],
+            "achievement": ["Fooled Wall Street", "Predicted the Crash", "Broke the Internet", "Built a Billion Dollar Company", "Changed an Industry", "Stole Millions", "Escaped Justice"],
+            "adjective": ["Terrifying", "Genius", "Evil", "Doomed", "Unstoppable", "Dangerous", "Brilliant"],
+            "successful_entity": ["Amazon", "Facebook", "Google", "Tesla", "Apple", "Disney", "Netflix", "Microsoft"],
+            "valuation": ["1 Billion", "10 Billion", "100 Billion", "1 Trillion"],
+            "amount": ["1 Billion", "10 Billion", "100 Million", "500 Million"],
+            "year": ["2008", "2020", "2001", "2019", "2023", "2022", "2024"],
+            "time_period": ["24 Hours", "One Week", "30 Days", "One Decision"],
+            "event": ["Crash", "Scandal", "Decision", "Mistake", "Discovery", "Betrayal", "Collapse"],
+            "famous_thing": ["the iPhone", "Netflix", "Bitcoin", "Amazon Prime", "the Tesla Roadster", "Facebook", "ChatGPT"],
+            "noun": ["Strategy", "Failure", "Success", "Scandal", "Project", "Deal", "Plan"],
+            "subject": ["WeWork", "Theranos", "FTX", "Enron", "Lehman Brothers", "Crypto"],
+            "location": ["Wall Street", "Silicon Valley", "Hollywood", "Washington"],
+        },
+        "content_types": [
+            "Company rise/fall documentaries (30+ min for high watch time)",
+            "Historical events with modern lessons",
+            "Unsolved mysteries and true crime adjacent",
+            "Founder stories with dramatic arcs",
+            "Business scandals and fraud exposures",
+            "Heist and crime documentaries",
+        ],
+        # Competitor insights
+        "competitor_channels": [
+            "JCS Criminal Psychology - Interrogation analysis, 5M+ subs, long-form",
+            "Truly Criminal - Mini-documentaries 30+ min, solved and unsolved cases",
+            "Lazy Masquerade - 1.7M subs, horror/true crime blend, calm narration",
+            "Mr. Nightmare - 6M subs, animation + true crime, spooky visuals",
+            "Stories to Remember - 143k subs, 35M views, compelling narratives",
+        ],
+        "best_practices": [
+            "Start in media res - hook with tension immediately",
+            "Use sensory details in every scene (visual, sound, physical)",
+            "Mini-cliffhangers every 45-60 seconds",
+            "Documentary-style production earns 30-50% higher CPM",
+            "Longer videos (12-30 min) have better retention in this niche",
+            "Historical crime content averages 2.3M views for established channels",
+        ],
+    }
+}
+
+# ============================================================
+# RETENTION PATTERNS (From Competitor Analysis)
+# ============================================================
+
+RETENTION_BEST_PRACTICES = {
+    "hook_timing": {
+        "first_5_seconds": "Pattern interrupt or bold claim - critical for 70%+ retention",
+        "5_15_seconds": "Context + first open loop planted",
+        "30_seconds": "Must deliver first micro-payoff or risk 50% drop-off",
+    },
+    "engagement_techniques": {
+        "open_loops": "Minimum 3 per video - 32% increase in watch time",
+        "micro_cliffhangers": "Every 45-60 seconds - 'But here's where it gets interesting...'",
+        "direct_address": "Use 'you' at least 3 times per minute",
+        "rhetorical_questions": "Every 30-45 seconds - 'Sound familiar?'",
+        "specific_numbers": "Always use exact figures, never vague terms",
+    },
+    "cta_placement": {
+        "soft_cta_30_percent": "If you're finding this valuable, hit subscribe...",
+        "engagement_cta_50_percent": "Comment below with your experience...",
+        "final_cta_95_percent": "Like and subscribe for more...",
+        "never_first_30_seconds": "CTAs in first 30 seconds kill retention",
+    },
+}
+
+
 class IdeaGenerator:
     """Generate and score video ideas using AI and research data."""
+
+    # ============================================================
+    # CHANNEL-NICHE MAPPING (for automatic niche detection)
+    # ============================================================
+    CHANNEL_NICHE_MAP = {
+        "money_blueprints": "finance",
+        "mind_unlocked": "psychology",
+        "untold_stories": "storytelling",
+    }
 
     IDEA_GENERATION_PROMPT = """You are an expert YouTube content strategist.
 
@@ -586,6 +866,173 @@ Return as JSON."""
         except Exception as e:
             logger.error(f"Error expanding idea: {e}")
             return {"error": str(e), "raw_response": ""}
+
+    # ============================================================
+    # VIRAL TOPIC GENERATION (From Report 5)
+    # ============================================================
+
+    def generate_viral_topic(
+        self,
+        channel_id: Optional[str] = None,
+        niche: Optional[str] = None
+    ) -> str:
+        """
+        Generate a viral video topic from proven templates.
+
+        Uses the VIRAL_TOPIC_TEMPLATES to create engaging video titles
+        based on Report 5 channel growth tactics.
+
+        Args:
+            channel_id: Channel ID (money_blueprints, mind_unlocked, untold_stories)
+            niche: Niche name (finance, psychology, storytelling)
+
+        Returns:
+            A filled-in viral topic title string
+        """
+        import random
+
+        # Determine niche from channel_id if provided
+        if channel_id and not niche:
+            niche = self.CHANNEL_NICHE_MAP.get(channel_id, "finance")
+
+        # Default to finance if no niche specified
+        if not niche:
+            niche = "finance"
+
+        # Get templates for this niche
+        niche_data = VIRAL_TOPIC_TEMPLATES.get(niche, VIRAL_TOPIC_TEMPLATES["finance"])
+        templates = niche_data["templates"]
+        variables = niche_data["variables"]
+
+        # Select a random template
+        template = random.choice(templates)
+
+        # Fill in the template with random variables
+        result = template
+        for var_name, var_options in variables.items():
+            placeholder = "{" + var_name + "}"
+            if placeholder in result:
+                result = result.replace(placeholder, random.choice(var_options), 1)
+
+        logger.info(f"Generated viral topic for {niche}: {result}")
+        return result
+
+    def generate_viral_ideas(
+        self,
+        channel_id: Optional[str] = None,
+        niche: Optional[str] = None,
+        count: int = 5
+    ) -> List[ScoredIdea]:
+        """
+        Generate multiple viral video ideas from templates.
+
+        Args:
+            channel_id: Channel ID for automatic niche detection
+            niche: Niche name (finance, psychology, storytelling)
+            count: Number of ideas to generate
+
+        Returns:
+            List of ScoredIdea objects with viral topics
+        """
+        import random
+
+        # Determine niche
+        if channel_id and not niche:
+            niche = self.CHANNEL_NICHE_MAP.get(channel_id, "finance")
+        if not niche:
+            niche = "finance"
+
+        ideas = []
+        used_templates = set()
+
+        niche_data = VIRAL_TOPIC_TEMPLATES.get(niche, VIRAL_TOPIC_TEMPLATES["finance"])
+        templates = niche_data["templates"]
+        variables = niche_data["variables"]
+        content_types = niche_data.get("content_types", [])
+
+        for _ in range(count):
+            # Try to get a unique template
+            available_templates = [t for t in templates if t not in used_templates]
+            if not available_templates:
+                available_templates = templates  # Reset if all used
+
+            template = random.choice(available_templates)
+            used_templates.add(template)
+
+            # Fill in the template
+            title = template
+            keywords = [niche]
+            for var_name, var_options in variables.items():
+                placeholder = "{" + var_name + "}"
+                if placeholder in title:
+                    chosen = random.choice(var_options)
+                    title = title.replace(placeholder, chosen, 1)
+                    # Add variable value as keyword
+                    keywords.append(chosen.lower().replace(" ", "_"))
+
+            # Generate description
+            content_type = random.choice(content_types) if content_types else "educational content"
+            description = f"A {content_type} video exploring: {title}"
+
+            # Score based on template type (viral templates should score high)
+            trend_score = random.randint(75, 95)
+            competition_score = random.randint(60, 80)
+            engagement_score = random.randint(70, 90)
+            overall = int((trend_score + competition_score + engagement_score) / 3)
+
+            idea = ScoredIdea(
+                title=title,
+                description=description,
+                keywords=keywords[:10],
+                niche=niche,
+                score=overall,
+                trend_score=trend_score,
+                competition_score=competition_score,
+                engagement_score=engagement_score,
+                source="viral_template",
+                reasoning=f"Based on proven viral template format for {niche} content"
+            )
+            ideas.append(idea)
+
+        # Sort by score
+        ideas.sort(key=lambda x: x.score, reverse=True)
+        logger.success(f"Generated {len(ideas)} viral ideas for {niche}")
+        return ideas
+
+    def get_viral_idea_for_channel(self, channel_id: str) -> ScoredIdea:
+        """
+        Get a single viral video idea for a specific channel.
+
+        Args:
+            channel_id: Channel ID (money_blueprints, mind_unlocked, untold_stories)
+
+        Returns:
+            A ScoredIdea optimized for the channel's niche
+        """
+        ideas = self.generate_viral_ideas(channel_id=channel_id, count=1)
+        if ideas:
+            return ideas[0]
+        # Fallback
+        niche = self.CHANNEL_NICHE_MAP.get(channel_id, "finance")
+        return self._get_fallback_ideas(niche, 1)[0]
+
+    def get_content_types_for_niche(self, niche: str) -> List[str]:
+        """
+        Get the recommended content types for a niche.
+
+        Args:
+            niche: Niche name (finance, psychology, storytelling)
+
+        Returns:
+            List of content type descriptions
+        """
+        niche_data = VIRAL_TOPIC_TEMPLATES.get(niche, {})
+        return niche_data.get("content_types", [
+            "Educational tutorials",
+            "Explainer videos",
+            "Tips and tricks",
+            "Analysis content",
+        ])
 
 
 # Example usage

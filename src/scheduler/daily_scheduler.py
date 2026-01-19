@@ -178,6 +178,35 @@ def get_channel_shorts_config(channel_id: str) -> Dict[str, Any]:
         return global_config
 
 
+def get_channel_posting_days(channel_id: str) -> Optional[List[int]]:
+    """
+    Get posting_days configuration for a specific channel.
+    Returns list of day numbers (0=Monday, 6=Sunday) or None for every day.
+    """
+    try:
+        config_path = PROJECT_ROOT / "config" / "channels.yaml"
+        if config_path.exists():
+            with open(config_path) as f:
+                config = yaml.safe_load(f)
+            for channel in config.get("channels", []):
+                if channel.get("id") == channel_id:
+                    settings = channel.get("settings", {})
+                    return settings.get("posting_days")
+        return None
+    except Exception as e:
+        logger.warning(f"Failed to load posting_days for {channel_id}: {e}")
+        return None
+
+
+def convert_posting_days_to_cron(posting_days: Optional[List[int]]) -> Optional[str]:
+    """Convert posting_days list to cron day_of_week string."""
+    if posting_days is None:
+        return None
+    day_names = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+    cron_days = [day_names[day] for day in posting_days if 0 <= day <= 6]
+    return ",".join(cron_days) if cron_days else None
+
+
 def calculate_shorts_times(regular_times: List[str], delay_hours: int = 2) -> List[str]:
     """
     Calculate Shorts posting times based on regular video times.
@@ -394,6 +423,29 @@ def create_and_upload_short(
 # SCHEDULER
 # ============================================================
 
+def run_scheduled_cleanup():
+    """
+    Run disk cleanup as a scheduled task.
+
+    Called daily by the scheduler to clean up old files and free disk space.
+    """
+    try:
+        from src.utils.cleanup import run_scheduled_cleanup as do_cleanup
+        result = do_cleanup()
+
+        if result.get("skipped"):
+            logger.info(f"Cleanup skipped: {result.get('reason')} ({result.get('free_gb', 0):.1f} GB free)")
+        else:
+            logger.success(
+                f"Cleanup complete: {result.get('files_deleted', 0)} files deleted, "
+                f"{result.get('space_freed_gb', 0):.2f} GB freed"
+            )
+        return result
+    except Exception as e:
+        logger.error(f"Scheduled cleanup failed: {e}")
+        return {"success": False, "error": str(e)}
+
+
 def run_scheduler(include_videos: bool = True, include_shorts: bool = True):
     """
     Run the automated posting scheduler.
@@ -415,24 +467,45 @@ def run_scheduler(include_videos: bool = True, include_shorts: bool = True):
     video_job_count = 0
     shorts_job_count = 0
 
+    # Add daily cleanup job (runs at 04:00 UTC every day)
+    scheduler.add_job(
+        run_scheduled_cleanup,
+        CronTrigger(hour=4, minute=0),
+        id="daily_cleanup",
+        name="Daily disk cleanup",
+        misfire_grace_time=3600  # 1 hour grace period
+    )
+    logger.info("  Scheduled daily cleanup: 04:00 UTC")
+
     # Add regular video jobs for each channel and time slot
     if include_videos:
         for channel_id, config in POSTING_SCHEDULE.items():
+            # Get posting_days from channels.yaml
+            posting_days = get_channel_posting_days(channel_id)
+            day_of_week = convert_posting_days_to_cron(posting_days)
+
             for time_str in config["times"]:
                 hour, minute = time_str.split(":")
-
                 job_id = f"{channel_id}_video_{time_str.replace(':', '')}"
+
+                # Build trigger with day_of_week if configured
+                if day_of_week:
+                    trigger = CronTrigger(day_of_week=day_of_week, hour=int(hour), minute=int(minute))
+                    days_str = day_of_week
+                else:
+                    trigger = CronTrigger(hour=int(hour), minute=int(minute))
+                    days_str = "daily"
 
                 scheduler.add_job(
                     create_and_upload_video,
-                    CronTrigger(hour=int(hour), minute=int(minute)),
+                    trigger,
                     args=[channel_id],
                     id=job_id,
                     name=f"{channel_id} video at {time_str}",
                     misfire_grace_time=3600  # 1 hour grace period
                 )
                 video_job_count += 1
-                logger.info(f"  Scheduled video: {channel_id} at {time_str} UTC")
+                logger.info(f"  Scheduled video: {channel_id} at {time_str} UTC ({days_str})")
 
     # Add Shorts jobs based on configuration
     if include_shorts:
@@ -442,6 +515,10 @@ def run_scheduler(include_videos: bool = True, include_shorts: bool = True):
             if not shorts_config.get("enabled", True):
                 logger.info(f"  Shorts disabled for {channel_id}")
                 continue
+
+            # Get posting_days (Shorts follow same schedule as regular videos)
+            posting_days = get_channel_posting_days(channel_id)
+            day_of_week = convert_posting_days_to_cron(posting_days)
 
             shorts_times = []
 
@@ -464,12 +541,19 @@ def run_scheduler(include_videos: bool = True, include_shorts: bool = True):
             # Schedule each Shorts time
             for time_str in shorts_times:
                 hour, minute = time_str.split(":")
-
                 job_id = f"{channel_id}_short_{time_str.replace(':', '')}"
+
+                # Build trigger with day_of_week if configured
+                if day_of_week:
+                    trigger = CronTrigger(day_of_week=day_of_week, hour=int(hour), minute=int(minute))
+                    days_str = day_of_week
+                else:
+                    trigger = CronTrigger(hour=int(hour), minute=int(minute))
+                    days_str = "daily"
 
                 scheduler.add_job(
                     create_and_upload_short,
-                    CronTrigger(hour=int(hour), minute=int(minute)),
+                    trigger,
                     args=[channel_id],
                     id=job_id,
                     name=f"{channel_id} short at {time_str}",
@@ -478,7 +562,7 @@ def run_scheduler(include_videos: bool = True, include_shorts: bool = True):
                 shorts_job_count += 1
                 logger.info(f"  Scheduled short: {channel_id} at {time_str} UTC")
 
-    total_job_count = video_job_count + shorts_job_count
+    total_job_count = video_job_count + shorts_job_count + 1  # +1 for cleanup job
 
     print()
     print("=" * 60)
@@ -490,6 +574,11 @@ def run_scheduler(include_videos: bool = True, include_shorts: bool = True):
         print(f"    Regular videos: {video_job_count}")
     if include_shorts:
         print(f"    YouTube Shorts: {shorts_job_count}")
+    print(f"    Maintenance: 1 (daily cleanup)")
+    print()
+    print("  Maintenance Schedule (UTC):")
+    print("  ----------------------------")
+    print("    Daily cleanup: 04:00 (removes files > 30 days old)")
     print()
     print("  Regular Video Schedule (UTC):")
     print("  ------------------------------")
@@ -698,6 +787,32 @@ def show_status():
     print(f"  Delay hours: {global_config.get('delay_hours', 2)}")
     print(f"  Standalone times: {global_config.get('standalone_times', [])}")
     print()
+
+    # Show Cleanup configuration
+    print("  Disk Cleanup:")
+    print("  -------------")
+    print("  Schedule: Daily at 04:00 UTC")
+    print("  Max file age: 30 days")
+    print("  Threshold: Runs if disk < 10 GB free")
+    print("  Directories cleaned:")
+    print("    - output/videos, output/audio, output/thumbnails, output/shorts")
+    print("    - data/stock_cache, cache, logs")
+    print("    - System temp (video_ultra, video_shorts, video_fast)")
+    print()
+
+    # Show current disk usage summary
+    try:
+        from src.utils.cleanup import get_disk_usage
+        usage = get_disk_usage()
+        system_disk = usage.get("system_disk", {})
+        if system_disk:
+            print("  Current Disk Status:")
+            print("  --------------------")
+            print(f"  Project size: {usage.get('total_formatted', 'N/A')}")
+            print(f"  Disk free: {system_disk.get('free_formatted', 'N/A')} ({100 - system_disk.get('used_percent', 0):.1f}%)")
+            print()
+    except Exception:
+        pass  # Silently skip if cleanup module not available
 
 
 # ============================================================

@@ -47,6 +47,30 @@ try:
 except ImportError:
     raise ImportError("Please install pillow: pip install pillow")
 
+# Import subtitle generator
+try:
+    from .subtitles import SubtitleGenerator, SubtitleTrack, SUBTITLE_STYLES
+    SUBTITLES_AVAILABLE = True
+except ImportError:
+    SUBTITLES_AVAILABLE = False
+    logger.debug("SubtitleGenerator not available - subtitles disabled")
+
+# Import hook generator for catchy intros
+try:
+    from .video_hooks import VideoHookGenerator, HookValidationResult
+    HOOKS_AVAILABLE = True
+except ImportError:
+    HOOKS_AVAILABLE = False
+    logger.debug("VideoHookGenerator not available - hooks disabled")
+
+# Import GPU encoder detection from video_ultra
+try:
+    from .video_ultra import get_video_encoder, get_encoder_args
+    GPU_ENCODER_AVAILABLE = True
+except ImportError:
+    GPU_ENCODER_AVAILABLE = False
+    logger.debug("GPU encoder detection not available - using CPU encoding")
+
 
 class ShortsVideoGenerator:
     """
@@ -59,6 +83,7 @@ class ShortsVideoGenerator:
     - Center-focused composition
     - More dynamic transitions
     - Faster visual pacing (2-3 seconds per segment)
+    - CATCHY HOOK in first 1-3 seconds (never blank screens!)
     """
 
     # Vertical resolution for Shorts (9:16 aspect ratio)
@@ -211,12 +236,66 @@ class ShortsVideoGenerator:
                 logger.warning(f"Stock footage provider unavailable: {e}")
                 self.stock = None
 
+        # Initialize Pika video generator (optional)
+        self.pika = None
+        try:
+            from .video_pika import PikaVideoGenerator
+            self.pika = PikaVideoGenerator()
+            if self.pika.api_key:
+                logger.info("Pika Labs AI video generation available")
+            else:
+                self.pika = None
+                logger.debug("Pika Labs not configured (no API key)")
+        except ImportError:
+            logger.debug("Pika Labs video generator not available")
+        except Exception as e:
+            logger.debug(f"Pika Labs initialization failed: {e}")
+
         # Temp directory
         self.temp_dir = Path(tempfile.gettempdir()) / "video_shorts"
         self.temp_dir.mkdir(exist_ok=True)
 
         # Load fonts
         self.fonts = self._load_fonts()
+
+        # Initialize subtitle generator
+        self.subtitle_generator = None
+        if SUBTITLES_AVAILABLE:
+            try:
+                self.subtitle_generator = SubtitleGenerator()
+                logger.debug("SubtitleGenerator initialized for Shorts captions")
+            except Exception as e:
+                logger.debug(f"SubtitleGenerator initialization failed: {e}")
+
+        # Initialize hook generator for catchy intros
+        self.hook_generator = None
+        if HOOKS_AVAILABLE:
+            try:
+                self.hook_generator = VideoHookGenerator(
+                    resolution=self.resolution,
+                    fps=self.fps,
+                    is_shorts=True
+                )
+                logger.debug("VideoHookGenerator initialized for catchy intros")
+            except Exception as e:
+                logger.debug(f"VideoHookGenerator initialization failed: {e}")
+
+        # Detect GPU encoder for hardware-accelerated encoding
+        if GPU_ENCODER_AVAILABLE:
+            self.encoder_info = get_video_encoder(self.ffmpeg)
+            if self.encoder_info["is_gpu"]:
+                logger.info(f"GPU acceleration enabled: {self.encoder_info['gpu_type'].upper()} ({self.encoder_info['encoder']})")
+            else:
+                logger.info("Using CPU encoding (libx264)")
+        else:
+            # Fallback encoder info if GPU detection module not available
+            self.encoder_info = {
+                "encoder": "libx264",
+                "preset": "fast",
+                "extra_args": ["-crf", "23", "-b:v", "8M"],
+                "is_gpu": False,
+                "gpu_type": "cpu"
+            }
 
         logger.info(f"ShortsVideoGenerator initialized ({self.width}x{self.height} @ {self.fps}fps)")
 
@@ -256,6 +335,36 @@ class ShortsVideoGenerator:
                 return ffprobe
 
         return None
+
+    def _get_encoder_args(self, use_fast_preset: bool = False) -> List[str]:
+        """
+        Get FFmpeg encoder arguments for video encoding.
+
+        Uses GPU acceleration if available, falls back to CPU.
+
+        Args:
+            use_fast_preset: If True, use fastest preset for intermediate encoding
+
+        Returns:
+            List of FFmpeg arguments for video encoding
+        """
+        if use_fast_preset:
+            # For intermediate clips, use fastest settings
+            if self.encoder_info["is_gpu"]:
+                if self.encoder_info["gpu_type"] == "nvidia":
+                    return ["-c:v", "h264_nvenc", "-preset", "p1"]  # Fastest NVENC preset
+                elif self.encoder_info["gpu_type"] == "amd":
+                    return ["-c:v", "h264_amf", "-quality", "speed"]
+                elif self.encoder_info["gpu_type"] == "intel":
+                    return ["-c:v", "h264_qsv", "-preset", "veryfast"]
+            return ["-c:v", "libx264", "-preset", "ultrafast"]
+
+        # For final output, use quality settings
+        if GPU_ENCODER_AVAILABLE:
+            return get_encoder_args(self.encoder_info)
+        else:
+            # Fallback if GPU encoder module not available
+            return ["-c:v", "libx264", "-preset", "fast", "-crf", "23", "-b:v", "8M"]
 
     def _load_fonts(self) -> Dict[str, str]:
         """Load available fonts."""
@@ -322,14 +431,17 @@ class ShortsVideoGenerator:
             # Crop to 9:16 aspect ratio from center
             crop_filter = f"scale=-1:{self.height*2},crop={self.width}:{self.height}"
 
+            # Use GPU-accelerated encoding
+            encoder_args = self._get_encoder_args(use_fast_preset=True)
+
             if is_image:
                 cmd = [
                     self.ffmpeg, '-y',
                     '-loop', '1',
                     '-i', input_path,
                     '-t', str(duration),
-                    '-vf', crop_filter,
-                    '-c:v', 'libx264',
+                    '-vf', crop_filter
+                ] + encoder_args + [
                     '-pix_fmt', 'yuv420p',
                     '-an',
                     output_path
@@ -339,8 +451,8 @@ class ShortsVideoGenerator:
                     self.ffmpeg, '-y',
                     '-i', input_path,
                     '-t', str(duration),
-                    '-vf', crop_filter,
-                    '-c:v', 'libx264',
+                    '-vf', crop_filter
+                ] + encoder_args + [
                     '-pix_fmt', 'yuv420p',
                     '-an',
                     output_path
@@ -441,15 +553,17 @@ class ShortsVideoGenerator:
 
             filter_str = ",".join(filters)
 
+            # Use GPU-accelerated encoding
+            encoder_args = self._get_encoder_args(use_fast_preset=True)
+
             if is_image:
                 cmd = [
                     self.ffmpeg, '-y',
                     '-loop', '1',
                     '-i', input_path,
                     '-t', str(duration),
-                    '-vf', filter_str,
-                    '-c:v', 'libx264',
-                    '-preset', 'fast',
+                    '-vf', filter_str
+                ] + encoder_args + [
                     '-pix_fmt', 'yuv420p',
                     '-an',
                     output_path
@@ -463,9 +577,8 @@ class ShortsVideoGenerator:
                     '-vf', f"scale=-1:{int(self.height*1.5)},"
                            f"crop={self.width}:{self.height},"
                            f"eq=saturation={sat}:contrast={con}:brightness=-{overlay_opacity * 0.35},"
-                           f"fade=in:0:{fade_frames},fade=out:st={duration - self.TRANSITION_DURATION}:d={self.TRANSITION_DURATION}",
-                    '-c:v', 'libx264',
-                    '-preset', 'fast',
+                           f"fade=in:0:{fade_frames},fade=out:st={duration - self.TRANSITION_DURATION}:d={self.TRANSITION_DURATION}"
+                ] + encoder_args + [
                     '-pix_fmt', 'yuv420p',
                     '-an',
                     output_path
@@ -514,24 +627,23 @@ class ShortsVideoGenerator:
 
             filter_str = ",".join(filters)
 
+            # Use GPU-accelerated encoding
+            encoder_args = self._get_encoder_args(use_fast_preset=True)
+
             if is_image:
                 cmd = [
                     self.ffmpeg, '-y',
                     '-loop', '1', '-i', input_path,
                     '-t', str(duration),
-                    '-vf', filter_str,
-                    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-an',
-                    output_path
-                ]
+                    '-vf', filter_str
+                ] + encoder_args + ['-pix_fmt', 'yuv420p', '-an', output_path]
             else:
                 cmd = [
                     self.ffmpeg, '-y',
                     '-stream_loop', '-1', '-i', input_path,
                     '-t', str(duration),
-                    '-vf', filter_str,
-                    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-an',
-                    output_path
-                ]
+                    '-vf', filter_str
+                ] + encoder_args + ['-pix_fmt', 'yuv420p', '-an', output_path]
 
             subprocess.run(cmd, capture_output=True, timeout=120)
             return output_path if os.path.exists(output_path) else None
@@ -814,16 +926,15 @@ class ShortsVideoGenerator:
             frame_path = str(Path(output_path).with_suffix('.png'))
             img.save(frame_path)
 
-            # Create video from frame
+            # Create video from frame with GPU-accelerated encoding
             fade_frames = int(self.TRANSITION_DURATION * self.fps)
+            encoder_args = self._get_encoder_args(use_fast_preset=True)
             cmd = [
                 self.ffmpeg, '-y',
                 '-loop', '1', '-i', frame_path,
                 '-t', str(duration),
-                '-vf', f"fade=in:0:{fade_frames},fade=out:st={duration - 0.3}:d=0.3",
-                '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-an',
-                output_path
-            ]
+                '-vf', f"fade=in:0:{fade_frames},fade=out:st={duration - 0.3}:d=0.3"
+            ] + encoder_args + ['-pix_fmt', 'yuv420p', '-an', output_path]
             subprocess.run(cmd, capture_output=True, timeout=60)
 
             # Cleanup
@@ -836,6 +947,47 @@ class ShortsVideoGenerator:
             logger.error(f"Gradient background failed: {e}")
             return None
 
+    async def generate_pika_clip(
+        self,
+        prompt: str,
+        output_path: str,
+        duration: int = 5
+    ) -> Optional[str]:
+        """
+        Generate an AI video clip using Pika Labs for Shorts.
+
+        Args:
+            prompt: Text description for the video
+            output_path: Where to save the generated clip
+            duration: Duration in seconds (5-10)
+
+        Returns:
+            Path to generated clip or None
+        """
+        if not self.pika:
+            logger.debug("Pika generator not available")
+            return None
+
+        try:
+            import asyncio
+            result = await self.pika.generate_short_clip(
+                prompt=prompt,
+                output_file=output_path,
+                duration=duration,
+                aspect_ratio="9:16"  # Vertical for Shorts
+            )
+
+            if result.success and result.local_path:
+                logger.info(f"Generated Pika AI clip: {result.local_path}")
+                return result.local_path
+            else:
+                logger.warning(f"Pika generation failed: {result.error}")
+                return None
+
+        except Exception as e:
+            logger.warning(f"Pika clip generation failed: {e}")
+            return None
+
     def create_short(
         self,
         audio_file: str,
@@ -843,7 +995,11 @@ class ShortsVideoGenerator:
         output_file: str,
         niche: str = "default",
         background_music: str = None,
-        music_volume: float = None
+        music_volume: float = None,
+        use_pika: bool = False,
+        pika_prompts: List[str] = None,
+        subtitles_enabled: bool = False,
+        script_text: Optional[str] = None
     ) -> Optional[str]:
         """
         Create a YouTube Short from audio and script.
@@ -855,6 +1011,10 @@ class ShortsVideoGenerator:
             niche: Content niche for styling
             background_music: Optional path to background music file
             music_volume: Optional music volume (0.0-1.0), defaults to 0.15
+            use_pika: Use Pika Labs AI to generate video clips (requires PIKA_API_KEY)
+            pika_prompts: Custom prompts for Pika generation (optional)
+            subtitles_enabled: Whether to burn subtitles into the video
+            script_text: Script/narration text for subtitle generation (optional, uses script if not provided)
 
         Returns:
             Path to created short video or None
@@ -952,22 +1112,136 @@ class ShortsVideoGenerator:
             segment_files = []
             current_time = 0.0
 
-            # 1. Title card / Hook (research: must grab attention in 1.5s)
-            title_duration = self.HOOK_DURATION  # Fast hook per research
-            title_frame = self.temp_dir / "title_frame.png"
-            self.create_title_card(
-                title=title[:40],
-                output_path=str(title_frame),
-                style=style,
-                subtitle=getattr(script, 'description', '')[:30] if hasattr(script, 'description') else None
-            )
+            # 0. PIKA LABS AI INTRO (if enabled)
+            # Generate AI intro clip using Pika Labs for eye-catching hook
+            pika_intro_clip = None
+            pika_outro_clip = None
 
-            if title_frame.exists():
-                title_video = self.temp_dir / "title.mp4"
-                self._create_simple_clip(str(title_frame), str(title_video), title_duration, style)
-                if title_video.exists():
-                    segment_files.append(str(title_video))
-                    current_time += title_duration
+            if use_pika and self.pika:
+                logger.info("Pika Labs hybrid mode enabled - generating AI intro/outro clips")
+
+                # Determine intro prompt
+                intro_prompt = None
+                if pika_prompts and len(pika_prompts) > 0:
+                    intro_prompt = pika_prompts[0]  # First prompt is for intro
+                else:
+                    # Use default niche prompts from shorts_hybrid
+                    try:
+                        from .shorts_hybrid import HybridShortsGenerator
+                        hybrid_gen = HybridShortsGenerator()
+                        intro_prompt = hybrid_gen._get_prompt_for_niche(niche, "intro", title)
+                    except ImportError:
+                        intro_prompt = f"Cinematic opening shot for {niche} content, vertical 9:16 format, eye-catching, high quality"
+
+                logger.info(f"Generating Pika intro: {intro_prompt[:60]}...")
+
+                # Generate intro clip asynchronously
+                import asyncio
+                try:
+                    pika_intro_path = str(self.temp_dir / "pika_intro.mp4")
+                    pika_intro_clip = asyncio.run(self.generate_pika_clip(
+                        prompt=intro_prompt,
+                        output_path=pika_intro_path,
+                        duration=5
+                    ))
+
+                    if pika_intro_clip:
+                        logger.success(f"Pika intro generated: {pika_intro_clip}")
+                except Exception as e:
+                    logger.warning(f"Pika intro generation failed: {e}")
+                    pika_intro_clip = None
+
+                # Determine outro prompt
+                outro_prompt = None
+                if pika_prompts and len(pika_prompts) > 1:
+                    outro_prompt = pika_prompts[1]  # Second prompt is for outro
+                else:
+                    # Use default niche prompts from shorts_hybrid
+                    try:
+                        from .shorts_hybrid import HybridShortsGenerator
+                        hybrid_gen = HybridShortsGenerator()
+                        outro_prompt = hybrid_gen._get_prompt_for_niche(niche, "outro", title)
+                    except ImportError:
+                        outro_prompt = f"Satisfying ending shot for {niche} content, vertical 9:16 format, call-to-action vibe, high quality"
+
+                logger.info(f"Generating Pika outro: {outro_prompt[:60]}...")
+
+                # Generate outro clip asynchronously
+                try:
+                    pika_outro_path = str(self.temp_dir / "pika_outro.mp4")
+                    pika_outro_clip = asyncio.run(self.generate_pika_clip(
+                        prompt=outro_prompt,
+                        output_path=pika_outro_path,
+                        duration=5
+                    ))
+
+                    if pika_outro_clip:
+                        logger.success(f"Pika outro generated: {pika_outro_clip}")
+                except Exception as e:
+                    logger.warning(f"Pika outro generation failed: {e}")
+                    pika_outro_clip = None
+
+            # Prepend Pika intro if generated
+            if pika_intro_clip and os.path.exists(pika_intro_clip):
+                segment_files.append(pika_intro_clip)
+                logger.info("Prepended Pika AI intro clip to video")
+
+            # 1. CATCHY ANIMATED HOOK (research: must grab attention in FIRST SECOND!)
+            # Hook duration: 2-3 seconds for animated intro, NEVER blank!
+            # Skip animated hook if we already have a Pika intro
+            hook_duration = 2.5 if not pika_intro_clip else 0  # Animated hook (longer than static title)
+
+            # Generate hook text based on niche
+            hook_text = None
+            if self.hook_generator:
+                # Get suggested hooks for this topic
+                suggested_hooks = self.hook_generator.get_suggested_hooks(title, niche, count=1)
+                if suggested_hooks:
+                    hook_text = suggested_hooks[0]
+                    logger.info(f"Hook text: {hook_text}")
+
+            # Use script hook if available
+            if not hook_text and hasattr(script, 'hook') and script.hook:
+                hook_text = script.hook
+            elif not hook_text:
+                # Default hook based on title
+                hook_text = title[:50] if len(title) <= 50 else f"{title[:47]}..."
+
+            # Try to create animated hook intro
+            hook_video = None
+            if self.hook_generator:
+                logger.info("Creating animated hook intro (catchy first 2.5 seconds)...")
+                animation_type = random.choice(["zoom_in", "fade_in", "slide_up"])
+                hook_video = self.hook_generator.create_animated_intro(
+                    hook_text=hook_text,
+                    niche=niche,
+                    duration=hook_duration,
+                    animation_type=animation_type,
+                    output_path=str(self.temp_dir / "hook_intro.mp4")
+                )
+
+            if hook_video and os.path.exists(hook_video):
+                segment_files.append(hook_video)
+                current_time += hook_duration
+                logger.success(f"Animated hook created: {hook_duration}s")
+            else:
+                # Fallback to static title card with hook text (still better than blank!)
+                logger.warning("Animated hook failed, using enhanced title card")
+                title_duration = 1.5  # Shorter for static fallback
+                title_frame = self.temp_dir / "title_frame.png"
+                self.create_title_card(
+                    title=hook_text[:40],  # Use hook text instead of plain title
+                    output_path=str(title_frame),
+                    style=style,
+                    subtitle=getattr(script, 'description', '')[:30] if hasattr(script, 'description') else None
+                )
+
+                if title_frame.exists():
+                    title_video = self.temp_dir / "title.mp4"
+                    self._create_simple_clip(str(title_frame), str(title_video), title_duration, style)
+                    if title_video.exists():
+                        segment_files.append(str(title_video))
+                        current_time += title_duration
 
             # 2. Main content segments (faster pacing)
             media_index = 0
@@ -1027,9 +1301,14 @@ class ShortsVideoGenerator:
                 logger.error("No video segments created")
                 return None
 
+            # Append Pika outro if generated
+            if pika_outro_clip and os.path.exists(pika_outro_clip):
+                segment_files.append(pika_outro_clip)
+                logger.info("Appended Pika AI outro clip to video")
+
             logger.info(f"Created {len(segment_files)} video segments")
 
-            # 3. Concatenate all segments
+            # 3. Concatenate all segments with GPU-accelerated encoding
             concat_file = self.temp_dir / "concat_list.txt"
             with open(concat_file, 'w') as f:
                 for seg in segment_files:
@@ -1037,13 +1316,13 @@ class ShortsVideoGenerator:
                     f.write(f"file '{safe_path}'\n")
 
             video_only = self.temp_dir / "video_only.mp4"
+            encoder_args = self._get_encoder_args(use_fast_preset=True)
             concat_cmd = [
                 self.ffmpeg, '-y',
                 '-f', 'concat',
                 '-safe', '0',
-                '-i', str(concat_file),
-                '-c:v', 'libx264',
-                '-preset', 'fast',
+                '-i', str(concat_file)
+            ] + encoder_args + [
                 '-pix_fmt', 'yuv420p',
                 str(video_only)
             ]
@@ -1088,6 +1367,77 @@ class ShortsVideoGenerator:
                     if music_result and os.path.exists(str(video_with_music)):
                         # Replace output with music version
                         shutil.move(str(video_with_music), output_file)
+
+                # Add subtitles if enabled
+                if subtitles_enabled and self.subtitle_generator:
+                    logger.info("Adding burned-in subtitles to Short...")
+                    try:
+                        # Get narration text from script or provided text
+                        narration = script_text
+                        if not narration and script:
+                            # Try to extract narration from script object
+                            if hasattr(script, 'sections'):
+                                narrations = []
+                                for section in script.sections:
+                                    if hasattr(section, 'narration') and section.narration:
+                                        narrations.append(section.narration)
+                                narration = " ".join(narrations)
+                            elif hasattr(script, 'full_narration'):
+                                narration = script.full_narration
+                            elif isinstance(script, dict):
+                                narration = script.get('full_narration', '')
+                                if not narration:
+                                    sections = script.get('sections', [])
+                                    narrations = [s.get('narration', '') for s in sections if s.get('narration')]
+                                    narration = " ".join(narrations)
+
+                        if narration:
+                            # Generate subtitle track with Shorts-optimized settings
+                            style_config = self.subtitle_generator.get_style("shorts", niche)
+                            max_chars = style_config.get("max_chars", 30)  # Shorter lines for vertical
+                            track = self.subtitle_generator.sync_subtitles_with_audio(
+                                narration, audio_file, max_chars
+                            )
+
+                            if track.cues:
+                                # Burn subtitles into video
+                                temp_video = str(self.temp_dir / "short_no_subs.mp4")
+                                shutil.move(output_file, temp_video)
+
+                                sub_result = self.subtitle_generator.burn_subtitles(
+                                    temp_video,
+                                    track,
+                                    output_file,
+                                    style="shorts",
+                                    niche=niche
+                                )
+
+                                # Clean up temp video
+                                if os.path.exists(temp_video):
+                                    try:
+                                        os.remove(temp_video)
+                                    except:
+                                        pass
+
+                                if sub_result:
+                                    logger.success(f"Subtitles burned into Short: {output_file}")
+                                else:
+                                    logger.warning("Subtitle burning failed for Short")
+                                    # Restore original if subtitle burning failed
+                                    if not os.path.exists(output_file) and os.path.exists(temp_video):
+                                        shutil.move(temp_video, output_file)
+                        else:
+                            logger.warning("No narration text available for subtitles")
+                    except Exception as e:
+                        logger.warning(f"Subtitle processing failed for Short: {e}")
+
+                # 5. Validate hook (ensure first seconds are not blank)
+                if self.hook_generator:
+                    validation = self.hook_generator.validate_hook(output_file, hook_duration=3.0)
+                    if not validation.is_valid:
+                        logger.warning(f"Hook validation: {', '.join(validation.suggestions)}")
+                    else:
+                        logger.info("Hook validation passed: First seconds are visually engaging")
 
                 file_size = os.path.getsize(output_file) / (1024 * 1024)
                 logger.success(f"YouTube Short created: {output_file} ({file_size:.1f} MB)")

@@ -56,6 +56,222 @@ try:
 except ImportError:
     raise ImportError("Please install pillow: pip install pillow")
 
+# Import audio processor for normalization
+try:
+    from .audio_processor import AudioProcessor
+    AUDIO_PROCESSOR_AVAILABLE = True
+except ImportError:
+    AUDIO_PROCESSOR_AVAILABLE = False
+    logger.debug("AudioProcessor not available - audio enhancement disabled")
+
+# Import hook generator for catchy intros
+try:
+    from .video_hooks import VideoHookGenerator, HookValidationResult
+    HOOKS_AVAILABLE = True
+except ImportError:
+    HOOKS_AVAILABLE = False
+    logger.debug("VideoHookGenerator not available - hooks disabled")
+
+# Import subtitle generator for burned-in captions (15-25% retention boost)
+try:
+    from .subtitles import SubtitleGenerator, SubtitleTrack
+    SUBTITLES_AVAILABLE = True
+except ImportError:
+    SUBTITLES_AVAILABLE = False
+    logger.debug("SubtitleGenerator not available - subtitles disabled")
+
+
+# GPU encoder detection cache
+_GPU_ENCODER_CACHE: Optional[Dict[str, str]] = None
+
+
+def get_video_encoder(ffmpeg_path: str = None) -> Dict[str, str]:
+    """
+    Detect available GPU and return the best video encoder settings.
+
+    Checks for hardware encoders in order of preference:
+    1. NVIDIA NVENC (h264_nvenc) - Best quality/speed balance
+    2. AMD AMF (h264_amf) - Good AMD GPU support
+    3. Intel QuickSync (h264_qsv) - Intel integrated/discrete GPU
+    4. CPU fallback (libx264) - Always available
+
+    Returns:
+        Dict with keys:
+        - encoder: The FFmpeg encoder name (e.g., 'h264_nvenc', 'libx264')
+        - preset: Encoder-specific preset for quality/speed balance
+        - extra_args: List of additional FFmpeg arguments for the encoder
+        - is_gpu: Boolean indicating if GPU acceleration is available
+        - gpu_type: String indicating GPU type ('nvidia', 'amd', 'intel', 'cpu')
+    """
+    global _GPU_ENCODER_CACHE
+
+    # Return cached result if available
+    if _GPU_ENCODER_CACHE is not None:
+        return _GPU_ENCODER_CACHE
+
+    # Find FFmpeg if not provided
+    if ffmpeg_path is None:
+        ffmpeg_path = shutil.which("ffmpeg")
+        if not ffmpeg_path:
+            # Check common Windows locations
+            common_paths = [
+                os.path.expanduser("~\\AppData\\Local\\Microsoft\\WinGet\\Packages"),
+                "C:\\ffmpeg\\bin",
+                "C:\\Program Files\\ffmpeg\\bin",
+            ]
+            for base_path in common_paths:
+                if os.path.exists(base_path):
+                    for root, dirs, files in os.walk(base_path):
+                        if "ffmpeg.exe" in files:
+                            ffmpeg_path = os.path.join(root, "ffmpeg.exe")
+                            break
+                    if ffmpeg_path:
+                        break
+
+    if not ffmpeg_path:
+        logger.warning("FFmpeg not found, defaulting to CPU encoder")
+        _GPU_ENCODER_CACHE = {
+            "encoder": "libx264",
+            "preset": "fast",
+            "extra_args": [],
+            "is_gpu": False,
+            "gpu_type": "cpu"
+        }
+        return _GPU_ENCODER_CACHE
+
+    def check_encoder(encoder_name: str) -> bool:
+        """Check if an encoder is available in FFmpeg."""
+        try:
+            result = subprocess.run(
+                [ffmpeg_path, '-hide_banner', '-encoders'],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            return encoder_name in result.stdout
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError):
+            return False
+
+    def test_encoder(encoder_name: str, test_args: List[str] = None) -> bool:
+        """Test if an encoder actually works (GPU may not be available)."""
+        try:
+            cmd = [
+                ffmpeg_path, '-y', '-hide_banner', '-loglevel', 'error',
+                '-f', 'lavfi', '-i', 'color=c=black:s=64x64:d=0.1',
+                '-c:v', encoder_name
+            ]
+            if test_args:
+                cmd.extend(test_args)
+            cmd.extend(['-f', 'null', '-'])
+
+            result = subprocess.run(cmd, capture_output=True, timeout=10)
+            return result.returncode == 0
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError):
+            return False
+
+    # Check for NVIDIA NVENC (most common for content creators)
+    if check_encoder('h264_nvenc'):
+        # Test with actual encoding to ensure GPU is available
+        if test_encoder('h264_nvenc', ['-preset', 'p4']):
+            logger.info("GPU encoder detected: NVIDIA NVENC (h264_nvenc)")
+            _GPU_ENCODER_CACHE = {
+                "encoder": "h264_nvenc",
+                "preset": "p4",  # p4 = balanced quality/speed (p1=fastest, p7=highest quality)
+                "extra_args": [
+                    "-rc", "vbr",           # Variable bitrate for better quality
+                    "-cq", "23",            # Constant quality (similar to CRF 23)
+                    "-b:v", "8M",           # Target bitrate 8 Mbps
+                    "-maxrate", "12M",      # Max bitrate
+                    "-bufsize", "16M",      # Buffer size
+                    "-spatial-aq", "1",     # Spatial adaptive quantization
+                    "-temporal-aq", "1",    # Temporal adaptive quantization
+                ],
+                "is_gpu": True,
+                "gpu_type": "nvidia"
+            }
+            return _GPU_ENCODER_CACHE
+
+    # Check for AMD AMF
+    if check_encoder('h264_amf'):
+        if test_encoder('h264_amf', ['-quality', 'balanced']):
+            logger.info("GPU encoder detected: AMD AMF (h264_amf)")
+            _GPU_ENCODER_CACHE = {
+                "encoder": "h264_amf",
+                "preset": "balanced",  # quality, balanced, speed
+                "extra_args": [
+                    "-rc", "vbr_lat",       # VBR latency mode
+                    "-qp_i", "23",          # I-frame QP
+                    "-qp_p", "23",          # P-frame QP
+                    "-b:v", "8M",           # Target bitrate
+                    "-maxrate", "12M",      # Max bitrate
+                ],
+                "is_gpu": True,
+                "gpu_type": "amd"
+            }
+            return _GPU_ENCODER_CACHE
+
+    # Check for Intel QuickSync
+    if check_encoder('h264_qsv'):
+        if test_encoder('h264_qsv', ['-preset', 'medium']):
+            logger.info("GPU encoder detected: Intel QuickSync (h264_qsv)")
+            _GPU_ENCODER_CACHE = {
+                "encoder": "h264_qsv",
+                "preset": "medium",  # veryfast, faster, fast, medium, slow, veryslow
+                "extra_args": [
+                    "-global_quality", "23",  # Quality level (similar to CRF)
+                    "-b:v", "8M",             # Target bitrate
+                    "-maxrate", "12M",        # Max bitrate
+                    "-bufsize", "16M",        # Buffer size
+                ],
+                "is_gpu": True,
+                "gpu_type": "intel"
+            }
+            return _GPU_ENCODER_CACHE
+
+    # Fallback to CPU encoding (libx264)
+    logger.info("No GPU encoder available, using CPU encoder (libx264)")
+    _GPU_ENCODER_CACHE = {
+        "encoder": "libx264",
+        "preset": "fast",  # ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow
+        "extra_args": [
+            "-crf", "23",       # Constant Rate Factor (18-28 recommended, lower = better)
+            "-b:v", "8M",       # Target bitrate
+            "-maxrate", "10M",  # Max bitrate
+            "-bufsize", "16M",  # Buffer size
+        ],
+        "is_gpu": False,
+        "gpu_type": "cpu"
+    }
+    return _GPU_ENCODER_CACHE
+
+
+def get_encoder_args(encoder_info: Dict[str, str]) -> List[str]:
+    """
+    Build FFmpeg encoder arguments from encoder info dict.
+
+    Args:
+        encoder_info: Dict from get_video_encoder()
+
+    Returns:
+        List of FFmpeg arguments for video encoding
+    """
+    args = ["-c:v", encoder_info["encoder"]]
+
+    # Add preset (different argument names for different encoders)
+    if encoder_info["gpu_type"] == "nvidia":
+        args.extend(["-preset", encoder_info["preset"]])
+    elif encoder_info["gpu_type"] == "amd":
+        args.extend(["-quality", encoder_info["preset"]])
+    elif encoder_info["gpu_type"] == "intel":
+        args.extend(["-preset", encoder_info["preset"]])
+    else:  # CPU
+        args.extend(["-preset", encoder_info["preset"]])
+
+    # Add extra encoder-specific arguments
+    args.extend(encoder_info["extra_args"])
+
+    return args
+
 
 @dataclass
 class VisualSegment:
@@ -192,6 +408,44 @@ class UltraVideoGenerator:
         # Load fonts
         self.fonts = self._load_fonts()
 
+        # Initialize audio processor for normalization
+        self.audio_processor = None
+        if AUDIO_PROCESSOR_AVAILABLE:
+            try:
+                self.audio_processor = AudioProcessor()
+                logger.debug("AudioProcessor initialized for audio enhancement")
+            except Exception as e:
+                logger.debug(f"AudioProcessor initialization failed: {e}")
+
+        # Initialize hook generator for catchy intros
+        self.hook_generator = None
+        if HOOKS_AVAILABLE:
+            try:
+                self.hook_generator = VideoHookGenerator(
+                    resolution=self.resolution,
+                    fps=self.fps,
+                    is_shorts=False  # Landscape format
+                )
+                logger.debug("VideoHookGenerator initialized for catchy intros")
+            except Exception as e:
+                logger.debug(f"VideoHookGenerator initialization failed: {e}")
+
+        # Initialize subtitle generator for burned-in captions (15-25% retention boost)
+        self.subtitle_generator = None
+        if SUBTITLES_AVAILABLE:
+            try:
+                self.subtitle_generator = SubtitleGenerator()
+                logger.debug("SubtitleGenerator initialized for burned-in captions")
+            except Exception as e:
+                logger.debug(f"SubtitleGenerator initialization failed: {e}")
+
+        # Detect GPU encoder for hardware-accelerated encoding
+        self.encoder_info = get_video_encoder(self.ffmpeg)
+        if self.encoder_info["is_gpu"]:
+            logger.info(f"GPU acceleration enabled: {self.encoder_info['gpu_type'].upper()} ({self.encoder_info['encoder']})")
+        else:
+            logger.info("Using CPU encoding (libx264)")
+
         logger.info(f"UltraVideoGenerator initialized ({self.width}x{self.height} @ {self.fps}fps)")
 
     def _find_ffmpeg(self) -> Optional[str]:
@@ -230,6 +484,32 @@ class UltraVideoGenerator:
                 return ffprobe
 
         return None
+
+    def _get_encoder_args(self, use_fast_preset: bool = False) -> List[str]:
+        """
+        Get FFmpeg encoder arguments for video encoding.
+
+        Uses GPU acceleration if available, falls back to CPU.
+
+        Args:
+            use_fast_preset: If True, use fastest preset for intermediate encoding
+
+        Returns:
+            List of FFmpeg arguments for video encoding
+        """
+        if use_fast_preset:
+            # For intermediate clips, use fastest settings
+            if self.encoder_info["is_gpu"]:
+                if self.encoder_info["gpu_type"] == "nvidia":
+                    return ["-c:v", "h264_nvenc", "-preset", "p1"]  # Fastest NVENC preset
+                elif self.encoder_info["gpu_type"] == "amd":
+                    return ["-c:v", "h264_amf", "-quality", "speed"]
+                elif self.encoder_info["gpu_type"] == "intel":
+                    return ["-c:v", "h264_qsv", "-preset", "veryfast"]
+            return ["-c:v", "libx264", "-preset", "ultrafast"]
+
+        # For final output, use quality settings
+        return get_encoder_args(self.encoder_info)
 
     def _load_fonts(self) -> Dict[str, str]:
         """Load available fonts."""
@@ -365,16 +645,17 @@ class UltraVideoGenerator:
 
             filter_str = ",".join(filters)
 
-            # Build command
+            # Build command with GPU-accelerated encoding
+            encoder_args = self._get_encoder_args(use_fast_preset=True)
+
             if is_image:
                 cmd = [
                     self.ffmpeg, '-y',
                     '-loop', '1',
                     '-i', input_path,
                     '-t', str(duration),
-                    '-vf', filter_str,
-                    '-c:v', 'libx264',
-                    '-preset', 'fast',
+                    '-vf', filter_str
+                ] + encoder_args + [
                     '-pix_fmt', 'yuv420p',
                     '-an',
                     output_path
@@ -388,9 +669,8 @@ class UltraVideoGenerator:
                     '-vf', f"scale={self.width}:{self.height}:force_original_aspect_ratio=increase,"
                            f"crop={self.width}:{self.height},"
                            f"eq=saturation={sat}:contrast={con}:brightness=-{overlay_opacity * 0.3},"
-                           f"fade=in:0:{fade_frames},fade=out:st={duration - self.TRANSITION_DURATION}:d={self.TRANSITION_DURATION}",
-                    '-c:v', 'libx264',
-                    '-preset', 'fast',
+                           f"fade=in:0:{fade_frames},fade=out:st={duration - self.TRANSITION_DURATION}:d={self.TRANSITION_DURATION}"
+                ] + encoder_args + [
                     '-pix_fmt', 'yuv420p',
                     '-an',
                     output_path
@@ -438,24 +718,23 @@ class UltraVideoGenerator:
 
             filter_str = ",".join(filters)
 
+            # Use GPU-accelerated encoding
+            encoder_args = self._get_encoder_args(use_fast_preset=True)
+
             if is_image:
                 cmd = [
                     self.ffmpeg, '-y',
                     '-loop', '1', '-i', input_path,
                     '-t', str(duration),
-                    '-vf', filter_str,
-                    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-an',
-                    output_path
-                ]
+                    '-vf', filter_str
+                ] + encoder_args + ['-pix_fmt', 'yuv420p', '-an', output_path]
             else:
                 cmd = [
                     self.ffmpeg, '-y',
                     '-stream_loop', '-1', '-i', input_path,
                     '-t', str(duration),
-                    '-vf', filter_str,
-                    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-an',
-                    output_path
-                ]
+                    '-vf', filter_str
+                ] + encoder_args + ['-pix_fmt', 'yuv420p', '-an', output_path]
 
             subprocess.run(cmd, capture_output=True, timeout=120)
             return output_path if os.path.exists(output_path) else None
@@ -740,6 +1019,7 @@ class UltraVideoGenerator:
 
                 # Build FFmpeg filter for animated gradient
                 # Uses geq (generic equation) for animated colors
+                encoder_args = self._get_encoder_args(use_fast_preset=True)
                 cmd = [
                     self.ffmpeg, '-y',
                     '-f', 'lavfi',
@@ -749,9 +1029,8 @@ class UltraVideoGenerator:
                     f"r='clip({secondary_rgb[0]}+{primary_rgb[0]-secondary_rgb[0]}*sin(2*PI*N/{frames}+X/{self.width}*PI)*0.3+{accent_rgb[0]-secondary_rgb[0]}*(Y/{self.height})*0.2,0,255)':"
                     f"g='clip({secondary_rgb[1]}+{primary_rgb[1]-secondary_rgb[1]}*sin(2*PI*N/{frames}+X/{self.width}*PI+1)*0.3+{accent_rgb[1]-secondary_rgb[1]}*(Y/{self.height})*0.2,0,255)':"
                     f"b='clip({secondary_rgb[2]}+{primary_rgb[2]-secondary_rgb[2]}*sin(2*PI*N/{frames}+X/{self.width}*PI+2)*0.3+{accent_rgb[2]-secondary_rgb[2]}*(Y/{self.height})*0.2,0,255)',"
-                    f"fade=in:0:{fade_frames},fade=out:st={duration - 0.5}:d=0.5",
-                    '-c:v', 'libx264',
-                    '-preset', 'fast',
+                    f"fade=in:0:{fade_frames},fade=out:st={duration - 0.5}:d=0.5"
+                ] + encoder_args + [
                     '-pix_fmt', 'yuv420p',
                     '-an',
                     output_path
@@ -808,6 +1087,8 @@ class UltraVideoGenerator:
             fade_frames = int(self.TRANSITION_DURATION * self.fps)
             frames = int(duration * self.fps)
 
+            # Use GPU-accelerated encoding
+            encoder_args = self._get_encoder_args(use_fast_preset=True)
             cmd = [
                 self.ffmpeg, '-y',
                 '-loop', '1', '-i', frame_path,
@@ -815,10 +1096,8 @@ class UltraVideoGenerator:
                 '-vf',
                 f"scale=2048:-1,"
                 f"zoompan=z='1.0+0.001*on':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={frames}:s={self.width}x{self.height}:fps={self.fps},"
-                f"fade=in:0:{fade_frames},fade=out:st={duration - 0.5}:d=0.5",
-                '-c:v', 'libx264', '-preset', 'fast', '-pix_fmt', 'yuv420p', '-an',
-                output_path
-            ]
+                f"fade=in:0:{fade_frames},fade=out:st={duration - 0.5}:d=0.5"
+            ] + encoder_args + ['-pix_fmt', 'yuv420p', '-an', output_path]
             subprocess.run(cmd, capture_output=True, timeout=120)
 
             # Cleanup
@@ -886,7 +1165,10 @@ class UltraVideoGenerator:
         output_file: str,
         niche: str = "default",
         background_music: str = None,
-        music_volume: float = None
+        music_volume: float = None,
+        normalize_audio: bool = True,
+        subtitles_enabled: bool = True,
+        subtitle_style: str = "regular"
     ) -> Optional[str]:
         """
         Create a professional video with all effects.
@@ -898,6 +1180,9 @@ class UltraVideoGenerator:
             niche: Content niche for styling
             background_music: Optional path to background music file
             music_volume: Optional music volume (0.0-1.0)
+            normalize_audio: Normalize audio to YouTube's -14 LUFS standard (default: True)
+            subtitles_enabled: Burn subtitles into video for 15-25% retention boost (default: True)
+            subtitle_style: Subtitle style - "regular", "shorts", "minimal", "cinematic" (default: "regular")
 
         Returns:
             Path to created video or None
@@ -913,12 +1198,26 @@ class UltraVideoGenerator:
         logger.info(f"Creating ultra-pro video: {output_file}")
         logger.info(f"Niche: {niche}")
 
+        # Pre-process audio (normalization to -14 LUFS)
+        processed_audio = audio_file
+        temp_audio_file = None
+
+        if normalize_audio and self.audio_processor:
+            logger.info("Pre-processing audio: Normalizing to YouTube's -14 LUFS standard")
+            temp_audio_file = str(self.temp_dir / "normalized_voice.mp3")
+            result = self.audio_processor.normalize_audio(audio_file, temp_audio_file)
+            if result:
+                processed_audio = result
+                logger.success("Audio normalized successfully")
+            else:
+                logger.warning("Audio normalization failed, using original audio")
+
         try:
             # Get style
             style = self.NICHE_STYLES.get(niche, self.NICHE_STYLES["default"])
 
             # Get audio duration
-            audio_duration = self.get_audio_duration(audio_file)
+            audio_duration = self.get_audio_duration(processed_audio)
             logger.info(f"Audio duration: {audio_duration:.1f}s")
 
             # Calculate number of visual segments (change every 3-5 seconds)
@@ -1034,22 +1333,61 @@ class UltraVideoGenerator:
             segment_files = []
             current_time = 0.0
 
-            # 1. Title card (first 4 seconds)
-            title_duration = min(4.0, audio_duration * 0.1)
-            title_frame = self.temp_dir / "title_frame.png"
-            self.create_title_card(
-                title=title[:60],
-                output_path=str(title_frame),
-                style=style,
-                subtitle=getattr(script, 'description', '')[:50] if hasattr(script, 'description') else None
-            )
+            # 1. CATCHY ANIMATED HOOK (first 3-5 seconds)
+            # Grab attention in first second - NEVER start with blank screen!
+            hook_duration = min(4.0, max(3.0, audio_duration * 0.1))
 
-            if title_frame.exists():
-                title_video = self.temp_dir / "title.mp4"
-                self._create_simple_clip(str(title_frame), str(title_video), title_duration, style)
-                if title_video.exists():
-                    segment_files.append(str(title_video))
-                    current_time += title_duration
+            # Generate hook text based on niche
+            hook_text = None
+            if self.hook_generator:
+                # Get suggested hooks for this topic
+                suggested_hooks = self.hook_generator.get_suggested_hooks(title, niche, count=1)
+                if suggested_hooks:
+                    hook_text = suggested_hooks[0]
+                    logger.info(f"Hook text: {hook_text}")
+
+            # Use script hook if available
+            if not hook_text and hasattr(script, 'hook') and script.hook:
+                hook_text = script.hook
+            elif not hook_text:
+                # Default hook based on title
+                hook_text = title[:60] if len(title) <= 60 else f"{title[:57]}..."
+
+            # Try to create animated hook intro
+            hook_video = None
+            if self.hook_generator:
+                logger.info("Creating animated hook intro (catchy first 3-4 seconds)...")
+                animation_type = random.choice(["zoom_in", "fade_in", "slide_up"])
+                hook_video = self.hook_generator.create_animated_intro(
+                    hook_text=hook_text,
+                    niche=niche,
+                    duration=hook_duration,
+                    animation_type=animation_type,
+                    output_path=str(self.temp_dir / "hook_intro.mp4")
+                )
+
+            if hook_video and os.path.exists(hook_video):
+                segment_files.append(hook_video)
+                current_time += hook_duration
+                logger.success(f"Animated hook created: {hook_duration}s")
+            else:
+                # Fallback to static title card with hook text (still better than blank!)
+                logger.warning("Animated hook failed, using enhanced title card")
+                title_duration = min(4.0, audio_duration * 0.1)
+                title_frame = self.temp_dir / "title_frame.png"
+                self.create_title_card(
+                    title=hook_text[:60],  # Use hook text instead of plain title
+                    output_path=str(title_frame),
+                    style=style,
+                    subtitle=getattr(script, 'description', '')[:50] if hasattr(script, 'description') else None
+                )
+
+                if title_frame.exists():
+                    title_video = self.temp_dir / "title.mp4"
+                    self._create_simple_clip(str(title_frame), str(title_video), title_duration, style)
+                    if title_video.exists():
+                        segment_files.append(str(title_video))
+                        current_time += title_duration
 
             # 2. Main content segments
             media_index = 0
@@ -1138,16 +1476,16 @@ class UltraVideoGenerator:
                 logger.error("Video concatenation failed")
                 return None
 
-            # 4. Combine with audio
+            # 4. Combine with audio (using normalized audio if available)
             Path(output_file).parent.mkdir(parents=True, exist_ok=True)
 
             final_cmd = [
                 self.ffmpeg, '-y',
                 '-i', str(video_only),
-                '-i', audio_file,
+                '-i', processed_audio,  # Use normalized audio
                 '-c:v', 'copy',
                 '-c:a', 'aac',
-                '-b:a', '192k',
+                '-b:a', '256k',  # Improved bitrate for better quality
                 '-shortest',
                 output_file
             ]
@@ -1169,6 +1507,73 @@ class UltraVideoGenerator:
                     if music_result and str(video_with_music) == music_result:
                         # Replace output with music version
                         shutil.move(str(video_with_music), output_file)
+
+                # 6. Burn subtitles into video (15-25% retention boost)
+                if subtitles_enabled and self.subtitle_generator:
+                    logger.info("Burning subtitles into video (15-25% retention boost)...")
+
+                    # Get script text for subtitle generation
+                    script_text = ""
+                    if hasattr(script, 'get_full_narration'):
+                        script_text = script.get_full_narration()
+                    elif hasattr(script, 'narration'):
+                        script_text = script.narration
+                    elif hasattr(script, 'sections'):
+                        # Build narration from sections
+                        for section in script.sections:
+                            if hasattr(section, 'narration'):
+                                script_text += section.narration + " "
+                            elif hasattr(section, 'content'):
+                                script_text += section.content + " "
+                    elif isinstance(script, str):
+                        script_text = script
+                    elif isinstance(script, dict):
+                        script_text = script.get('narration', script.get('content', str(script)))
+
+                    if script_text.strip():
+                        try:
+                            # Generate subtitles synced with audio
+                            subtitle_track = self.subtitle_generator.sync_subtitles_with_audio(
+                                script_text=script_text.strip(),
+                                audio_path=processed_audio,
+                                max_chars=50 if subtitle_style == "regular" else 30
+                            )
+
+                            if subtitle_track and subtitle_track.cues:
+                                logger.info(f"Generated {len(subtitle_track.cues)} subtitle cues")
+
+                                # Burn subtitles into video
+                                video_with_subs = self.temp_dir / "video_with_subtitles.mp4"
+                                sub_result = self.subtitle_generator.burn_subtitles(
+                                    video_path=output_file,
+                                    subtitle_track=subtitle_track,
+                                    output_path=str(video_with_subs),
+                                    style=subtitle_style,
+                                    niche=niche
+                                )
+
+                                if sub_result and os.path.exists(str(video_with_subs)):
+                                    # Replace output with subtitled version
+                                    shutil.move(str(video_with_subs), output_file)
+                                    logger.success(f"Subtitles burned successfully ({subtitle_style} style)")
+                                else:
+                                    logger.warning("Subtitle burning failed, continuing without subtitles")
+                            else:
+                                logger.warning("No subtitle cues generated, skipping subtitle burning")
+                        except Exception as e:
+                            logger.warning(f"Subtitle generation failed: {e}, continuing without subtitles")
+                    else:
+                        logger.warning("No script text available for subtitle generation")
+                elif subtitles_enabled and not self.subtitle_generator:
+                    logger.info("Subtitles requested but SubtitleGenerator not available")
+
+                # 7. Validate hook (ensure first seconds are not blank)
+                if self.hook_generator:
+                    validation = self.hook_generator.validate_hook(output_file, hook_duration=4.0)
+                    if not validation.is_valid:
+                        logger.warning(f"Hook validation: {', '.join(validation.suggestions)}")
+                    else:
+                        logger.info("Hook validation passed: First seconds are visually engaging")
 
                 file_size = os.path.getsize(output_file) / (1024 * 1024)
                 logger.success(f"Ultra video created: {output_file} ({file_size:.1f} MB)")
@@ -1347,12 +1752,12 @@ class UltraVideoGenerator:
             expected_duration = sum(durations) - (len(segment_files) - 1) * xfade_duration
             logger.info(f"Expected output duration: {expected_duration:.2f}s")
 
-            # Build FFmpeg command
+            # Build FFmpeg command with GPU-accelerated encoding
+            encoder_args = self._get_encoder_args(use_fast_preset=True)
             cmd = [self.ffmpeg, '-y'] + inputs + [
                 '-filter_complex', filter_str,
-                '-map', '[outv]',
-                '-c:v', 'libx264',
-                '-preset', 'fast',
+                '-map', '[outv]'
+            ] + encoder_args + [
                 '-pix_fmt', 'yuv420p',
                 output_path
             ]
@@ -1392,13 +1797,14 @@ class UltraVideoGenerator:
                 safe_path = seg.replace("'", "'\\''")
                 f.write(f"file '{safe_path}'\n")
 
+        # Use GPU-accelerated encoding
+        encoder_args = self._get_encoder_args(use_fast_preset=True)
         cmd = [
             self.ffmpeg, '-y',
             '-f', 'concat',
             '-safe', '0',
-            '-i', str(concat_file),
-            '-c:v', 'libx264',
-            '-preset', 'fast',
+            '-i', str(concat_file)
+        ] + encoder_args + [
             '-pix_fmt', 'yuv420p',
             output_path
         ]
@@ -1593,12 +1999,13 @@ class UltraVideoGenerator:
                 f"OutlineColour=&H000000&,Outline=2,Shadow=1,MarginV=50'"
             )
 
+            # Use GPU-accelerated encoding
+            encoder_args = self._get_encoder_args(use_fast_preset=False)  # Use quality preset for final output
             cmd = [
                 self.ffmpeg, '-y',
                 '-i', video_file,
-                '-vf', subtitle_filter,
-                '-c:v', 'libx264',
-                '-preset', 'fast',
+                '-vf', subtitle_filter
+            ] + encoder_args + [
                 '-c:a', 'copy',
                 output_file
             ]
@@ -1684,12 +2091,13 @@ class UltraVideoGenerator:
             # Combine all filters
             filter_chain = ",".join(filters)
 
+            # Use GPU-accelerated encoding
+            encoder_args = self._get_encoder_args(use_fast_preset=False)  # Use quality preset for final output
             cmd = [
                 self.ffmpeg, '-y',
                 '-i', video_file,
-                '-vf', filter_chain,
-                '-c:v', 'libx264',
-                '-preset', 'fast',
+                '-vf', filter_chain
+            ] + encoder_args + [
                 '-c:a', 'copy',
                 output_file
             ]

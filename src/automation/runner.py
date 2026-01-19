@@ -31,16 +31,27 @@ load_dotenv(PROJECT_ROOT / "config" / ".env")
 
 from loguru import logger
 
+# Import budget enforcement utilities
+from src.utils.token_manager import (
+    BudgetExceededError,
+    check_budget_status,
+    enforce_budget,
+    BudgetGuard,
+    load_budget_config
+)
+
 # Configure logging
 logger.remove()
 logger.add(sys.stderr, level="INFO", format="<green>{time:HH:mm:ss}</green> | <level>{message}</level>")
 
 
+@enforce_budget()
 def task_research(niche: str, count: int = 5) -> Dict[str, Any]:
     """
     TASK: Research trending topics for a niche.
 
     Returns dict with topics list.
+    Budget-enforced: Will raise BudgetExceededError if daily limit exceeded.
     """
     logger.info(f"Researching topics for: {niche}")
 
@@ -65,11 +76,13 @@ def task_research(niche: str, count: int = 5) -> Dict[str, Any]:
     return {"success": True, "topics": topics}
 
 
+@enforce_budget()
 def task_script(topic: str, niche: str = "default", duration: int = 5) -> Dict[str, Any]:
     """
     TASK: Generate a video script for a topic.
 
     Returns dict with script data.
+    Budget-enforced: Will raise BudgetExceededError if daily limit exceeded.
     """
     logger.info(f"Writing script for: {topic}")
 
@@ -183,7 +196,9 @@ def task_video(
     output_file: str,
     niche: str = "default",
     music_enabled: bool = True,
-    music_volume: Optional[float] = None
+    music_volume: Optional[float] = None,
+    subtitles_enabled: bool = True,
+    subtitle_style: str = "regular"
 ) -> Dict[str, Any]:
     """
     TASK: Create video from audio and script.
@@ -195,11 +210,14 @@ def task_video(
         niche: Content niche for styling
         music_enabled: Whether to add background music (default: True)
         music_volume: Optional music volume override (0.0-1.0)
+        subtitles_enabled: Burn subtitles into video for 15-25% retention boost (default: True)
+        subtitle_style: Subtitle style - "regular", "shorts", "minimal", "cinematic" (default: "regular")
 
     Returns dict with video file path.
     """
     logger.info(f"Creating video: {output_file}")
     logger.info(f"Music settings: enabled={music_enabled}, volume={music_volume}")
+    logger.info(f"Subtitle settings: enabled={subtitles_enabled}, style={subtitle_style}")
 
     from src.content.video_ultra import UltraVideoGenerator
     from src.content.script_writer import VideoScript, ScriptSection
@@ -239,7 +257,9 @@ def task_video(
         output_file=output_file,
         niche=niche,
         background_music=background_music,
-        music_volume=music_volume
+        music_volume=music_volume,
+        subtitles_enabled=subtitles_enabled,
+        subtitle_style=subtitle_style
     )
 
     if result and os.path.exists(result):
@@ -256,7 +276,10 @@ def task_short(
     output_file: str,
     niche: str = "default",
     music_enabled: bool = True,
-    music_volume: Optional[float] = None
+    music_volume: Optional[float] = None,
+    subtitles_enabled: bool = False,
+    use_pika: bool = False,
+    pika_prompts: Optional[Dict[str, str]] = None
 ) -> Dict[str, Any]:
     """
     TASK: Create YouTube Short (vertical video) from audio and script.
@@ -274,11 +297,15 @@ def task_short(
         niche: Content niche for styling
         music_enabled: Whether to add background music (default: True)
         music_volume: Optional music volume override (0.0-1.0), defaults to 0.15 for Shorts
+        subtitles_enabled: Whether to burn subtitles into the video
+        use_pika: Use Pika Labs AI for intro/outro clips (requires PIKA_API_KEY)
+        pika_prompts: Custom Pika prompts dict with 'intro' and 'outro' keys
 
     Returns dict with video file path.
     """
     logger.info(f"Creating YouTube Short: {output_file}")
     logger.info(f"Music settings: enabled={music_enabled}, volume={music_volume}")
+    logger.info(f"Pika hybrid mode: enabled={use_pika}")
 
     from src.content.video_shorts import ShortsVideoGenerator
     from src.content.script_writer import VideoScript, ScriptSection
@@ -314,13 +341,35 @@ def task_short(
     if music_enabled:
         background_music = generator.get_niche_music_path(niche)
 
+    # Get script text for subtitles
+    script_text = script_data.get("full_narration", "")
+    if not script_text:
+        # Build from sections
+        narrations = [s.get("narration", "") for s in script_data.get("sections", []) if s.get("narration")]
+        script_text = " ".join(narrations)
+
+    # Convert pika_prompts dict to list format expected by create_short
+    # pika_prompts should be [intro_prompt, outro_prompt]
+    pika_prompt_list = None
+    if pika_prompts:
+        pika_prompt_list = [
+            pika_prompts.get("intro", ""),
+            pika_prompts.get("outro", "")
+        ]
+        # Filter out empty strings
+        pika_prompt_list = [p for p in pika_prompt_list if p] or None
+
     result = generator.create_short(
         audio_file=audio_file,
         script=script,
         output_file=output_file,
         niche=niche,
         background_music=background_music,
-        music_volume=shorts_volume
+        music_volume=shorts_volume,
+        use_pika=use_pika,
+        pika_prompts=pika_prompt_list,
+        subtitles_enabled=subtitles_enabled,
+        script_text=script_text if subtitles_enabled else None
     )
 
     if result and os.path.exists(result):
@@ -381,16 +430,49 @@ def task_upload(video_file: str, channel_id: str, title: str, description: str, 
     return {"success": False, "error": result.error}
 
 
+def _check_budget_for_pipeline() -> Dict[str, Any]:
+    """
+    Check budget status before running an expensive pipeline.
+
+    Returns:
+        Dict with budget status and whether to proceed
+    """
+    config = load_budget_config()
+    status = check_budget_status()
+
+    if status["exceeded"]:
+        logger.error(f"Cannot start pipeline: Daily budget exceeded (${status['spent_today']:.4f} spent)")
+        return {"can_proceed": False, "reason": "budget_exceeded", "status": status}
+
+    if status["warning"]:
+        logger.warning(
+            f"Budget warning: {status['usage_percent']:.1f}% used "
+            f"(${status['spent_today']:.4f} of ${config['daily_limit']:.2f})"
+        )
+
+    return {"can_proceed": True, "status": status}
+
+
 def task_full_pipeline(channel_id: str, topic: str = None) -> Dict[str, Any]:
     """
     TASK: Run full video creation and upload pipeline.
 
     Returns dict with all outputs.
+    Budget-enforced: Checks budget before starting and at each step.
     """
     import yaml
     import re
 
     logger.info(f"Starting full pipeline for: {channel_id}")
+
+    # Check budget before starting pipeline
+    budget_check = _check_budget_for_pipeline()
+    if not budget_check["can_proceed"]:
+        return {
+            "success": False,
+            "error": f"Budget exceeded: ${budget_check['status']['spent_today']:.4f} spent of ${budget_check['status']['daily_budget']:.2f} limit",
+            "budget_status": budget_check["status"]
+        }
 
     # Load channel config
     with open(PROJECT_ROOT / "config" / "channels.yaml") as f:
@@ -655,11 +737,21 @@ def task_short_pipeline(channel_id: str, topic: str = None) -> Dict[str, Any]:
     Uses shorter script, faster pacing, and vertical 9:16 format.
 
     Returns dict with all outputs.
+    Budget-enforced: Checks budget before starting and at each step.
     """
     import yaml
     import re
 
     logger.info(f"Starting YouTube Shorts pipeline for: {channel_id}")
+
+    # Check budget before starting pipeline
+    budget_check = _check_budget_for_pipeline()
+    if not budget_check["can_proceed"]:
+        return {
+            "success": False,
+            "error": f"Budget exceeded: ${budget_check['status']['spent_today']:.4f} spent of ${budget_check['status']['daily_budget']:.2f} limit",
+            "budget_status": budget_check["status"]
+        }
 
     # Load channel config
     with open(PROJECT_ROOT / "config" / "channels.yaml") as f:
@@ -685,7 +777,22 @@ def task_short_pipeline(channel_id: str, topic: str = None) -> Dict[str, Any]:
     channel_music_enabled = channel_config["settings"].get("music_enabled", global_music.get("enabled", True))
     channel_music_volume = channel_config["settings"].get("music_volume", global_music.get("shorts_volume", 0.15))
 
+    # Get subtitle settings from channel config, with fallback to global settings
+    global_subtitles = config.get("global", {}).get("subtitles", {})
+    channel_subtitles_enabled = channel_config["settings"].get(
+        "subtitles_enabled",
+        global_subtitles.get("enabled", True)  # Default enabled - subtitles increase retention by 15-25%
+    )
+
+    # Get Pika hybrid settings from channel shorts_schedule, with fallback to global settings
+    global_shorts_schedule = config.get("global", {}).get("shorts_schedule", {})
+    channel_shorts_schedule = channel_config.get("shorts_schedule", {})
+    use_pika = channel_shorts_schedule.get("use_hybrid", global_shorts_schedule.get("use_hybrid", False))
+    pika_prompts = channel_shorts_schedule.get("pika_prompts", None)
+
     logger.info(f"Shorts music configuration: enabled={channel_music_enabled}, volume={channel_music_volume}")
+    logger.info(f"Subtitles configuration: enabled={channel_subtitles_enabled}")
+    logger.info(f"Pika hybrid configuration: enabled={use_pika}")
 
     results = {
         "channel": channel_id,
@@ -694,6 +801,8 @@ def task_short_pipeline(channel_id: str, topic: str = None) -> Dict[str, Any]:
         "voice_settings": voice_settings,
         "music_enabled": channel_music_enabled,
         "music_volume": channel_music_volume,
+        "subtitles_enabled": channel_subtitles_enabled,
+        "use_pika": use_pika,
         "steps": {}
     }
 
@@ -759,7 +868,10 @@ def task_short_pipeline(channel_id: str, topic: str = None) -> Dict[str, Any]:
         video_file,
         niche=niche,
         music_enabled=channel_music_enabled,
-        music_volume=channel_music_volume
+        music_volume=channel_music_volume,
+        subtitles_enabled=channel_subtitles_enabled,
+        use_pika=use_pika,
+        pika_prompts=pika_prompts
     )
     if not video_result["success"]:
         return {"success": False, "error": "Short video generation failed", "results": results}
@@ -870,84 +982,136 @@ def task_short_with_upload(channel_id: str, topic: str = None) -> Dict[str, Any]
 # CLI Interface
 def main():
     parser = argparse.ArgumentParser(description="YouTube Automation Runner")
-    parser.add_argument("task", choices=["research", "script", "audio", "video", "short", "upload", "full", "full-upload", "short-pipeline", "short-upload"])
+    parser.add_argument("task", choices=["research", "script", "audio", "video", "short", "upload", "full", "full-upload", "short-pipeline", "short-upload", "budget"])
     parser.add_argument("args", nargs="*", help="Task arguments")
     parser.add_argument("--niche", default="default", help="Content niche")
     parser.add_argument("--channel", help="Channel ID")
     parser.add_argument("--output", help="Output file path")
 
     args = parser.parse_args()
+    result = None
 
-    if args.task == "research":
-        niche = args.args[0] if args.args else args.niche
-        result = task_research(niche)
+    try:
+        if args.task == "research":
+            niche = args.args[0] if args.args else args.niche
+            result = task_research(niche)
 
-    elif args.task == "script":
-        topic = args.args[0] if args.args else "passive income ideas"
-        result = task_script(topic, niche=args.niche)
+        elif args.task == "script":
+            topic = args.args[0] if args.args else "passive income ideas"
+            result = task_script(topic, niche=args.niche)
 
-    elif args.task == "audio":
-        if len(args.args) < 2:
-            print("Usage: runner.py audio <narration> <output_file>")
-            return
-        result = task_audio(args.args[0], args.args[1])
+        elif args.task == "audio":
+            if len(args.args) < 2:
+                print("Usage: runner.py audio <narration> <output_file>")
+                return
+            result = task_audio(args.args[0], args.args[1])
 
-    elif args.task == "video":
-        if len(args.args) < 2:
-            print("Usage: runner.py video <audio_file> <script_json>")
-            return
-        with open(args.args[1]) as f:
-            script_data = json.load(f)
-        output = args.output or "output/video.mp4"
-        result = task_video(args.args[0], script_data, output, niche=args.niche)
+        elif args.task == "video":
+            if len(args.args) < 2:
+                print("Usage: runner.py video <audio_file> <script_json>")
+                return
+            with open(args.args[1]) as f:
+                script_data = json.load(f)
+            output = args.output or "output/video.mp4"
+            result = task_video(args.args[0], script_data, output, niche=args.niche)
 
-    elif args.task == "short":
-        # Create a single YouTube Short from audio + script
-        if len(args.args) < 2:
-            print("Usage: runner.py short <audio_file> <script_json>")
-            return
-        with open(args.args[1]) as f:
-            script_data = json.load(f)
-        output = args.output or "output/short.mp4"
-        result = task_short(args.args[0], script_data, output, niche=args.niche)
+        elif args.task == "short":
+            # Create a single YouTube Short from audio + script
+            if len(args.args) < 2:
+                print("Usage: runner.py short <audio_file> <script_json>")
+                return
+            with open(args.args[1]) as f:
+                script_data = json.load(f)
+            output = args.output or "output/short.mp4"
+            result = task_short(args.args[0], script_data, output, niche=args.niche)
 
-    elif args.task == "upload":
-        if len(args.args) < 2:
-            print("Usage: runner.py upload <video_file> <channel_id>")
-            return
-        result = task_upload(
-            args.args[0],
-            args.args[1],
-            title="Test Video",
-            description="Test",
-            tags=["test"]
-        )
+        elif args.task == "upload":
+            if len(args.args) < 2:
+                print("Usage: runner.py upload <video_file> <channel_id>")
+                return
+            result = task_upload(
+                args.args[0],
+                args.args[1],
+                title="Test Video",
+                description="Test",
+                tags=["test"]
+            )
 
-    elif args.task == "full":
-        channel = args.args[0] if args.args else args.channel or "money_blueprints"
-        topic = args.args[1] if len(args.args) > 1 else None
-        result = task_full_pipeline(channel, topic)
+        elif args.task == "full":
+            channel = args.args[0] if args.args else args.channel or "money_blueprints"
+            topic = args.args[1] if len(args.args) > 1 else None
+            result = task_full_pipeline(channel, topic)
 
-    elif args.task == "full-upload":
-        channel = args.args[0] if args.args else args.channel or "money_blueprints"
-        topic = args.args[1] if len(args.args) > 1 else None
-        result = task_full_with_upload(channel, topic)
+        elif args.task == "full-upload":
+            channel = args.args[0] if args.args else args.channel or "money_blueprints"
+            topic = args.args[1] if len(args.args) > 1 else None
+            result = task_full_with_upload(channel, topic)
 
-    elif args.task == "short-pipeline":
-        # Full Shorts pipeline: research -> script -> audio -> short video
-        channel = args.args[0] if args.args else args.channel or "money_blueprints"
-        topic = args.args[1] if len(args.args) > 1 else None
-        result = task_short_pipeline(channel, topic)
+        elif args.task == "short-pipeline":
+            # Full Shorts pipeline: research -> script -> audio -> short video
+            channel = args.args[0] if args.args else args.channel or "money_blueprints"
+            topic = args.args[1] if len(args.args) > 1 else None
+            result = task_short_pipeline(channel, topic)
 
-    elif args.task == "short-upload":
-        # Full Shorts pipeline with upload
-        channel = args.args[0] if args.args else args.channel or "money_blueprints"
-        topic = args.args[1] if len(args.args) > 1 else None
-        result = task_short_with_upload(channel, topic)
+        elif args.task == "short-upload":
+            # Full Shorts pipeline with upload
+            channel = args.args[0] if args.args else args.channel or "money_blueprints"
+            topic = args.args[1] if len(args.args) > 1 else None
+            result = task_short_with_upload(channel, topic)
 
-    # Print result
-    print("\n" + "="*50)
-    print(json.dumps(result, indent=2, default=str))
+        elif args.task == "budget":
+            # Check current budget status
+            config = load_budget_config()
+            status = check_budget_status()
+            result = {
+                "success": True,
+                "config": config,
+                "status": status,
+                "message": "Budget EXCEEDED - pipeline will not run" if status["exceeded"]
+                          else "Budget WARNING - approaching limit" if status["warning"]
+                          else "Budget OK - within limits"
+            }
+            # Print a nice summary
+            print("\n" + "="*50)
+            print("         BUDGET STATUS")
+            print("="*50)
+            print(f"\nDaily Limit:    ${config['daily_limit']:.2f}")
+            print(f"Spent Today:    ${status['spent_today']:.4f}")
+            print(f"Remaining:      ${status['remaining']:.4f}")
+            print(f"Usage:          {status['usage_percent']:.1f}%")
+            print(f"Warning at:     {config['warning_threshold']*100:.0f}%")
+            print(f"Enforcement:    {'ENABLED' if config['enforce'] else 'DISABLED'}")
+            print(f"\nStatus:         {result['message']}")
+            print("="*50)
+            return  # Skip the JSON output for budget check
+
+        # Print result
+        if result is not None:
+            print("\n" + "="*50)
+            print(json.dumps(result, indent=2, default=str))
+
+    except BudgetExceededError as e:
+        # Handle budget exceeded gracefully
+        logger.error(f"Budget exceeded: {e}")
+        result = {
+            "success": False,
+            "error": str(e),
+            "error_type": "BudgetExceededError",
+            "spent": e.spent,
+            "limit": e.limit
+        }
+        print("\n" + "="*50)
+        print("         BUDGET EXCEEDED")
+        print("="*50)
+        print(f"\nError: {e}")
+        print(f"Spent today: ${e.spent:.4f}")
+        print(f"Daily limit: ${e.limit:.2f}")
+        print("\nPipeline stopped to prevent overspending.")
+        print("To continue, either:")
+        print("  1. Wait until tomorrow (budget resets daily)")
+        print("  2. Increase daily_limit in config/config.yaml")
+        print("  3. Set budget.enforce: false to disable enforcement")
+        print("="*50)
 
 
 if __name__ == "__main__":

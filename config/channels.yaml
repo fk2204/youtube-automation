@@ -1,10 +1,12 @@
 # YouTube Channels Configuration
 # 3 Faceless Channels for Automated Content
+# Updated with Competitor Analysis (January 2026)
 
 channels:
   # ============================================================
   # CHANNEL 1: FINANCE & WEALTH BUILDING
   # CPM: $10-25 (Highest Earning Potential)
+  # Competitors: The Swedish Investor, Practical Wisdom, Two Cents
   # ============================================================
   - id: "money_blueprints"
     name: "Money Blueprints"
@@ -14,7 +16,7 @@ channels:
     settings:
       niche: "finance"
       target_audience: "18-45 year olds interested in wealth building"
-      default_privacy: "unlisted"  # Change to "public" when ready
+      default_privacy: "public"  # PUBLIC for maximum reach
 
       # Professional male voice for authority
       voice: "en-US-GuyNeural"
@@ -30,19 +32,52 @@ channels:
       # Post Mon, Wed, Fri (optimal for finance content)
       posting_days: [0, 2, 4]
 
-      # Video length target (minutes)
-      target_duration: 8
+      # Video length target (minutes) - 8-15 min optimal for finance
+      target_duration: 10
 
-      # Topics to rotate through
+      # Topics to rotate through (Updated with Competitor Analysis Jan 2026)
+      # Based on: The Swedish Investor, Practical Wisdom patterns
       topics:
-        - "side hustle ideas that actually work"
-        - "passive income strategies for beginners"
-        - "money mindset and wealth habits"
-        - "how to pay off debt fast"
-        - "investing for beginners explained"
-        - "budgeting tips to save money"
-        - "financial mistakes to avoid"
-        - "trading app tutorials for beginners"
+        # Business Model Explainers (The Swedish Investor style - highest engagement)
+        - "how {company} makes money (business model explained)"
+        - "the genius strategy behind {company}'s success"
+        - "{company} vs {competitor}: who will win"
+        # Stock Analysis (visual evidence builds trust)
+        - "why {stock} will {multiplier}x in {year}"
+        - "{company} stock: buy, sell, or hold in {year}"
+        - "i analyzed {number} {investment_type} - here's what i found"
+        # Passive Income (high search volume - evergreen)
+        - "{number} passive income ideas that actually work in {year}"
+        - "{number} passive income streams i use to make ${amount}/month"
+        - "the ${amount} side hustle nobody talks about"
+        # Loss Aversion (highest CTR trigger)
+        - "{number} money mistakes costing you ${amount}/year"
+        - "why {percentage}% of investors lose money (and how to win)"
+        - "the hidden fees costing you ${amount} over your lifetime"
+        # Documentary-Business Hybrids (30-50% higher CPM)
+        - "the truth about {financial_trend}"
+        - "how warren buffett built his ${amount} fortune"
+        - "the man who predicted the {year} {event}"
+        # Wealth Building Guides
+        - "how to turn ${small_amount} into ${large_amount} ({timeframe})"
+        - "{number} investing rules that changed my life"
+
+      # Topic variables for dynamic generation
+      topic_variables:
+        company: ["Apple", "Tesla", "Amazon", "Microsoft", "Netflix", "Nvidia", "Meta", "Google", "Costco", "Berkshire Hathaway"]
+        competitor: ["Apple", "Microsoft", "Amazon", "Google", "Tesla", "Meta"]
+        stock: ["NVIDIA", "TSMC", "AMD", "Tesla", "Amazon", "Apple", "Microsoft", "Palantir"]
+        financial_trend: ["index funds", "dividend investing", "real estate", "crypto", "AI stocks", "ETFs", "REITs"]
+        investment_type: ["stocks", "ETFs", "REITs", "dividend stocks", "growth stocks"]
+        number: ["3", "5", "7", "10"]
+        multiplier: ["2", "3", "5", "10"]
+        amount: ["1,000", "5,000", "10,000", "50,000"]
+        small_amount: ["100", "500", "1,000"]
+        large_amount: ["10,000", "50,000", "100,000"]
+        percentage: ["73", "87", "92", "96"]
+        timeframe: ["3 years", "5 years", "10 years"]
+        year: ["2026"]
+        event: ["crash", "recession", "bull run"]
 
     branding:
       intro_text: "Welcome to Money Blueprints - your guide to building wealth."
@@ -67,10 +102,15 @@ channels:
       post_after_regular: true  # Post Short after each regular video
       delay_hours: 2            # Hours after regular video (14:00 -> 16:00)
       standalone_times: []      # Additional standalone Shorts times
+      use_hybrid: true          # Use Pika Labs AI for intro/outro clips (requires PIKA_API_KEY)
+      pika_prompts:             # Custom Pika prompts for this niche [intro, outro]
+        intro: "Dramatic close-up of gold coins falling in slow motion, dark background, cinematic lighting, vertical 9:16 format"
+        outro: "Subscribe button animation with coins exploding, dark background, vertical 9:16 format"
 
   # ============================================================
   # CHANNEL 2: PSYCHOLOGY & SELF-IMPROVEMENT
   # CPM: $5-12 (High Engagement)
+  # Competitors: Psych2Go (12.7M), Brainy Dose (10M views), The Infographics Show (15M)
   # ============================================================
   - id: "mind_unlocked"
     name: "Mind Unlocked"
@@ -80,7 +120,7 @@ channels:
     settings:
       niche: "psychology"
       target_audience: "curious minds interested in human behavior"
-      default_privacy: "unlisted"
+      default_privacy: "public"  # PUBLIC for maximum reach
 
       # Calm, authoritative female voice
       voice: "en-US-JennyNeural"
@@ -96,17 +136,52 @@ channels:
       # Post Tue, Thu, Sat
       posting_days: [1, 3, 5]
 
+      # Video length target (minutes) - 8-12 min optimal for psychology
       target_duration: 10
 
+      # Topics to rotate through (Updated with Competitor Analysis Jan 2026)
+      # Based on: Psych2Go, Brainy Dose, The Infographics Show patterns
       topics:
-        - "dark psychology and manipulation tactics"
-        - "stoicism and ancient wisdom"
-        - "psychology facts about human behavior"
-        - "signs of narcissism and toxic people"
-        - "body language secrets and cues"
-        - "motivation and self discipline"
-        - "cognitive biases that affect decisions"
-        - "emotional intelligence tips"
+        # Personality Types (Psych2Go style - 18M views on best video)
+        - "{number} signs of {personality_type}"
+        - "{number} things only {personality_type} will understand"
+        - "how to spot a {personality_type} instantly"
+        - "{number} toxic things {group} say to {target}"
+        # Brain Facts (high curiosity - Brainy Dose style)
+        - "why your brain {brain_action}"
+        - "the science behind {behavior}"
+        - "what happens to your brain when you {action}"
+        # Dark Psychology (manipulation awareness - highest engagement)
+        - "dark psychology tricks {group} uses against you"
+        - "{number} manipulation tactics {group} uses (and how to defend)"
+        - "why {percentage}% of people fall for this manipulation"
+        - "{number} signs you're being manipulated"
+        # Cognitive Biases (practical value)
+        - "the {cognitive_bias} that's ruining your life"
+        - "{number} cognitive biases that control your decisions"
+        - "how {group} exploits the {cognitive_bias}"
+        # Body Language (evergreen content)
+        - "{number} body language signs someone is {emotion}"
+        - "how to read anyone in {number} seconds"
+        - "FBI techniques to detect when someone is {emotion}"
+        # Psychology Tricks (The Infographics Show style)
+        - "{number} psychological tricks that work on everyone"
+        - "the psychology of {topic}: why you {action}"
+        - "why intelligent people {action}"
+
+      # Topic variables for dynamic generation
+      topic_variables:
+        personality_type: ["a narcissist", "a manipulator", "high intelligence", "an introvert", "a psychopath", "an empath", "a covert narcissist"]
+        brain_action: ["hates change", "remembers embarrassing moments", "sabotages your success", "fears rejection", "creates false memories", "procrastinates"]
+        behavior: ["procrastination", "jealousy", "attraction", "fear", "motivation", "anxiety", "love bombing"]
+        group: ["salespeople", "politicians", "advertisers", "narcissists", "manipulators", "toxic parents", "gaslighters"]
+        target: ["you", "their children", "their partners"]
+        cognitive_bias: ["confirmation bias", "sunk cost fallacy", "anchoring effect", "dunning-kruger effect", "negativity bias"]
+        action: ["remember embarrassing moments", "procrastinate", "fear success", "self-sabotage", "overthink", "people please"]
+        emotion: ["lying", "attracted to you", "hiding something", "nervous", "guilty"]
+        topic: ["success", "money", "attraction", "influence", "persuasion"]
+        number: ["3", "5", "7", "10", "8"]
+        percentage: ["73", "87", "92", "96"]
 
     branding:
       intro_text: "Welcome to Mind Unlocked - where we decode the mysteries of human psychology."
@@ -131,10 +206,15 @@ channels:
       post_after_regular: true  # Post Short after each regular video
       delay_hours: 2            # Hours after regular video
       standalone_times: ["12:00"]  # Extra standalone Short at noon
+      use_hybrid: true          # Use Pika Labs AI for intro/outro clips (requires PIKA_API_KEY)
+      pika_prompts:             # Custom Pika prompts for this niche [intro, outro]
+        intro: "Close-up of human eye with neural network reflections, mysterious atmosphere, dark purple aesthetic, vertical 9:16 format"
+        outro: "Mind expanding visualization, enlightenment imagery, neural pathways forming connections, vertical 9:16 format"
 
   # ============================================================
   # CHANNEL 3: STORIES & ENTERTAINMENT
-  # CPM: $4-10 (Viral Potential)
+  # CPM: $4-10 (Viral Potential, 30-50% higher for documentary-style)
+  # Competitors: JCS (5M+), Truly Criminal (30+ min), Lazy Masquerade (1.7M), Mr. Nightmare (6M)
   # ============================================================
   - id: "untold_stories"
     name: "Untold Stories"
@@ -144,7 +224,7 @@ channels:
     settings:
       niche: "storytelling"
       target_audience: "entertainment seekers who love mysteries and stories"
-      default_privacy: "unlisted"
+      default_privacy: "public"  # PUBLIC for maximum reach
 
       # Dramatic, engaging voice for storytelling
       voice: "en-GB-RyanNeural"
@@ -162,17 +242,61 @@ channels:
       # Post every other day for maximum reach
       posting_days: [0, 1, 2, 3, 4, 5, 6]
 
-      target_duration: 12
+      # Video length target (minutes) - 12-30 min optimal for storytelling
+      target_duration: 15
 
+      # Topics to rotate through (Updated with Competitor Analysis Jan 2026)
+      # Based on: JCS Criminal Psychology, Truly Criminal, Lazy Masquerade, Mr. Nightmare
       topics:
-        - "true crime stories and unsolved mysteries"
-        - "scary stories and creepypasta"
-        - "business rise and fall documentaries"
-        - "historical mysteries and secrets"
-        - "reddit stories compilation"
-        - "internet mysteries explained"
-        - "famous disappearances and cold cases"
-        - "conspiracy theories debunked"
+        # Company Documentaries (high watch time - Truly Criminal style)
+        - "the untold story of {company_person}"
+        - "how {company} went from $0 to ${valuation}"
+        - "the rise and fall of {brand}"
+        - "what happened to {forgotten_entity}"
+        - "{company}'s biggest mistake ever"
+        - "the dark side of {successful_entity}"
+        # Person Stories (JCS Criminal Psychology style)
+        - "the {person} who {achievement}"
+        - "how {person} built a ${amount} empire (then lost it all)"
+        - "inside the mind of {famous_person}"
+        - "what really happened to {famous_person}"
+        # Business Scandals (high engagement)
+        - "why {company} is secretly {adjective}"
+        - "the {year} {event} that changed everything"
+        - "the true story behind {famous_thing}"
+        - "inside {company}'s secret {noun}"
+        # Mystery/Tension (Lazy Masquerade style - 1.7M subs)
+        - "the mystery that still haunts {location}"
+        - "why everyone was wrong about {subject}"
+        - "the case that shocked the world"
+        # Crime/Investigation (Mr. Nightmare style - 6M subs)
+        - "the criminal who {achievement}"
+        - "the heist that went horribly wrong"
+        # New trending templates
+        - "the {time_period} that destroyed {company}"
+        - "the genius strategy that backfired"
+        - "the truth they don't want you to know about {subject}"
+
+      # Topic variables for dynamic generation
+      topic_variables:
+        company_person: ["Enron", "WeWork", "Theranos", "Bernie Madoff", "FTX", "Lehman Brothers", "Elizabeth Holmes", "Sam Bankman-Fried", "Adam Neumann"]
+        company: ["Amazon", "Apple", "Netflix", "Google", "Tesla", "Uber", "Airbnb", "SpaceX", "Meta", "Twitter", "TikTok"]
+        brand: ["Blockbuster", "Kodak", "Nokia", "BlackBerry", "Toys R Us", "Sears", "RadioShack", "Vine", "MySpace"]
+        forgotten_entity: ["MySpace", "AOL", "Yahoo", "Vine", "Palm", "Compaq", "Circuit City", "Borders", "Tower Records"]
+        successful_entity: ["Amazon", "Facebook", "Google", "Tesla", "Apple", "Disney", "Netflix", "Microsoft"]
+        famous_thing: ["the iPhone", "Netflix", "Bitcoin", "Amazon Prime", "the Tesla Roadster", "ChatGPT"]
+        person: ["man", "woman", "teenager", "dropout", "immigrant", "founder", "genius", "scammer", "whistleblower"]
+        famous_person: ["Elon Musk", "Jeff Bezos", "Mark Zuckerberg", "Steve Jobs", "Elizabeth Holmes"]
+        achievement: ["fooled Wall Street", "predicted the crash", "broke the internet", "stole millions", "escaped justice"]
+        adjective: ["terrifying", "genius", "evil", "doomed", "unstoppable", "dangerous"]
+        valuation: ["1 billion", "10 billion", "100 billion"]
+        amount: ["1 billion", "10 billion", "100 million"]
+        year: ["2008", "2020", "2023", "2024"]
+        time_period: ["24 hours", "one week", "30 days", "one decision"]
+        event: ["crash", "scandal", "decision", "betrayal", "collapse"]
+        noun: ["strategy", "failure", "scandal", "project", "deal"]
+        subject: ["WeWork", "Theranos", "FTX", "Enron", "crypto"]
+        location: ["Wall Street", "Silicon Valley", "Hollywood"]
 
     branding:
       intro_text: "Welcome to Untold Stories. Some stories were never meant to be forgotten."
@@ -197,6 +321,10 @@ channels:
       post_after_regular: true  # Post Short after each regular video
       delay_hours: 3            # 3 hours after regular video for this channel
       standalone_times: ["18:00"]  # Extra standalone Short at 6 PM
+      use_hybrid: true          # Use Pika Labs AI for intro/outro clips (requires PIKA_API_KEY)
+      pika_prompts:             # Custom Pika prompts for this niche [intro, outro]
+        intro: "Old book opening with magical dust particles, cinematic lighting, mysterious atmosphere, vertical 9:16 format"
+        outro: "Book closing gently, satisfying ending, warm lighting, stars appearing in night sky, vertical 9:16 format"
 
 # ============================================================
 # GLOBAL SETTINGS
@@ -223,7 +351,7 @@ global:
   allow_comments: true
 
   # Safety settings
-  test_mode: true  # Set to false for real uploads
+  test_mode: false  # ENABLED - Real uploads active
 
   # ============================================================
   # QUALITY CHECK SETTINGS (Pre-upload validation)
@@ -253,3 +381,6 @@ global:
     post_after_regular: true    # Post Short after each regular video
     delay_hours: 2              # Hours after regular video (e.g., 14:00 -> 16:00)
     standalone_times: []        # Additional standalone Shorts times (e.g., ["12:00", "18:00"])
+    use_hybrid: true            # Use Pika Labs AI for intro/outro (requires PIKA_API_KEY)
+                                # When enabled, generates AI intro (~5s) and outro (~5s) clips
+                                # Cost: ~$0.20 per clip at 720p, ~$0.40 total per Short

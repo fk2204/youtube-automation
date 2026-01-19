@@ -11,6 +11,22 @@ Usage:
         output_file="video.mp4",
         title="My Tutorial"
     )
+
+Audio Enhancement (optional):
+    generator.create_video(
+        audio_file="narration.mp3",
+        output_file="video.mp4",
+        normalize_audio=True  # Normalize to -14 LUFS
+    )
+
+Subtitles (optional):
+    generator.create_video(
+        audio_file="narration.mp3",
+        output_file="video.mp4",
+        script_text="Your narration text...",
+        subtitles_enabled=True,
+        subtitle_style="regular"  # or "shorts", "minimal", "cinematic"
+    )
 """
 
 import os
@@ -24,6 +40,22 @@ try:
     from PIL import Image, ImageDraw, ImageFont
 except ImportError:
     raise ImportError("Please install pillow: pip install pillow")
+
+# Import audio processor for normalization
+try:
+    from .audio_processor import AudioProcessor
+    AUDIO_PROCESSOR_AVAILABLE = True
+except ImportError:
+    AUDIO_PROCESSOR_AVAILABLE = False
+    logger.debug("AudioProcessor not available - audio enhancement disabled")
+
+# Import subtitle generator
+try:
+    from .subtitles import SubtitleGenerator, SubtitleTrack, SUBTITLE_STYLES
+    SUBTITLES_AVAILABLE = True
+except ImportError:
+    SUBTITLES_AVAILABLE = False
+    logger.debug("SubtitleGenerator not available - subtitles disabled")
 
 
 class FastVideoGenerator:
@@ -53,6 +85,24 @@ class FastVideoGenerator:
             logger.info(f"FastVideoGenerator ready (FFmpeg: {self.ffmpeg})")
         else:
             logger.warning("FFmpeg not found. Install from https://ffmpeg.org/download.html")
+
+        # Initialize audio processor for normalization
+        self.audio_processor = None
+        if AUDIO_PROCESSOR_AVAILABLE:
+            try:
+                self.audio_processor = AudioProcessor()
+                logger.debug("AudioProcessor initialized for audio enhancement")
+            except Exception as e:
+                logger.debug(f"AudioProcessor initialization failed: {e}")
+
+        # Initialize subtitle generator
+        self.subtitle_generator = None
+        if SUBTITLES_AVAILABLE:
+            try:
+                self.subtitle_generator = SubtitleGenerator()
+                logger.debug("SubtitleGenerator initialized for caption support")
+            except Exception as e:
+                logger.debug(f"SubtitleGenerator initialization failed: {e}")
 
     def _find_ffmpeg(self) -> Optional[str]:
         """Find FFmpeg executable."""
@@ -165,7 +215,14 @@ class FastVideoGenerator:
         output_file: str,
         title: Optional[str] = None,
         subtitle: Optional[str] = None,
-        background_image: Optional[str] = None
+        background_image: Optional[str] = None,
+        normalize_audio: bool = False,
+        background_music: Optional[str] = None,
+        music_volume: float = 0.15,
+        script_text: Optional[str] = None,
+        subtitles_enabled: bool = False,
+        subtitle_style: str = "regular",
+        niche: Optional[str] = None
     ) -> Optional[str]:
         """
         Create a video from audio file.
@@ -176,6 +233,13 @@ class FastVideoGenerator:
             title: Optional title overlay
             subtitle: Optional subtitle
             background_image: Custom background (or auto-generate)
+            normalize_audio: Normalize audio to YouTube's -14 LUFS standard
+            background_music: Optional background music file to mix with voice
+            music_volume: Volume level for background music (0.0-1.0, default 0.15)
+            script_text: Script/narration text for subtitle generation
+            subtitles_enabled: Whether to burn subtitles into video
+            subtitle_style: Subtitle style ("regular", "shorts", "minimal", "cinematic")
+            niche: Content niche for subtitle styling ("finance", "psychology", etc.)
 
         Returns:
             Path to created video or None on failure
@@ -190,6 +254,32 @@ class FastVideoGenerator:
 
         # Create output directory
         Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+
+        # Process audio (normalization and/or music mixing)
+        processed_audio = audio_file
+        temp_audio = None
+
+        if self.audio_processor and (normalize_audio or background_music):
+            temp_audio = str(Path(output_file).with_suffix('.processed_audio.mp3'))
+
+            if background_music and os.path.exists(background_music):
+                # Mix with background music (this also normalizes)
+                logger.info(f"Mixing audio with background music at {music_volume*100:.0f}% volume")
+                result = self.audio_processor.mix_with_background_music(
+                    voice_file=audio_file,
+                    music_file=background_music,
+                    output_file=temp_audio,
+                    music_volume=music_volume,
+                    normalize_before_mix=True
+                )
+                if result:
+                    processed_audio = result
+            elif normalize_audio:
+                # Just normalize
+                logger.info("Normalizing audio to YouTube's -14 LUFS standard")
+                result = self.audio_processor.normalize_audio(audio_file, temp_audio)
+                if result:
+                    processed_audio = result
 
         # Create or use background image
         temp_bg = None
@@ -206,11 +296,13 @@ class FastVideoGenerator:
                 '-y',  # Overwrite output
                 '-loop', '1',  # Loop image
                 '-i', background_image,  # Input image
-                '-i', audio_file,  # Input audio
+                '-i', processed_audio,  # Input audio (may be normalized/mixed)
                 '-c:v', 'libx264',  # Video codec
                 '-tune', 'stillimage',  # Optimize for still image
+                '-crf', '23',  # Constant rate factor for quality
+                '-b:v', '8000k',  # Video bitrate (8 Mbps for YouTube 1080p)
                 '-c:a', 'aac',  # Audio codec
-                '-b:a', '192k',  # Audio bitrate
+                '-b:a', '256k',  # Audio bitrate (improved from 192k)
                 '-pix_fmt', 'yuv420p',  # Pixel format
                 '-shortest',  # End when audio ends
                 '-vf', f'scale={self.width}:{self.height}',  # Resolution
@@ -231,6 +323,51 @@ class FastVideoGenerator:
                 return None
 
             logger.success(f"Video created: {output_file}")
+
+            # Apply subtitles if enabled
+            if subtitles_enabled and script_text and self.subtitle_generator:
+                logger.info("Adding burned-in subtitles...")
+                try:
+                    # Get audio duration for subtitle timing
+                    audio_duration = self.get_audio_duration(audio_file)
+                    if not audio_duration:
+                        audio_duration = len(script_text.split()) / 2.5  # Fallback estimate
+
+                    # Generate subtitle track
+                    style_config = self.subtitle_generator.get_style(subtitle_style, niche)
+                    max_chars = style_config.get("max_chars", 50)
+                    track = self.subtitle_generator.sync_subtitles_with_audio(
+                        script_text, audio_file, max_chars
+                    )
+
+                    if track.cues:
+                        # Burn subtitles into video
+                        temp_video = str(Path(output_file).with_suffix('.temp_no_subs.mp4'))
+                        os.rename(output_file, temp_video)
+
+                        result = self.subtitle_generator.burn_subtitles(
+                            temp_video,
+                            track,
+                            output_file,
+                            style=subtitle_style,
+                            niche=niche
+                        )
+
+                        # Clean up temp video
+                        if os.path.exists(temp_video):
+                            try:
+                                os.remove(temp_video)
+                            except:
+                                pass
+
+                        if result:
+                            logger.success(f"Subtitles burned into video: {output_file}")
+                        else:
+                            # Restore original video if subtitle burning failed
+                            logger.warning("Subtitle burning failed, video saved without subtitles")
+                except Exception as e:
+                    logger.warning(f"Subtitle processing failed: {e}")
+
             return output_file
 
         except subprocess.TimeoutExpired:
@@ -244,6 +381,12 @@ class FastVideoGenerator:
             if temp_bg and os.path.exists(temp_bg):
                 try:
                     os.remove(temp_bg)
+                except:
+                    pass
+            # Clean up temp audio
+            if temp_audio and os.path.exists(temp_audio):
+                try:
+                    os.remove(temp_audio)
                 except:
                     pass
 

@@ -7,6 +7,13 @@ app:
   debug: true
   log_level: "INFO"
 
+# Budget Settings
+# Controls API spending limits and enforcement
+budget:
+  daily_limit: 10.0           # Maximum daily spend in dollars
+  warning_threshold: 0.8      # Warn at 80% of daily budget (0.0-1.0)
+  enforce: true               # If true, raises BudgetExceededError when limit hit
+
 # Research Settings
 research:
   # How many video ideas to generate per run
@@ -49,12 +56,40 @@ content:
     rate: "+0%"                      # Speed adjustment (-50% to +100%)
     pitch: "+0Hz"                    # Pitch adjustment
 
+  # Audio Processing Settings (Professional Voice Enhancement)
+  # These settings apply broadcast-quality processing to TTS output
+  audio:
+    # Enable professional voice enhancement
+    # Applies: noise reduction, EQ, de-essing, compression, normalization
+    enhance_voice: true
+
+    # FFT-based noise reduction (removes background noise/hum)
+    noise_reduction: true
+
+    # Target loudness in LUFS (Loudness Units Full Scale)
+    # -14 LUFS is YouTube's recommended level for optimal playback
+    normalize_lufs: -14
+
+    # Sample rate for output audio (48kHz is YouTube's preferred rate)
+    sample_rate: 48000
+
+    # Audio bitrate for output files
+    bitrate: "256k"
+
   # Video settings
   video:
     resolution: [1920, 1080]  # 1080p
     fps: 30
     format: "mp4"
     codec: "libx264"
+
+  # Subtitle settings
+  # Subtitles increase retention by 15-25%
+  subtitles:
+    enabled: true               # Enable burned-in subtitles
+    style: "regular"            # Default style: "regular", "shorts", "minimal", "cinematic"
+    shorts_style: "shorts"      # Style for YouTube Shorts (larger fonts, centered)
+    use_transcription: true     # Try to use Whisper for accurate timing (if available)
 
   # Thumbnail settings
   thumbnail:
@@ -65,7 +100,7 @@ content:
 youtube:
   # Default video settings
   defaults:
-    privacy: "unlisted"     # public, unlisted, private
+    privacy: "public"       # PUBLIC for maximum reach and algorithm visibility
     category: "27"          # 27 = Education
     language: "en"
 

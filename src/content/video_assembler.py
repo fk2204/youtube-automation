@@ -11,6 +11,13 @@ Usage:
         output_file="output.mp4",
         title="My Tutorial"
     )
+
+Audio Enhancement (optional):
+    video_path = assembler.create_video_from_audio(
+        audio_file="narration.mp3",
+        output_file="output.mp4",
+        normalize_audio=True  # Normalize to -14 LUFS
+    )
 """
 
 import os
@@ -18,6 +25,14 @@ from pathlib import Path
 from typing import List, Dict, Optional, Tuple, Union
 from dataclasses import dataclass
 from loguru import logger
+
+# Import audio processor for normalization
+try:
+    from .audio_processor import AudioProcessor
+    AUDIO_PROCESSOR_AVAILABLE = True
+except ImportError:
+    AUDIO_PROCESSOR_AVAILABLE = False
+    logger.debug("AudioProcessor not available - audio enhancement disabled")
 
 try:
     from moviepy.editor import (
@@ -65,6 +80,15 @@ class VideoAssembler:
         self.fps = fps
         self.background_color = background_color
         self.width, self.height = resolution
+
+        # Initialize audio processor for normalization
+        self.audio_processor = None
+        if AUDIO_PROCESSOR_AVAILABLE:
+            try:
+                self.audio_processor = AudioProcessor()
+                logger.debug("AudioProcessor initialized for audio enhancement")
+            except Exception as e:
+                logger.debug(f"AudioProcessor initialization failed: {e}")
 
         logger.info(f"VideoAssembler: {resolution[0]}x{resolution[1]} @ {fps}fps")
 
@@ -215,7 +239,10 @@ class VideoAssembler:
         title: Optional[str] = None,
         segments: Optional[List[VideoSegment]] = None,
         add_captions: bool = True,
-        subtitle_file: Optional[str] = None
+        subtitle_file: Optional[str] = None,
+        normalize_audio: bool = False,
+        background_music: Optional[str] = None,
+        music_volume: float = 0.15
     ) -> str:
         """
         Create a video from audio narration.
@@ -227,6 +254,9 @@ class VideoAssembler:
             segments: Optional list of VideoSegments for custom visuals
             add_captions: Whether to add caption overlays
             subtitle_file: Path to VTT/SRT subtitle file
+            normalize_audio: Normalize audio to YouTube's -14 LUFS standard
+            background_music: Optional background music file to mix with voice
+            music_volume: Volume level for background music (0.0-1.0, default 0.15)
 
         Returns:
             Path to created video file
@@ -236,8 +266,34 @@ class VideoAssembler:
         # Ensure output directory exists
         Path(output_file).parent.mkdir(parents=True, exist_ok=True)
 
-        # Load audio
-        audio = AudioFileClip(audio_file)
+        # Process audio (normalization and/or music mixing)
+        processed_audio_file = audio_file
+        temp_audio_file = None
+
+        if self.audio_processor and (normalize_audio or background_music):
+            temp_audio_file = str(Path(output_file).with_suffix('.processed_audio.mp3'))
+
+            if background_music and os.path.exists(background_music):
+                # Mix with background music (this also normalizes)
+                logger.info(f"Mixing audio with background music at {music_volume*100:.0f}% volume")
+                result = self.audio_processor.mix_with_background_music(
+                    voice_file=audio_file,
+                    music_file=background_music,
+                    output_file=temp_audio_file,
+                    music_volume=music_volume,
+                    normalize_before_mix=True
+                )
+                if result:
+                    processed_audio_file = result
+            elif normalize_audio:
+                # Just normalize
+                logger.info("Normalizing audio to YouTube's -14 LUFS standard")
+                result = self.audio_processor.normalize_audio(audio_file, temp_audio_file)
+                if result:
+                    processed_audio_file = result
+
+        # Load audio (use processed if available)
+        audio = AudioFileClip(processed_audio_file)
         duration = audio.duration
 
         logger.info(f"Audio duration: {duration:.1f} seconds")
@@ -301,7 +357,7 @@ class VideoAssembler:
             fps=self.fps,
             codec="libx264",
             audio_codec="aac",
-            preset="medium",
+            preset="slow",  # Higher quality encoding (was "medium")
             threads=4,
             logger=None  # Suppress moviepy's verbose output
         )
@@ -309,6 +365,13 @@ class VideoAssembler:
         # Clean up
         video.close()
         audio.close()
+
+        # Clean up temp audio file
+        if temp_audio_file and os.path.exists(temp_audio_file):
+            try:
+                os.remove(temp_audio_file)
+            except (OSError, PermissionError) as e:
+                logger.debug(f"Could not remove temp audio file: {e}")
 
         logger.success(f"Video created: {output_file}")
         return output_file

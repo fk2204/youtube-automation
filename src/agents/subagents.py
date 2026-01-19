@@ -317,7 +317,9 @@ class ProductionAgent:
                 audio_file=audio_file,
                 script=script,
                 output_file=video_path,
-                niche=niche
+                niche=niche,
+                subtitles_enabled=True,  # Enable burned-in subtitles for 15-25% retention boost
+                subtitle_style="regular"  # Use regular style, can be customized per niche
             )
         else:
             # Fallback to basic video generator

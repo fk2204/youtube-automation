@@ -210,14 +210,208 @@ When working on this project, Claude should:
 
 5. **Commit frequently** with descriptive messages
 
-## Recent Updates (2026-01)
+6. **ALWAYS use best practices from competitor analysis** when creating content:
+   - Reference `docs/COMPETITOR_ANALYSIS.md` for niche-specific insights
+   - Use `src/utils/best_practices.py` for validation functions
+   - Run pre-publish checklist before uploading videos
+   - Follow viral title patterns, hook formulas, and retention techniques
 
-- [x] YouTube Shorts support (1080x1920 vertical)
-- [x] Research-backed optimizations (safe zones, 30s optimal duration)
-- [x] Smart stock footage matching (niche-specific keywords)
-- [x] SQLite database tracking
-- [x] Shorts scheduler (post after regular videos)
-- [x] Background music support (15% volume)
+## Recent Updates (2026-01-18)
+
+### Video Quality Fixes
+- [x] Video bitrate: 8 Mbps (was default ~2-4 Mbps)
+- [x] Encoding preset: "slow" for quality (was "medium")
+- [x] Audio bitrate: 256k (was 192k)
+- [x] CRF 23 for consistent quality
+- [x] test_mode: false (videos now upload!)
+
+### New Features Added
+- [x] **Fish Audio TTS** - Premium quality voices (better than ElevenLabs)
+- [x] **Multi-source stock footage** - Pexels → Pixabay → Coverr fallback
+- [x] **Audio normalization** - -14 LUFS (YouTube's target)
+- [x] **Background music mixing** - 15% volume, proper levels
+- [x] **Token manager** - Track API costs (`python run.py cost`)
+- [x] **Best practices scripts** - Hooks, chapters, retention points
+- [x] **Scheduler posting_days** - Respects channel config now
+- [x] **Professional Voice Enhancement** - Broadcast-quality audio processing (2026-01-19)
+- [x] **Stock footage caching** - Query-based caching saves 80% download time (2026-01-19)
+
+### Files Added/Modified
+- `src/content/tts_fish.py` - Fish Audio TTS provider
+- `src/content/audio_processor.py` - Audio normalization/enhancement
+- `src/content/video_ultra.py` - High-quality video generator
+- `src/content/stock_cache.py` - Query-based stock footage caching system
+- `src/utils/token_manager.py` - Cost tracking system
+- `src/utils/best_practices.py` - Competitor analysis validation module
+- `start_scheduler.bat` - Auto-start script
+- `docs/RESEARCH_REPORTS.md` - Full research findings
+- `docs/COMPETITOR_ANALYSIS.md` - Competitor best practices (Jan 2026)
+
+## API Keys Configured
+
+| Service | Status | Purpose |
+|---------|--------|---------|
+| Groq | ✓ Active | AI scripts (free) |
+| Pexels | ✓ Active | Stock footage |
+| Pixabay | ✓ Active | Stock footage backup |
+| Fish Audio | ✓ Active | Premium TTS |
+| YouTube OAuth | ✓ Active | 3 channels configured |
+
+## Channels
+
+| Channel | Posting Days | Times (UTC) |
+|---------|--------------|-------------|
+| money_blueprints | Mon, Wed, Fri | 15:00, 19:00, 21:00 |
+| mind_unlocked | Tue, Thu, Sat | 16:00, 19:30, 21:30 |
+| untold_stories | Every day | 17:00, 20:00, 22:00 |
+
+## Quick Commands
+
+```bash
+python run.py daily-all      # Start full scheduler
+python run.py video <channel> # Single video
+python run.py short <channel> # Single Short
+python run.py cost           # View token usage
+python run.py status         # Scheduler status
+python run.py cache-stats    # View stock footage cache stats
+python run.py cache-stats --cleanup  # Clean old cache (>30 days)
+```
+
+## TTS Provider Selection
+
+```python
+from src.content.tts import get_tts_provider
+
+# Edge-TTS (free, default)
+tts = get_tts_provider("edge")
+
+# Fish Audio (premium quality)
+tts = get_tts_provider("fish")
+```
+
+## Video with Audio Enhancement
+
+```python
+from src.content.video_fast import FastVideoGenerator
+
+gen = FastVideoGenerator()
+gen.create_video(
+    audio_file="voice.mp3",
+    output_file="video.mp4",
+    normalize_audio=True,      # -14 LUFS
+    background_music="bg.mp3", # Optional
+    music_volume=0.15          # 15%
+)
+```
+
+## YouTube Best Practices (Implemented)
+
+### Regular Videos
+- Strong hook in first 5 seconds
+- Micro-payoffs every 30-60 seconds
+- Open loops (min 3 per video)
+- Chapter markers auto-generated
+- CTAs at 30%, 50%, 95%
+
+### Shorts
+- Hook in first 1-2 seconds
+- Optimal length: 20-45 seconds
+- Loop-friendly endings
+- Pattern interrupts every 2-3 seconds
+
+### Audio Levels
+- Voice: -12dB
+- Background music: -25 to -30dB
+- Overall: -14 LUFS (YouTube target)
+
+### Professional Voice Enhancement (NEW)
+The `enhance_voice_professional()` method applies broadcast-quality processing:
+1. **FFT Noise Reduction** - Removes background noise and hum (nf=-20dB)
+2. **Presence EQ** - Boosts 2-4kHz for voice clarity (+3dB)
+3. **High-Pass Filter** - Removes rumble below 80Hz
+4. **De-esser** - Reduces harsh sibilant 's' sounds
+5. **Compression** - Smooths dynamics (threshold=-18dB, ratio=3:1)
+6. **Loudness Normalization** - Targets -14 LUFS with -1.5dB true peak
+
+```python
+# Using professional enhancement with TTS
+from src.content.tts import TextToSpeech
+
+tts = TextToSpeech()
+await tts.generate_enhanced(
+    text="Your narration here...",
+    output_file="output/voice.mp3",
+    enhance=True,              # Enable professional enhancement
+    noise_reduction=True,      # FFT-based noise removal
+    normalize_lufs=-14         # YouTube's target loudness
+)
+
+# Or use the AudioProcessor directly
+from src.content.audio_processor import AudioProcessor
+
+processor = AudioProcessor()
+processor.enhance_voice_professional(
+    input_file="raw_voice.mp3",
+    output_file="enhanced_voice.mp3",
+    noise_reduction=True,
+    normalize_lufs=-14
+)
+```
+
+## Competitor Analysis Best Practices
+
+The `src/utils/best_practices.py` module provides validation against competitor research:
+
+### Validate Content Before Publishing
+```python
+from src.utils.best_practices import (
+    validate_title,
+    validate_hook,
+    get_best_practices,
+    suggest_improvements,
+    pre_publish_checklist
+)
+
+# Validate a title
+result = validate_title("5 Money Mistakes Costing You $1000/Year", "finance")
+print(f"Valid: {result.is_valid}, Score: {result.score:.0%}")
+for suggestion in result.suggestions:
+    print(f"  - {suggestion}")
+
+# Validate a hook
+result = validate_hook("Wall Street doesn't want you to know this...", "finance")
+print(f"Valid: {result.is_valid}, Score: {result.score:.0%}")
+
+# Get best practices for a niche
+practices = get_best_practices("psychology")
+print(f"CPM Range: ${practices['metrics']['cpm_range'][0]}-${practices['metrics']['cpm_range'][1]}")
+print(f"Optimal Length: {practices['metrics']['optimal_video_length'][0]}-{practices['metrics']['optimal_video_length'][1]} min")
+```
+
+### Run Pre-Publish Checklist
+```python
+from src.content.script_writer import ScriptWriter
+
+writer = ScriptWriter(provider="groq")
+script = writer.generate_script("How AI Works", niche="psychology")
+
+# Run comprehensive checklist
+checklist = writer.run_pre_publish_checklist(script, "psychology")
+print(f"Ready to publish: {checklist.ready_to_publish}")
+print(f"Score: {checklist.overall_score:.0%}")
+
+for item in checklist.items:
+    status = "[PASS]" if item.passed else "[FAIL]"
+    print(f"{status} {item.name}: {item.details}")
+```
+
+### Niche-Specific Metrics
+
+| Niche | CPM Range | Optimal Length | Best Posting Days |
+|-------|-----------|----------------|-------------------|
+| Finance | $10-22 | 8-15 min | Mon, Wed, Fri |
+| Psychology | $3-6 | 8-12 min | Tue, Thu, Sat |
+| Storytelling | $4-15 | 12-30 min | Daily |
 
 ## Future Improvements
 
@@ -225,7 +419,5 @@ When working on this project, Claude should:
 - [ ] Implement CrewAI multi-agent workflow
 - [ ] Add video analytics tracking
 - [ ] Add A/B testing for thumbnails
-- [x] Crossfade transitions between segments (2026-01)
-- [x] Animated gradient fallbacks (2026-01)
-- [x] Burned-in captions support (2026-01)
-- [x] Background music integration (2026-01)
+- [ ] Integrate VidIQ/TubeBuddy API for SEO
+- [ ] Add Reddit API for research

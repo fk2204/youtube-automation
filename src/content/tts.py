@@ -1,8 +1,13 @@
 """
-Text-to-Speech Module using Edge-TTS (FREE!)
+Text-to-Speech Module using Edge-TTS (FREE!) or Fish Audio (Premium)
 
 Edge-TTS uses Microsoft Edge's online TTS service.
 No API key required - completely free with 300+ neural voices.
+
+Fish Audio provides higher quality TTS with premium voices.
+Requires FISH_AUDIO_API_KEY environment variable.
+
+Both providers support professional voice enhancement for broadcast-quality audio.
 
 Usage:
     tts = TextToSpeech()
@@ -13,6 +18,14 @@ Usage:
 
     # Generate with subtitles
     await tts.generate_with_subtitles("Hello!", "output.mp3", "subtitles.vtt")
+
+    # Generate with professional enhancement (broadcast quality)
+    await tts.generate_enhanced("Hello!", "output.mp3", enhance=True)
+
+    # Use Fish Audio provider
+    from src.content.tts import get_tts_provider
+    tts = get_tts_provider("fish")
+    await tts.generate("Hello!", "output.mp3")
 """
 
 import asyncio
@@ -345,6 +358,88 @@ class TextToSpeech:
 
         return '\n'.join(srt_lines)
 
+    async def generate_enhanced(
+        self,
+        text: str,
+        output_file: str,
+        voice: Optional[str] = None,
+        rate: str = "+0%",
+        pitch: str = "+0Hz",
+        volume: str = "+0%",
+        enhance: bool = True,
+        noise_reduction: bool = True,
+        normalize_lufs: float = -14.0
+    ) -> str:
+        """
+        Generate speech with professional broadcast-quality enhancement.
+
+        This method generates speech and then applies professional audio processing:
+        - FFT-based noise reduction
+        - Voice presence EQ boost (2-4kHz)
+        - De-essing for sibilant reduction
+        - Dynamic compression
+        - Loudness normalization to YouTube's -14 LUFS target
+
+        Args:
+            text: Text to convert to speech
+            output_file: Output audio file path (mp3)
+            voice: Voice to use (default: self.default_voice)
+            rate: Speech rate adjustment (e.g., "+20%", "-10%")
+            pitch: Pitch adjustment (e.g., "+5Hz", "-5Hz")
+            volume: Volume adjustment (e.g., "+10%", "-10%")
+            enhance: Apply professional voice enhancement (default: True)
+            noise_reduction: Apply FFT noise reduction (default: True)
+            normalize_lufs: Target loudness in LUFS (default: -14)
+
+        Returns:
+            Path to the generated and enhanced audio file
+        """
+        voice = voice or self.default_voice
+
+        # Generate raw TTS first
+        if enhance:
+            # Generate to temp file, then enhance
+            output_path = Path(output_file)
+            temp_file = str(output_path.parent / f"_raw_{output_path.name}")
+            raw_audio = await self.generate(text, temp_file, voice, rate, pitch, volume)
+
+            try:
+                # Import audio processor and enhance
+                try:
+                    from src.content.audio_processor import AudioProcessor
+                except ImportError:
+                    from .audio_processor import AudioProcessor
+
+                processor = AudioProcessor()
+                enhanced = processor.enhance_voice_professional(
+                    input_file=raw_audio,
+                    output_file=output_file,
+                    noise_reduction=noise_reduction,
+                    normalize_lufs=normalize_lufs
+                )
+
+                if enhanced:
+                    # Cleanup temp file
+                    try:
+                        os.remove(temp_file)
+                    except OSError:
+                        pass
+                    logger.success(f"Enhanced audio saved: {output_file}")
+                    return enhanced
+                else:
+                    # Enhancement failed, keep raw audio
+                    logger.warning("Enhancement failed, using raw TTS output")
+                    os.rename(temp_file, output_file)
+                    return output_file
+
+            except ImportError as e:
+                logger.warning(f"AudioProcessor not available: {e}. Using raw TTS output.")
+                os.rename(temp_file, output_file)
+                return output_file
+        else:
+            # No enhancement, just generate normally
+            return await self.generate(text, output_file, voice, rate, pitch, volume)
+
     @staticmethod
     async def list_voices(locale: Optional[str] = None) -> List[Dict]:
         """
@@ -388,6 +483,49 @@ async def generate_speech(
     """Quick function to generate speech."""
     tts = TextToSpeech(default_voice=voice)
     return await tts.generate(text, output_file)
+
+
+def get_tts_provider(provider: str = "edge", **kwargs):
+    """
+    Factory function to get a TTS provider.
+
+    Args:
+        provider: TTS provider to use ("edge" or "fish")
+        **kwargs: Additional arguments passed to the provider
+
+    Returns:
+        TTS provider instance (TextToSpeech or FishAudioTTS)
+
+    Example:
+        # Use Edge-TTS (default, free)
+        tts = get_tts_provider("edge")
+
+        # Use Fish Audio (premium quality)
+        tts = get_tts_provider("fish")
+        tts = get_tts_provider("fish", api_key="your_api_key")
+    """
+    provider = provider.lower().strip()
+
+    if provider in ("edge", "edge-tts", "edgetts"):
+        default_voice = kwargs.get("default_voice", "en-US-GuyNeural")
+        logger.info(f"Using Edge-TTS provider with voice: {default_voice}")
+        return TextToSpeech(default_voice=default_voice)
+
+    elif provider in ("fish", "fish-audio", "fishaudio"):
+        try:
+            from src.content.tts_fish import FishAudioTTS
+        except ImportError:
+            # Handle relative import when running as module
+            from .tts_fish import FishAudioTTS
+
+        api_key = kwargs.get("api_key")
+        logger.info("Using Fish Audio TTS provider")
+        return FishAudioTTS(api_key=api_key)
+
+    else:
+        logger.warning(f"Unknown TTS provider '{provider}', falling back to Edge-TTS")
+        default_voice = kwargs.get("default_voice", "en-US-GuyNeural")
+        return TextToSpeech(default_voice=default_voice)
 
 
 # Example usage and testing

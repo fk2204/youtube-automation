@@ -1,0 +1,383 @@
+# ============================================================
+# YouTube SEO Templates Configuration
+# Optimized for algorithm virality and maximum reach
+# ============================================================
+# Created: 2026-01-18
+# Purpose: Centralized SEO templates for description, tags, and hashtags
+# ============================================================
+
+# ============================================================
+# DESCRIPTION TEMPLATES BY NICHE
+# Structure: Hook (first 2 lines) + Body + Chapters + CTA + Hashtags
+# ============================================================
+description_templates:
+  # FINANCE NICHE (money_blueprints)
+  finance:
+    hooks:
+      - "This video reveals the exact strategy that could change your financial future forever."
+      - "What you're about to learn has helped thousands build real wealth."
+      - "The money secret Wall Street doesn't want you to know is finally revealed."
+      - "Stop losing money. This one change could save you thousands every year."
+      - "In this video, I break down exactly how the wealthy build passive income."
+
+    body_templates:
+      - |
+        In this video, you'll discover:
+        - The exact strategies successful investors use
+        - Common money mistakes that cost you thousands
+        - Step-by-step actionable tips you can use TODAY
+        - The one thing that separates wealthy people from everyone else
+      - |
+        This comprehensive guide covers everything you need to know about building wealth:
+        - Why most financial advice is wrong
+        - The proven formula for passive income
+        - Real numbers and calculations you can use
+        - Actionable steps to start TODAY
+
+    cta:
+      - "If you found value in this video, LIKE and SUBSCRIBE for more money-making content!"
+      - "Comment below: What's your biggest financial challenge? I'll make a video about it!"
+      - "Turn on NOTIFICATIONS to never miss a wealth-building tip!"
+
+  # PSYCHOLOGY NICHE (mind_unlocked)
+  psychology:
+    hooks:
+      - "Your brain is hiding something from you - and I'm about to reveal it."
+      - "What psychology researchers discovered will change how you see yourself."
+      - "The manipulation technique they don't want you to know about."
+      - "Scientists were shocked when they discovered this about the human mind."
+      - "By the end of this video, you'll be able to read anyone like a book."
+
+    body_templates:
+      - |
+        In this deep dive into human psychology, you'll learn:
+        - The science behind why your mind works this way
+        - Practical techniques to use in your daily life
+        - Warning signs to watch for in yourself and others
+        - How to protect yourself from manipulation
+      - |
+        This video explores the fascinating world of human behavior:
+        - Research-backed psychological insights
+        - Real-world applications you can use immediately
+        - The hidden patterns in human interaction
+        - Tools to understand yourself and others better
+
+    cta:
+      - "SUBSCRIBE for more mind-blowing psychology content!"
+      - "Comment: Which psychological trick surprised you the most?"
+      - "Like this video if your mind was blown!"
+
+  # STORYTELLING NICHE (untold_stories)
+  storytelling:
+    hooks:
+      - "The true story they tried to bury is finally being told."
+      - "What happened next shocked everyone - and you won't believe the ending."
+      - "This is the story nobody was supposed to hear."
+      - "The rise and fall you're about to witness changed everything."
+      - "Behind closed doors, something terrifying was happening."
+
+    body_templates:
+      - |
+        In this gripping documentary-style video, you'll discover:
+        - The events that led to this shocking moment
+        - The people involved and their hidden motivations
+        - What the media never reported
+        - The aftermath that still affects us today
+      - |
+        This is the untold story of:
+        - How it all began
+        - The turning point nobody saw coming
+        - The secrets that were hidden for years
+        - The truth that finally came to light
+
+    cta:
+      - "If this story gave you chills, hit SUBSCRIBE for more untold stories!"
+      - "Comment: What story should I cover next?"
+      - "LIKE this video if the ending shocked you!"
+
+# ============================================================
+# TAG LISTS BY NICHE
+# Mix of: Broad + Niche + Trending + Long-tail keywords
+# ============================================================
+tags:
+  # FINANCE TAGS
+  finance:
+    core:
+      - "money"
+      - "finance"
+      - "investing"
+      - "passive income"
+      - "wealth building"
+      - "personal finance"
+      - "financial freedom"
+      - "money tips"
+
+    trending_2026:
+      - "passive income 2026"
+      - "how to make money 2026"
+      - "investing for beginners 2026"
+      - "side hustle ideas 2026"
+      - "financial freedom 2026"
+      - "ai investing"
+      - "dividend investing"
+      - "index fund investing"
+
+    long_tail:
+      - "how to build wealth from nothing"
+      - "passive income ideas for beginners"
+      - "money mistakes to avoid"
+      - "financial advice for young adults"
+      - "how to invest your first 1000 dollars"
+      - "side hustle that actually works"
+      - "how to retire early"
+      - "compound interest explained"
+
+    competitor_research:
+      - "the swedish investor"
+      - "practical wisdom"
+      - "ali abdaal"
+      - "graham stephan"
+      - "minority mindset"
+
+  # PSYCHOLOGY TAGS
+  psychology:
+    core:
+      - "psychology"
+      - "psychology facts"
+      - "human behavior"
+      - "self improvement"
+      - "mindset"
+      - "dark psychology"
+      - "manipulation"
+      - "cognitive bias"
+
+    trending_2026:
+      - "psychology tricks 2026"
+      - "dark psychology 2026"
+      - "manipulation tactics"
+      - "narcissist signs"
+      - "body language secrets"
+      - "emotional intelligence"
+      - "stoicism explained"
+      - "brain hacks"
+
+    long_tail:
+      - "signs of a narcissist"
+      - "how to read body language"
+      - "psychological manipulation tactics"
+      - "cognitive biases explained"
+      - "how to be more confident"
+      - "why do we procrastinate"
+      - "psychology of persuasion"
+      - "dark triad personality"
+
+    competitor_research:
+      - "psych2go"
+      - "brainy dose"
+      - "the infographics show"
+      - "practical psychology"
+      - "improvement pill"
+
+  # STORYTELLING TAGS
+  storytelling:
+    core:
+      - "true story"
+      - "documentary"
+      - "untold story"
+      - "mystery"
+      - "true crime"
+      - "investigation"
+      - "scandal"
+      - "story time"
+
+    trending_2026:
+      - "true crime 2026"
+      - "documentary 2026"
+      - "company scandal"
+      - "rise and fall"
+      - "business documentary"
+      - "what happened to"
+      - "unsolved mystery"
+      - "true horror story"
+
+    long_tail:
+      - "the rise and fall of"
+      - "what really happened to"
+      - "the untold story of"
+      - "company documentary"
+      - "business scandal explained"
+      - "true crime documentary"
+      - "mystery explained"
+      - "investigation revealed"
+
+    competitor_research:
+      - "jcs criminal psychology"
+      - "truly criminal"
+      - "lazy masquerade"
+      - "company man"
+      - "cold fusion"
+
+# ============================================================
+# HASHTAG SETS BY NICHE
+# 3-5 hashtags shown above title on mobile
+# ============================================================
+hashtags:
+  finance:
+    primary:
+      - "#finance"
+      - "#money"
+      - "#investing"
+    secondary:
+      - "#passiveincome"
+      - "#wealthbuilding"
+      - "#personalfinance"
+      - "#financialfreedom"
+      - "#moneytips"
+      - "#sidehustle"
+
+  psychology:
+    primary:
+      - "#psychology"
+      - "#mindset"
+      - "#selfimprovement"
+    secondary:
+      - "#darkpsychology"
+      - "#humanmind"
+      - "#brainpower"
+      - "#manipulation"
+      - "#motivation"
+      - "#stoicism"
+
+  storytelling:
+    primary:
+      - "#truecrime"
+      - "#documentary"
+      - "#truestory"
+    secondary:
+      - "#mystery"
+      - "#untoldstories"
+      - "#investigation"
+      - "#scandal"
+      - "#storytime"
+      - "#crime"
+
+# ============================================================
+# TITLE TEMPLATES BY NICHE
+# Proven viral patterns from competitor analysis
+# ============================================================
+title_templates:
+  finance:
+    - "How {subject} Makes Money (Business Explained)"
+    - "Why {stock} Will {multiplier}x in {year}"
+    - "{number} Passive Income Ideas That Actually Work"
+    - "The Truth About {topic}"
+    - "I Analyzed {number} {investment_type} - Here's What I Found"
+    - "How to Turn ${small_amount} Into ${large_amount}"
+    - "Why {percentage}% of Investors Lose Money"
+    - "The ${amount} Side Hustle Nobody Talks About"
+    - "{topic} Stock: Buy, Sell, or Hold?"
+    - "The Hidden Truth About {topic}"
+
+  psychology:
+    - "{number} Signs of {personality_type}"
+    - "Why Your Brain {brain_action}"
+    - "Dark Psychology Tricks {group} Uses Against You"
+    - "The Science Behind {behavior}"
+    - "{number} Psychological Tricks That Work on Everyone"
+    - "Why {percentage}% of People Fall for This"
+    - "The {cognitive_bias} Ruining Your Life"
+    - "How to Read Anyone in {number} Seconds"
+    - "{number} Body Language Signs Someone Is {emotion}"
+    - "The Psychology of {topic}"
+
+  storytelling:
+    - "The Untold Story of {subject}"
+    - "How {company} Went From $0 to ${valuation}"
+    - "The Rise and Fall of {brand}"
+    - "What Happened to {entity}?"
+    - "The {person} Who {achievement}"
+    - "Why {company} Is Secretly {adjective}"
+    - "The Dark Side of {successful_entity}"
+    - "{company}'s Biggest Mistake Ever"
+    - "The True Story Behind {famous_thing}"
+    - "Inside {company}'s Secret {noun}"
+
+# ============================================================
+# OPTIMAL SETTINGS BY NICHE
+# Category, timing, and algorithm recommendations
+# ============================================================
+optimal_settings:
+  finance:
+    category_id: "22"           # People & Blogs (better for finance)
+    best_upload_days: [2, 3, 4] # Wed, Thu, Fri
+    best_upload_hours: [14, 15, 16, 19, 20]  # 2-4 PM, 7-8 PM EST
+    optimal_duration_minutes: [8, 12]
+    thumbnail_style: "Bold text + charts/graphs"
+
+  psychology:
+    category_id: "27"           # Education
+    best_upload_days: [1, 3, 5] # Tue, Thu, Sat
+    best_upload_hours: [16, 17, 18, 20, 21]  # 4-6 PM, 8-9 PM EST
+    optimal_duration_minutes: [8, 15]
+    thumbnail_style: "Brain imagery + expressive face"
+
+  storytelling:
+    category_id: "24"           # Entertainment
+    best_upload_days: [0, 2, 4, 5, 6]  # Most days except Tue, Thu
+    best_upload_hours: [17, 18, 19, 20, 21, 22]  # 5-10 PM EST
+    optimal_duration_minutes: [10, 20]
+    thumbnail_style: "Dramatic imagery + minimal text"
+
+# ============================================================
+# CTA PLACEMENT STRATEGY
+# Based on YouTube algorithm research
+# ============================================================
+cta_placement:
+  soft_cta:
+    timing_percent: 30          # 30% into video
+    examples:
+      - "If you're finding this valuable so far, hit that subscribe button..."
+      - "By the way, subscribing helps me make more videos like this..."
+      - "Quick reminder - if you're learning something, that subscribe button really helps..."
+
+  engagement_cta:
+    timing_percent: 50          # 50% into video
+    examples:
+      - "Comment below with your experience..."
+      - "I'm curious - drop a comment telling me..."
+      - "Let me know in the comments..."
+
+  final_cta:
+    timing_percent: 95          # 95% into video
+    examples:
+      - "If this video helped you, smash that like button and subscribe for more!"
+      - "Like, comment, and subscribe if you want more content like this!"
+      - "Don't forget to like and subscribe - I post new videos every week!"
+
+  never_cta_before_seconds: 30  # Never put CTA in first 30 seconds
+
+# ============================================================
+# RETENTION HOOKS
+# Use these phrases at strategic moments
+# ============================================================
+retention_hooks:
+  open_loops:
+    - "I'll reveal the most important tip at the end..."
+    - "But there's something even more shocking coming up..."
+    - "The real secret? I'll tell you after we cover the basics..."
+    - "What happened next will surprise you - but first..."
+    - "The best part is coming up - stay with me..."
+
+  pattern_interrupts:
+    - "But here's where it gets really interesting..."
+    - "Wait - there's something most people miss here..."
+    - "Now, this next part is crucial..."
+    - "And this is where most people go wrong..."
+    - "Pay attention to this next part..."
+
+  micro_payoffs:
+    - "Here's a secret most people miss..."
+    - "What you might not know is..."
+    - "The first thing you can do RIGHT NOW is..."
+    - "Here's the key insight..."
+    - "This is what separates the winners..."
