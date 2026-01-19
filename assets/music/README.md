@@ -2,6 +2,16 @@
 
 This directory contains background music files for automated video generation.
 
+## Current Music Status
+
+**Placeholder tracks installed** (as of 2026-01-19):
+- `finance.mp3` - Generic instrumental track (8.5 MB, 192kbps)
+- `psychology.mp3` - Generic instrumental track (9.7 MB, 192kbps)
+- `storytelling.mp3` - Generic instrumental track (7.9 MB, 192kbps)
+- `background.mp3` - Generic fallback track (6.9 MB, 192kbps)
+
+These are royalty-free SoundHelix demo tracks. For better results, replace them with niche-appropriate music from Pixabay or YouTube Audio Library (see instructions below).
+
 ## Expected File Names
 
 The video generator looks for music files in this order:
@@ -130,6 +140,57 @@ settings:
 2. Rename it to match your niche (e.g., `finance.mp3`)
 3. Place it in this directory (`assets/music/`)
 4. The video generator will automatically use it
+
+## Upgrade to Better Music (Recommended)
+
+The placeholder tracks work but aren't optimized for each niche. Here's how to get better music:
+
+### Option 1: Pixabay Music (Recommended - Free, No Attribution)
+
+Visit these search links and download appropriate tracks:
+
+**Finance Channel:**
+- https://pixabay.com/music/search/corporate%20ambient/
+- https://pixabay.com/music/search/business%20background/
+- Look for: Upbeat, professional, motivating tracks
+
+**Psychology Channel:**
+- https://pixabay.com/music/search/calm%20ambient/
+- https://pixabay.com/music/search/meditation%20background/
+- Look for: Calm, contemplative, atmospheric tracks
+
+**Storytelling Channel:**
+- https://pixabay.com/music/search/cinematic%20tension/
+- https://pixabay.com/music/search/documentary%20mysterious/
+- Look for: Dramatic, suspenseful, engaging tracks
+
+**Steps:**
+1. Visit the link above for your channel
+2. Click on a track to preview
+3. Click the green "Download" button
+4. Choose MP3 format (any quality works)
+5. Rename to `finance.mp3`, `psychology.mp3`, or `storytelling.mp3`
+6. Move to this folder (`assets/music/`)
+
+### Option 2: YouTube Audio Library (Best Quality)
+
+1. Go to https://studio.youtube.com/
+2. Click "Audio Library" in the left menu
+3. Use filters:
+   - Finance: Genre = "Corporate" or "Pop", Mood = "Inspirational"
+   - Psychology: Genre = "Ambient", Mood = "Calm" or "Dramatic"
+   - Storytelling: Genre = "Cinematic", Mood = "Dark" or "Dramatic"
+4. Download and rename appropriately
+
+### Option 3: Run Download Helper Script
+
+Run this Python script to open music search pages in your browser:
+
+```python
+python scripts/download_music_helper.py
+```
+
+This will open Pixabay search pages for each niche so you can manually download.
 
 ## Troubleshooting
 

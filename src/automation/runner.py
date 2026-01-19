@@ -534,7 +534,8 @@ def task_full_pipeline(channel_id: str, topic: str = None) -> Dict[str, Any]:
 
     # Step 2: Script
     logger.info("\n[2/4] SCRIPT")
-    script_result = task_script(topic, niche=niche, duration=5)
+    target_duration = channel_config["settings"].get("target_duration", 10)
+    script_result = task_script(topic, niche=niche, duration=target_duration)
     if not script_result["success"]:
         return {"success": False, "error": "Script failed", "results": results}
 

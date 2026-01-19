@@ -33,7 +33,7 @@ channels:
       posting_days: [0, 2, 4]
 
       # Video length target (minutes) - 8-15 min optimal for finance
-      target_duration: 10
+      target_duration: 12
 
       # Topics to rotate through (Updated with Competitor Analysis Jan 2026)
       # Based on: The Swedish Investor, Practical Wisdom patterns

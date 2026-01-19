@@ -901,12 +901,12 @@ NEVER put CTA in first 30 seconds (kills retention).
 }}
 ```
 
-## CRITICAL REQUIREMENTS (Report 5 Best Practices):
+## CRITICAL REQUIREMENTS (Best Practices):
 
 ### WORD COUNT (MANDATORY):
-- **Target: 800-1500 words total** (Report 5 optimal range)
+- **Target: {word_count} words total** (8-15 min optimal range)
 - This equals approximately {duration} minutes at 150 words/minute
-- Scripts outside this range perform worse on retention
+- Longer scripts (1200-2500 words) perform better for retention
 
 ### STRUCTURE REQUIREMENTS:
 - Generate 10-15 sections for {duration} minute video
@@ -936,7 +936,7 @@ NEVER put CTA in first 30 seconds (kills retention).
 - Include chapter_markers array for YouTube chapters feature
 - Include retention_points array with types: "hook", "micro_payoff", "open_loop", "cliffhanger", "cta"
 
-Write the COMPLETE viral script now (800-1500 words):"""
+Write the COMPLETE viral script now ({word_count} words target):"""
 
     # Longer detailed prompt for better videos
     VIRAL_SCRIPT_PROMPT = """You are a viral content strategist creating faceless YouTube videos that get millions of views.
@@ -1718,10 +1718,10 @@ Write the script now:"""
         """
         logger.info(f"Generating {duration_minutes}-min script for: {topic}")
 
-        # Calculate target word count (Report 5: 800-1500 words optimal)
-        # Use 150 words per minute for natural speech, but enforce 800-1500 range
+        # Calculate target word count (Updated: 1200-2500 words for 8-15 min videos)
+        # Use 150 words per minute for natural speech
         word_count = duration_minutes * 150
-        word_count = max(800, min(1500, word_count))  # Enforce Report 5 optimal range
+        word_count = max(1200, min(2500, word_count))  # Enforce 8-15 min optimal range
 
         # Calculate content duration (total minus intro/outro overhead)
         duration_content_mins = max(1, duration_minutes - 2)  # Reserve ~2 min for hook/context/cta

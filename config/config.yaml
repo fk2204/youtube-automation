@@ -42,8 +42,9 @@ research:
 content:
   # Script settings
   script:
-    min_length: 500        # Minimum words
-    max_length: 2000       # Maximum words
+    min_length: 1200       # Minimum words (8 min @ 150 wpm)
+    max_length: 2500       # Maximum words (15+ min @ 150 wpm)
+    target_length: 1500    # Target words (10 min optimal)
     style: "educational"   # educational, casual, professional
 
   # Voice settings (Edge-TTS)
