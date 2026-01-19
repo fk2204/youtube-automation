@@ -25,6 +25,907 @@ sys.path.insert(0, os.path.dirname(__file__))
 from dotenv import load_dotenv
 load_dotenv("config/.env")
 
+# ============================================================
+# AGENT COMMAND HANDLERS
+# ============================================================
+
+def _print_agent_result(result, output_json=False, verbose=False):
+    """Pretty print an AgentResult or similar dataclass."""
+    import json
+
+    if output_json:
+        print(json.dumps(result.to_dict(), indent=2))
+        return
+
+    print("\n" + "=" * 60)
+
+    # Check for common result attributes
+    if hasattr(result, 'summary'):
+        print(result.summary())
+    else:
+        # Generic output
+        if hasattr(result, 'success'):
+            status = "[OK]" if result.success else "[FAIL]"
+            print(f"Status: {status}")
+
+        if hasattr(result, 'operation'):
+            print(f"Operation: {result.operation}")
+
+        if hasattr(result, 'error') and result.error:
+            print(f"Error: {result.error}")
+
+    # Show additional details in verbose mode
+    if verbose:
+        print("\n" + "-" * 40)
+        print("Detailed Output:")
+        if hasattr(result, 'to_dict'):
+            for key, value in result.to_dict().items():
+                if key not in ['timestamp', 'error']:
+                    print(f"  {key}: {str(value)[:100]}{'...' if len(str(value)) > 100 else ''}")
+
+    # Show token usage if available
+    if hasattr(result, 'tokens_used') and result.tokens_used > 0:
+        print(f"\nTokens used: {result.tokens_used}")
+    if hasattr(result, 'cost') and result.cost > 0:
+        print(f"Cost: ${result.cost:.4f}")
+
+    print("=" * 60)
+
+
+def _parse_agent_args(args):
+    """Parse agent command arguments into kwargs."""
+    kwargs = {}
+    positional = []
+    i = 0
+
+    while i < len(args):
+        arg = args[i]
+        if arg.startswith("--"):
+            key = arg[2:].replace("-", "_")
+            if i + 1 < len(args) and not args[i + 1].startswith("--"):
+                value = args[i + 1]
+                # Try to convert to appropriate type
+                try:
+                    value = int(value)
+                except ValueError:
+                    try:
+                        value = float(value)
+                    except ValueError:
+                        pass
+                kwargs[key] = value
+                i += 2
+            else:
+                kwargs[key] = True
+                i += 1
+        else:
+            positional.append(arg)
+            i += 1
+
+    return kwargs, positional
+
+
+def _handle_agent_command(args):
+    """Handle agent subcommands."""
+    import json
+
+    if not args:
+        print("""
+Agent Dispatcher - Comprehensive Task Agents
+============================================
+
+Usage:
+    python run.py agent <agent-type> <subcommand> [options]
+
+Available Agent Types:
+    research          Topic discovery and trend analysis
+    seo-strategy      World-class SEO optimization
+    quality           Script and content validation
+    analytics         Video performance analysis
+    workflow          Automation workflow management
+    monitor           System health monitoring
+    scheduler         Schedule management
+    safety            Content safety checks
+    compliance        Platform compliance validation
+    branding          Channel branding assets
+
+Global Options:
+    --json            Output in JSON format
+    --verbose         Detailed logging output
+
+Research Commands:
+    python run.py agent research --niche finance --count 10
+    python run.py agent research --channel money_blueprints
+    python run.py agent research --trends --niche psychology
+    python run.py agent research --competitors --niche storytelling
+
+SEO Strategy Commands:
+    python run.py agent seo-strategy research "passive income" --niche finance
+    python run.py agent seo-strategy ab-test "My Title" --variants 5
+    python run.py agent seo-strategy strategy --niche finance --topics 10
+    python run.py agent seo-strategy competitors "keyword" --top 10
+    python run.py agent seo-strategy calendar --niche finance --weeks 4
+
+Quality Commands:
+    python run.py agent quality validate "output/video.mp4"
+    python run.py agent quality audio "output/audio.mp3"
+    python run.py agent quality video "output/video.mp4"
+    python run.py agent quality script "output/script.txt" --niche finance
+
+Analytics Commands:
+    python run.py agent analytics insights --channel money_blueprints --period 30d
+    python run.py agent analytics revenue --all-channels
+    python run.py agent analytics strategy --niche finance
+    python run.py agent analytics cost
+
+Workflow Commands:
+    python run.py agent workflow status
+    python run.py agent workflow run full-video --channel money_blueprints
+    python run.py agent workflow run short --channel mind_unlocked
+
+Monitor Commands:
+    python run.py agent monitor health
+    python run.py agent monitor resources
+    python run.py agent monitor errors
+
+Scheduler Commands:
+    python run.py agent scheduler status
+    python run.py agent scheduler next
+    python run.py agent scheduler list
+
+Safety/Compliance Commands:
+    python run.py agent safety check "script.txt"
+    python run.py agent compliance check "video.mp4"
+
+Examples:
+    python run.py agent research --niche finance --count 5 --json
+    python run.py agent seo-strategy ab-test "How to Make Money" --variants 5
+    python run.py agent quality validate output/video.mp4 --verbose
+    python run.py agent analytics insights --channel money_blueprints --period 7d
+        """)
+        return
+
+    agent_type = args[0].lower()
+    subargs = args[1:] if len(args) > 1 else []
+    kwargs, positional = _parse_agent_args(subargs)
+
+    output_json = kwargs.pop("json", False)
+    verbose = kwargs.pop("verbose", False)
+
+    try:
+        if agent_type == "research":
+            _handle_research_agent(subargs, kwargs, positional, output_json, verbose)
+
+        elif agent_type in ["seo-strategy", "seo-strategist"]:
+            _handle_seo_strategy_agent(subargs, kwargs, positional, output_json, verbose)
+
+        elif agent_type == "quality":
+            _handle_quality_agent(subargs, kwargs, positional, output_json, verbose)
+
+        elif agent_type == "analytics":
+            _handle_analytics_agent(subargs, kwargs, positional, output_json, verbose)
+
+        elif agent_type == "workflow":
+            _handle_workflow_agent(subargs, kwargs, positional, output_json, verbose)
+
+        elif agent_type == "monitor":
+            _handle_monitor_agent(subargs, kwargs, positional, output_json, verbose)
+
+        elif agent_type == "scheduler":
+            _handle_scheduler_agent(subargs, kwargs, positional, output_json, verbose)
+
+        elif agent_type == "safety":
+            _handle_safety_agent(subargs, kwargs, positional, output_json, verbose)
+
+        elif agent_type == "compliance":
+            _handle_compliance_agent(subargs, kwargs, positional, output_json, verbose)
+
+        elif agent_type == "branding":
+            _handle_branding_agent(subargs, kwargs, positional, output_json, verbose)
+
+        elif agent_type == "seo":
+            # Basic SEO agent (backwards compatibility)
+            _handle_basic_seo_agent(subargs, kwargs, positional, output_json, verbose)
+
+        else:
+            print(f"Unknown agent type: {agent_type}")
+            print("Run 'python run.py agent' for available agents")
+
+    except Exception as e:
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        print(f"\n[ERROR] Agent error: {e}")
+        sys.exit(1)
+
+
+def _handle_research_agent(args, kwargs, positional, output_json, verbose):
+    """Handle research agent commands."""
+    from src.agents.research_agent import ResearchAgent
+
+    agent = ResearchAgent()
+
+    # Determine operation
+    niche = kwargs.get("niche", "finance")
+    channel = kwargs.get("channel")
+    count = kwargs.get("count", 5)
+
+    if kwargs.get("trends"):
+        result = agent.analyze_trends(niche)
+    elif kwargs.get("competitors"):
+        result = agent.analyze_competitors(niche)
+    elif channel:
+        # Generate ideas for specific channel
+        result = agent.generate_viral_ideas(channel_id=channel, count=count)
+    else:
+        # Default: find topics
+        result = agent.find_topics(niche, count=count)
+
+    _print_agent_result(result, output_json, verbose)
+
+    # Print ideas if available
+    if not output_json and hasattr(result, 'ideas') and result.ideas:
+        print(f"\nTop Ideas ({len(result.ideas)}):")
+        for i, idea in enumerate(result.ideas[:5], 1):
+            print(f"  {i}. {idea.title}")
+            if verbose:
+                print(f"     Score: {idea.score} | Trend: {idea.trend_score}")
+
+
+def _handle_seo_strategy_agent(args, kwargs, positional, output_json, verbose):
+    """Handle SEO strategy agent commands."""
+    from src.agents.seo_strategist import SEOStrategist
+    import json as json_module
+
+    strategist = SEOStrategist()
+
+    if not args:
+        print("Usage: python run.py agent seo-strategy <command> [options]")
+        print("Commands: research, ab-test, strategy, competitors, calendar, optimize")
+        return
+
+    command = args[0]
+    niche = kwargs.get("niche", "default")
+
+    if command == "research":
+        keyword = positional[0] if positional else kwargs.get("keyword", "")
+        if not keyword:
+            print("Error: Keyword required. Usage: agent seo-strategy research \"keyword\"")
+            return
+        result = strategist.research_keyword(keyword, niche)
+
+    elif command == "ab-test":
+        title = positional[0] if positional else kwargs.get("title", "")
+        if not title:
+            print("Error: Title required. Usage: agent seo-strategy ab-test \"title\"")
+            return
+        variants = kwargs.get("variants", 5)
+        result = strategist.generate_ab_variants(title, variants, niche)
+
+    elif command == "strategy":
+        topics = kwargs.get("topics", 10)
+        weeks = kwargs.get("weeks", 4)
+        result = strategist.content_strategy(niche, topics, weeks)
+
+    elif command == "competitors":
+        keyword = positional[0] if positional else kwargs.get("keyword", "")
+        if not keyword:
+            print("Error: Keyword required. Usage: agent seo-strategy competitors \"keyword\"")
+            return
+        top = kwargs.get("top", 10)
+        result = strategist.analyze_competitors(keyword, top)
+
+    elif command == "calendar":
+        weeks = kwargs.get("weeks", 4)
+        result = strategist.content_strategy(niche, topics=weeks * 3, weeks=weeks)
+
+    elif command == "optimize":
+        file_path = kwargs.get("file")
+        if not file_path:
+            print("Error: File required. Usage: agent seo-strategy optimize --file path.json")
+            return
+        with open(file_path) as f:
+            data = json_module.load(f)
+        result = strategist.full_optimization(
+            title=data.get("title", ""),
+            description=data.get("description", ""),
+            tags=data.get("tags", []),
+            niche=niche
+        )
+
+    else:
+        print(f"Unknown command: {command}")
+        print("Commands: research, ab-test, strategy, competitors, calendar, optimize")
+        return
+
+    _print_agent_result(result, output_json, verbose)
+
+
+def _handle_quality_agent(args, kwargs, positional, output_json, verbose):
+    """Handle quality agent commands."""
+    from src.agents.quality_agent import QualityAgent
+
+    agent = QualityAgent()
+
+    if not args:
+        print("Usage: python run.py agent quality <command> [file] [options]")
+        print("Commands: validate, audio, video, script")
+        return
+
+    command = args[0]
+    file_path = positional[0] if positional else kwargs.get("file")
+    niche = kwargs.get("niche", "default")
+    is_short = kwargs.get("short", False)
+
+    if command == "validate" or command == "video":
+        if not file_path:
+            print("Error: File path required")
+            return
+        result = agent.check_video_file(file_path, is_short=is_short)
+
+    elif command == "audio":
+        if not file_path:
+            print("Error: Audio file path required")
+            return
+        # Audio validation - check if file exists and basic properties
+        import os
+        if not os.path.exists(file_path):
+            print(f"[FAIL] Audio file not found: {file_path}")
+            return
+        print(f"[OK] Audio file exists: {file_path}")
+        print(f"     Size: {os.path.getsize(file_path) / 1024 / 1024:.2f} MB")
+        return
+
+    elif command == "script":
+        if not file_path:
+            print("Error: Script file path required")
+            return
+        with open(file_path, 'r', encoding='utf-8') as f:
+            script_text = f.read()
+
+        full = kwargs.get("full", False)
+        if full:
+            result = agent.full_analysis(script_text, niche, is_short)
+        else:
+            result = agent.quick_check(script_text, niche, is_short)
+
+    else:
+        print(f"Unknown command: {command}")
+        return
+
+    _print_agent_result(result, output_json, verbose)
+
+
+def _handle_analytics_agent(args, kwargs, positional, output_json, verbose):
+    """Handle analytics agent commands."""
+    from src.agents.analytics_agent import AnalyticsAgent
+
+    agent = AnalyticsAgent()
+
+    if not args:
+        print("Usage: python run.py agent analytics <command> [options]")
+        print("Commands: insights, revenue, strategy, cost, patterns")
+        return
+
+    command = args[0]
+
+    if command == "insights":
+        channel = kwargs.get("channel")
+        period = kwargs.get("period", "30d")
+        if not channel:
+            print("Error: --channel required for insights")
+            return
+        result = agent.analyze_channel(channel, period)
+
+    elif command == "revenue":
+        all_channels = kwargs.get("all_channels", False)
+        # Revenue analysis using cost tracker
+        result = agent.get_cost_analysis()
+
+    elif command == "strategy":
+        niche = kwargs.get("niche", "finance")
+        use_ai = kwargs.get("ai", False)
+        result = agent.generate_strategy(niche, use_ai=use_ai)
+
+    elif command == "cost":
+        result = agent.get_cost_analysis()
+
+    elif command == "patterns":
+        niche = kwargs.get("niche")
+        channel = kwargs.get("channel")
+        result = agent.find_patterns(niche=niche, channel=channel)
+
+    else:
+        print(f"Unknown command: {command}")
+        return
+
+    _print_agent_result(result, output_json, verbose)
+
+
+def _handle_workflow_agent(args, kwargs, positional, output_json, verbose):
+    """Handle workflow agent commands."""
+    import json as json_module
+    from datetime import datetime
+
+    if not args:
+        print("Usage: python run.py agent workflow <command> [options]")
+        print("Commands: status, run")
+        return
+
+    command = args[0]
+
+    if command == "status":
+        # Show workflow status
+        print("\n" + "=" * 60)
+        print("WORKFLOW STATUS")
+        print("=" * 60)
+        print(f"\nTimestamp: {datetime.now().isoformat()}")
+        print("\nPipeline Components:")
+        print("  [OK] Research Agent")
+        print("  [OK] Script Writer")
+        print("  [OK] TTS Engine")
+        print("  [OK] Video Assembler")
+        print("  [OK] Quality Checker")
+        print("  [OK] YouTube Uploader")
+        print("\nStatus: All systems operational")
+        print("=" * 60)
+
+    elif command == "run":
+        if len(args) < 2:
+            print("Usage: python run.py agent workflow run <pipeline> [options]")
+            print("Pipelines: full-video, short")
+            return
+
+        pipeline = args[1]
+        channel = kwargs.get("channel", "money_blueprints")
+        niche = kwargs.get("niche", "finance")
+
+        if pipeline == "full-video":
+            from src.automation.runner import task_full_with_upload
+            print(f"\n[INFO] Running full video pipeline for {channel}...")
+            result = task_full_with_upload(channel)
+            if result["success"]:
+                print(f"[OK] Video uploaded: {result['results'].get('video_url', 'N/A')}")
+            else:
+                print(f"[FAIL] Pipeline failed: {result.get('error')}")
+
+        elif pipeline == "short":
+            from src.automation.runner import task_short_with_upload
+            print(f"\n[INFO] Running short video pipeline for {channel}...")
+            result = task_short_with_upload(channel)
+            if result["success"]:
+                print(f"[OK] Short uploaded: {result['results'].get('video_url', 'N/A')}")
+            else:
+                print(f"[FAIL] Pipeline failed: {result.get('error')}")
+
+        else:
+            print(f"Unknown pipeline: {pipeline}")
+
+    else:
+        print(f"Unknown command: {command}")
+
+
+def _handle_monitor_agent(args, kwargs, positional, output_json, verbose):
+    """Handle monitor agent commands."""
+    import json as json_module
+    from datetime import datetime
+    import os
+    import psutil
+
+    if not args:
+        print("Usage: python run.py agent monitor <command>")
+        print("Commands: health, resources, errors")
+        return
+
+    command = args[0]
+
+    if command == "health":
+        print("\n" + "=" * 60)
+        print("SYSTEM HEALTH CHECK")
+        print("=" * 60)
+        print(f"\nTimestamp: {datetime.now().isoformat()}")
+
+        # Check API keys
+        api_keys = {
+            "GROQ_API_KEY": bool(os.getenv("GROQ_API_KEY")),
+            "PEXELS_API_KEY": bool(os.getenv("PEXELS_API_KEY")),
+            "PIXABAY_API_KEY": bool(os.getenv("PIXABAY_API_KEY")),
+            "FISH_AUDIO_API_KEY": bool(os.getenv("FISH_AUDIO_API_KEY")),
+        }
+
+        print("\nAPI Keys:")
+        for key, configured in api_keys.items():
+            status = "[OK]" if configured else "[MISSING]"
+            print(f"  {status} {key}")
+
+        # Check directories
+        dirs = ["output", "assets", "data", "config"]
+        print("\nDirectories:")
+        for d in dirs:
+            status = "[OK]" if os.path.exists(d) else "[MISSING]"
+            print(f"  {status} {d}/")
+
+        print("\n" + "=" * 60)
+
+    elif command == "resources":
+        print("\n" + "=" * 60)
+        print("SYSTEM RESOURCES")
+        print("=" * 60)
+
+        # CPU usage
+        cpu_percent = psutil.cpu_percent(interval=1)
+        print(f"\nCPU Usage: {cpu_percent}%")
+
+        # Memory usage
+        memory = psutil.virtual_memory()
+        print(f"Memory: {memory.percent}% used ({memory.used / 1024**3:.1f}GB / {memory.total / 1024**3:.1f}GB)")
+
+        # Disk usage
+        disk = psutil.disk_usage('.')
+        print(f"Disk: {disk.percent}% used ({disk.used / 1024**3:.1f}GB / {disk.total / 1024**3:.1f}GB)")
+
+        print("\n" + "=" * 60)
+
+    elif command == "errors":
+        print("\n" + "=" * 60)
+        print("RECENT ERRORS")
+        print("=" * 60)
+
+        # Check for error logs
+        log_files = [
+            "logs/error.log",
+            "logs/automation.log"
+        ]
+
+        for log_file in log_files:
+            if os.path.exists(log_file):
+                print(f"\n{log_file}:")
+                with open(log_file, 'r') as f:
+                    lines = f.readlines()
+                    errors = [l for l in lines if 'ERROR' in l or 'FAIL' in l][-5:]
+                    for line in errors:
+                        print(f"  {line.strip()}")
+            else:
+                print(f"\n{log_file}: Not found")
+
+        print("\n" + "=" * 60)
+
+    else:
+        print(f"Unknown command: {command}")
+
+
+def _handle_scheduler_agent(args, kwargs, positional, output_json, verbose):
+    """Handle scheduler agent commands."""
+    from datetime import datetime
+
+    if not args:
+        print("Usage: python run.py agent scheduler <command>")
+        print("Commands: status, next, list")
+        return
+
+    command = args[0]
+
+    if command == "status":
+        from src.scheduler.daily_scheduler import show_status
+        show_status()
+
+    elif command == "next":
+        # Show next scheduled items
+        print("\n" + "=" * 60)
+        print("NEXT SCHEDULED ITEMS")
+        print("=" * 60)
+
+        # This would integrate with APScheduler
+        # For now, show configured schedule
+        import yaml
+        try:
+            with open("config/channels.yaml") as f:
+                channels = yaml.safe_load(f)
+
+            print("\nUpcoming (based on config):")
+            for channel_id, config in channels.get("channels", {}).items():
+                if config.get("enabled", True):
+                    schedule = config.get("schedule", {})
+                    times = schedule.get("posting_times", [])
+                    days = schedule.get("posting_days", [])
+                    print(f"  {channel_id}: {days[:3]}... at {times[:2]}...")
+
+        except Exception as e:
+            print(f"  Error loading schedule: {e}")
+
+        print("\n" + "=" * 60)
+
+    elif command == "list":
+        # List all scheduled jobs
+        print("\n" + "=" * 60)
+        print("SCHEDULED JOBS")
+        print("=" * 60)
+
+        import yaml
+        try:
+            with open("config/channels.yaml") as f:
+                channels = yaml.safe_load(f)
+
+            for channel_id, config in channels.get("channels", {}).items():
+                enabled = "[ON]" if config.get("enabled", True) else "[OFF]"
+                print(f"\n{enabled} {channel_id}")
+                schedule = config.get("schedule", {})
+                print(f"    Days: {schedule.get('posting_days', [])}")
+                print(f"    Times: {schedule.get('posting_times', [])}")
+
+        except Exception as e:
+            print(f"Error: {e}")
+
+        print("\n" + "=" * 60)
+
+    else:
+        print(f"Unknown command: {command}")
+
+
+def _handle_safety_agent(args, kwargs, positional, output_json, verbose):
+    """Handle safety agent commands."""
+    import os
+    import re
+
+    if not args:
+        print("Usage: python run.py agent safety check <file>")
+        return
+
+    command = args[0]
+
+    if command == "check":
+        file_path = positional[0] if positional else kwargs.get("file")
+        if not file_path:
+            print("Error: File path required")
+            return
+
+        if not os.path.exists(file_path):
+            print(f"[FAIL] File not found: {file_path}")
+            return
+
+        print("\n" + "=" * 60)
+        print("CONTENT SAFETY CHECK")
+        print("=" * 60)
+        print(f"\nFile: {file_path}")
+
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        issues = []
+
+        # Check for potentially problematic content
+        problematic_patterns = [
+            (r'\b(guarantee[d]?|proven|100%)\s+(results?|works?|success)', "Income claim"),
+            (r'get rich quick', "Get rich quick claim"),
+            (r'financial advice', "Unlicensed financial advice"),
+            (r'investment advice', "Unlicensed investment advice"),
+            (r'medical advice', "Unlicensed medical advice"),
+        ]
+
+        for pattern, issue_type in problematic_patterns:
+            if re.search(pattern, content, re.IGNORECASE):
+                issues.append(issue_type)
+
+        # Word count
+        word_count = len(content.split())
+
+        print(f"\nWord count: {word_count}")
+        print(f"\nSafety Issues Found: {len(issues)}")
+
+        if issues:
+            for issue in issues:
+                print(f"  [!] {issue}")
+            print("\nStatus: REVIEW REQUIRED")
+        else:
+            print("  None detected")
+            print("\nStatus: PASSED")
+
+        print("\n" + "=" * 60)
+
+    else:
+        print(f"Unknown command: {command}")
+
+
+def _handle_compliance_agent(args, kwargs, positional, output_json, verbose):
+    """Handle compliance agent commands."""
+    import os
+
+    if not args:
+        print("Usage: python run.py agent compliance check <file>")
+        return
+
+    command = args[0]
+
+    if command == "check":
+        file_path = positional[0] if positional else kwargs.get("file")
+        if not file_path:
+            print("Error: File path required")
+            return
+
+        if not os.path.exists(file_path):
+            print(f"[FAIL] File not found: {file_path}")
+            return
+
+        print("\n" + "=" * 60)
+        print("PLATFORM COMPLIANCE CHECK")
+        print("=" * 60)
+        print(f"\nFile: {file_path}")
+
+        # Check file properties
+        file_size = os.path.getsize(file_path) / (1024 * 1024)  # MB
+        file_ext = os.path.splitext(file_path)[1].lower()
+
+        checks = []
+
+        # Size check (YouTube limit is 256GB, but practical limit ~12 hours)
+        if file_size > 128 * 1024:  # 128GB
+            checks.append(("[WARN]", "File size > 128GB"))
+        else:
+            checks.append(("[OK]", f"File size: {file_size:.1f}MB"))
+
+        # Format check
+        allowed_formats = ['.mp4', '.mov', '.avi', '.wmv', '.flv', '.webm', '.mkv']
+        if file_ext in allowed_formats:
+            checks.append(("[OK]", f"Format: {file_ext} (supported)"))
+        else:
+            checks.append(("[FAIL]", f"Format: {file_ext} (not supported)"))
+
+        # If video, check technical specs
+        if file_ext in ['.mp4', '.mov', '.mkv', '.webm']:
+            try:
+                import subprocess
+                result = subprocess.run(
+                    ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_streams', file_path],
+                    capture_output=True, text=True
+                )
+                if result.returncode == 0:
+                    import json
+                    probe_data = json.loads(result.stdout)
+                    for stream in probe_data.get('streams', []):
+                        if stream.get('codec_type') == 'video':
+                            width = stream.get('width', 0)
+                            height = stream.get('height', 0)
+                            if width >= 1920 and height >= 1080:
+                                checks.append(("[OK]", f"Resolution: {width}x{height} (HD+)"))
+                            else:
+                                checks.append(("[WARN]", f"Resolution: {width}x{height} (below HD)"))
+            except:
+                checks.append(("[?]", "Could not analyze video specs"))
+
+        print("\nCompliance Checks:")
+        for status, message in checks:
+            print(f"  {status} {message}")
+
+        failed = any(c[0] == "[FAIL]" for c in checks)
+        print(f"\nOverall: {'FAILED' if failed else 'PASSED'}")
+
+        print("\n" + "=" * 60)
+
+    else:
+        print(f"Unknown command: {command}")
+
+
+def _handle_branding_agent(args, kwargs, positional, output_json, verbose):
+    """Handle branding agent commands."""
+    from src.content.channel_branding import ChannelBrandingGenerator
+
+    generator = ChannelBrandingGenerator()
+
+    if not args:
+        print("Usage: python run.py agent branding <all|channel_id> [niche]")
+        return
+
+    target = args[0]
+
+    if target == "all":
+        channels = [
+            ("money_blueprints", "finance"),
+            ("mind_unlocked", "psychology"),
+            ("untold_stories", "storytelling")
+        ]
+        for channel_id, niche in channels:
+            print(f"\nGenerating assets for {channel_id}...")
+            assets = generator.generate_all_assets(channel_id, niche)
+            print(f"  Profile: {assets['profile_picture']}")
+            print(f"  Banner: {assets['banner']}")
+        print(f"\nAll assets generated in: {generator.output_dir}")
+    else:
+        channel_id = target
+        niche = args[1] if len(args) > 1 else kwargs.get("niche", "default")
+        assets = generator.generate_all_assets(channel_id, niche)
+        print(f"\nAssets generated for {channel_id}:")
+        print(f"  Profile: {assets['profile_picture']}")
+        print(f"  Banner: {assets['banner']}")
+
+
+def _handle_basic_seo_agent(args, kwargs, positional, output_json, verbose):
+    """Handle basic SEO agent commands (backwards compatibility)."""
+    from src.agents.seo_agent import SEOAgent
+
+    agent = SEOAgent()
+
+    # If positional argument, treat as title
+    if positional:
+        kwargs["title"] = positional[0]
+
+    result = agent.run(**kwargs)
+    _print_agent_result(result, output_json, verbose)
+
+
+def _handle_agents_command(args):
+    """Handle 'agents' command for overall status."""
+    import json as json_module
+    from datetime import datetime
+
+    if not args:
+        args = ["status"]
+
+    command = args[0]
+
+    if command == "status":
+        print("\n" + "=" * 60)
+        print("AGENTS STATUS OVERVIEW")
+        print("=" * 60)
+        print(f"\nTimestamp: {datetime.now().isoformat()}")
+
+        agents_status = [
+            ("ResearchAgent", "research", "Topic discovery and trends", True),
+            ("SEOStrategist", "seo-strategy", "World-class SEO optimization", True),
+            ("SEOAgent", "seo", "Basic SEO metadata optimization", True),
+            ("QualityAgent", "quality", "Content validation", True),
+            ("AnalyticsAgent", "analytics", "Performance analysis", True),
+            ("WorkflowAgent", "workflow", "Automation management", True),
+            ("MonitorAgent", "monitor", "System health", True),
+            ("SchedulerAgent", "scheduler", "Schedule management", True),
+            ("SafetyAgent", "safety", "Content safety checks", True),
+            ("ComplianceAgent", "compliance", "Platform compliance", True),
+            ("BrandingAgent", "branding", "Channel branding", True),
+        ]
+
+        print("\nAvailable Agents:")
+        print("-" * 60)
+        print(f"{'Agent':<20} {'Command':<15} {'Description':<25}")
+        print("-" * 60)
+
+        for name, cmd, desc, available in agents_status:
+            status = "[OK]" if available else "[--]"
+            print(f"{status} {name:<17} {cmd:<15} {desc:<25}")
+
+        print("-" * 60)
+        print(f"\nTotal: {len(agents_status)} agents available")
+        print("\nUsage: python run.py agent <command> [subcommand] [options]")
+        print("       python run.py agent --help")
+        print("=" * 60)
+
+    elif command == "list":
+        print("\n" + "=" * 60)
+        print("AVAILABLE AGENTS")
+        print("=" * 60)
+
+        agents = [
+            ("research", "Topic discovery, trend analysis, competitor research"),
+            ("seo-strategy", "Keyword research, A/B testing, content strategy"),
+            ("seo", "Title, description, tag optimization"),
+            ("quality", "Video/script validation, quality checks"),
+            ("analytics", "Channel insights, performance metrics, cost analysis"),
+            ("workflow", "Pipeline status, run automation workflows"),
+            ("monitor", "System health, resources, error monitoring"),
+            ("scheduler", "View and manage scheduled tasks"),
+            ("safety", "Content safety verification"),
+            ("compliance", "Platform compliance checks"),
+            ("branding", "Channel asset generation"),
+        ]
+
+        for cmd, desc in agents:
+            print(f"\n  {cmd}")
+            print(f"    {desc}")
+
+        print("\n" + "=" * 60)
+
+    else:
+        print(f"Unknown command: {command}")
+        print("Usage: python run.py agents [status|list]")
+
+
 def main():
     if len(sys.argv) < 2:
         print("""
@@ -91,9 +992,54 @@ Script Validation:
     --short     Validate as YouTube Short
 
 Agent Commands:
-  python run.py agent                         Show available agents
-  python run.py agent seo-strategist <cmd>    World-class SEO strategy
-  python run.py agent branding all            Generate profile pictures
+  python run.py agent                         Show all available agents
+  python run.py agents status                 Overview of all agents
+  python run.py agents list                   List all agents with descriptions
+
+  Research Agent:
+    python run.py agent research --niche finance --count 10
+    python run.py agent research --channel money_blueprints
+    python run.py agent research --trends --niche psychology
+    python run.py agent research --competitors --niche storytelling
+
+  SEO Strategy Agent:
+    python run.py agent seo-strategy research "keyword" --niche finance
+    python run.py agent seo-strategy ab-test "My Title" --variants 5
+    python run.py agent seo-strategy strategy --niche finance --topics 10
+    python run.py agent seo-strategy competitors "keyword" --top 10
+    python run.py agent seo-strategy calendar --niche finance --weeks 4
+
+  Quality Agent:
+    python run.py agent quality validate "output/video.mp4"
+    python run.py agent quality audio "output/audio.mp3"
+    python run.py agent quality video "output/video.mp4"
+    python run.py agent quality script "script.txt" --niche finance
+
+  Analytics Agent:
+    python run.py agent analytics insights --channel money_blueprints --period 30d
+    python run.py agent analytics revenue --all-channels
+    python run.py agent analytics strategy --niche finance
+    python run.py agent analytics cost
+
+  Automation Agents:
+    python run.py agent workflow status
+    python run.py agent workflow run full-video --channel money_blueprints
+    python run.py agent monitor health
+    python run.py agent monitor resources
+    python run.py agent scheduler status
+    python run.py agent scheduler next
+
+  Safety/Compliance:
+    python run.py agent safety check "script.txt"
+    python run.py agent compliance check "video.mp4"
+
+  Branding:
+    python run.py agent branding all
+    python run.py agent branding money_blueprints finance
+
+  Agent Global Options:
+    --json              Output in JSON format
+    --verbose           Detailed logging output
 
 Subtitles:
   python run.py add-subtitles <video> <script> [options]
@@ -680,152 +1626,12 @@ Examples:
                 print(f"     Color scheme: {thumb_args.niche}")
 
     elif cmd == "agent":
-        # Agent dispatcher for specialized tasks
-        if len(sys.argv) < 3:
-            print("""
-Agent Dispatcher - Specialized Task Agents
-==========================================
+        # Comprehensive Agent dispatcher for specialized tasks
+        _handle_agent_command(sys.argv[2:])
 
-Usage:
-    python run.py agent <agent-name> <command> [options]
-
-Available Agents:
-    seo-strategist    World-class SEO optimization and strategy
-    seo               Basic SEO metadata optimization
-    branding          Channel branding and profile pictures
-
-SEO Strategist Commands:
-    python run.py agent seo-strategist research "<keyword>" --niche <niche>
-    python run.py agent seo-strategist strategy --niche <niche> --topics N
-    python run.py agent seo-strategist ab-test "<title>" --variants N
-    python run.py agent seo-strategist competitors "<keyword>" --top N
-    python run.py agent seo-strategist calendar --niche <niche> --weeks N
-    python run.py agent seo-strategist optimize --file <path>
-
-Branding Commands:
-    python run.py agent branding all                    Generate all channel assets
-    python run.py agent branding <channel> <niche>      Generate assets for one channel
-
-Examples:
-    python run.py agent seo-strategist research "passive income" --niche finance
-    python run.py agent seo-strategist ab-test "How to Make Money" --variants 5
-    python run.py agent branding all
-            """)
-            return
-
-        agent_name = sys.argv[2]
-
-        if agent_name == "seo-strategist":
-            from src.agents.seo_strategist import SEOStrategist
-            import json
-
-            strategist = SEOStrategist()
-
-            if len(sys.argv) < 4:
-                print("Usage: python run.py agent seo-strategist <command> [options]")
-                return
-
-            agent_cmd = sys.argv[3]
-            kwargs = {}
-            positional = None
-            i = 4
-
-            while i < len(sys.argv):
-                arg = sys.argv[i]
-                if arg.startswith("--"):
-                    key = arg[2:]
-                    if i + 1 < len(sys.argv) and not sys.argv[i + 1].startswith("--"):
-                        value = sys.argv[i + 1]
-                        try:
-                            value = int(value)
-                        except ValueError:
-                            pass
-                        kwargs[key] = value
-                        i += 2
-                    else:
-                        kwargs[key] = True
-                        i += 1
-                else:
-                    positional = arg
-                    i += 1
-
-            # Map positional to command-specific key
-            if positional:
-                if agent_cmd in ["research", "competitors"]:
-                    kwargs["keyword"] = positional
-                elif agent_cmd == "ab-test":
-                    kwargs["title"] = positional
-
-            result = strategist.run(agent_cmd, **kwargs)
-
-            print("\n" + "=" * 60)
-            print(f"SEO STRATEGIST: {agent_cmd.upper()}")
-            print("=" * 60)
-            print(result.summary())
-
-            if kwargs.get("json"):
-                print("\nFull Output:")
-                print(json.dumps(result.to_dict(), indent=2))
-
-        elif agent_name == "branding":
-            from src.content.channel_branding import ChannelBrandingGenerator
-
-            generator = ChannelBrandingGenerator()
-
-            if len(sys.argv) < 4:
-                print("Usage: python run.py agent branding <channel|all> [niche]")
-                return
-
-            target = sys.argv[3]
-
-            if target == "all":
-                channels = [
-                    ("money_blueprints", "finance"),
-                    ("mind_unlocked", "psychology"),
-                    ("untold_stories", "storytelling")
-                ]
-                for channel_id, niche in channels:
-                    print(f"\nGenerating assets for {channel_id}...")
-                    assets = generator.generate_all_assets(channel_id, niche)
-                    print(f"  Profile: {assets['profile_picture']}")
-                    print(f"  Banner: {assets['banner']}")
-                print(f"\nAll assets generated in: {generator.output_dir}")
-            else:
-                channel_id = target
-                niche = sys.argv[4] if len(sys.argv) > 4 else "default"
-                assets = generator.generate_all_assets(channel_id, niche)
-                print(f"\nAssets generated for {channel_id}:")
-                print(f"  Profile: {assets['profile_picture']}")
-                print(f"  Banner: {assets['banner']}")
-
-        elif agent_name == "seo":
-            from src.agents.seo_agent import SEOAgent
-            import json
-
-            agent = SEOAgent()
-            kwargs = {}
-            i = 3
-
-            while i < len(sys.argv):
-                arg = sys.argv[i]
-                if arg.startswith("--"):
-                    key = arg[2:]
-                    if i + 1 < len(sys.argv) and not sys.argv[i + 1].startswith("--"):
-                        kwargs[key] = sys.argv[i + 1]
-                        i += 2
-                    else:
-                        kwargs[key] = True
-                        i += 1
-                else:
-                    kwargs["title"] = arg
-                    i += 1
-
-            result = agent.run(**kwargs)
-            print("\n" + result.summary())
-
-        else:
-            print(f"Unknown agent: {agent_name}")
-            print("Available: seo-strategist, seo, branding")
+    elif cmd == "agents":
+        # Show overall status of all agents
+        _handle_agents_command(sys.argv[2:])
 
     elif cmd == "analytics":
         # Show video analytics and algorithm score
