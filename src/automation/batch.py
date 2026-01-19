@@ -19,7 +19,7 @@ import json
 import argparse
 import asyncio
 import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple
@@ -539,6 +539,232 @@ async def batch_create_videos(
             processed_results.append(result)
 
     return processed_results
+
+
+def _process_video_task(args: Tuple[str, int, bool]) -> Dict:
+    """
+    Worker function for ProcessPoolExecutor.
+
+    Must be defined at module level for pickling.
+
+    Args:
+        args: Tuple of (channel_id, video_index, upload)
+
+    Returns:
+        Dict with task result
+    """
+    channel_id, video_index, upload = args
+
+    # Import inside worker to avoid pickling issues
+    from src.automation.runner import task_full_with_upload, task_full_pipeline
+
+    job_id = f"{channel_id}_{video_index}"
+    started_at = datetime.now()
+
+    try:
+        logger.info(f"[Process Worker] Starting {job_id}")
+
+        if upload:
+            result = task_full_with_upload(channel_id)
+        else:
+            result = task_full_pipeline(channel_id)
+
+        duration = (datetime.now() - started_at).total_seconds()
+
+        return {
+            "job_id": job_id,
+            "channel_id": channel_id,
+            "success": result.get("success", False),
+            "result": result,
+            "duration_seconds": duration,
+            "error": result.get("error") if not result.get("success") else None
+        }
+
+    except Exception as e:
+        duration = (datetime.now() - started_at).total_seconds()
+        error_msg = f"{type(e).__name__}: {str(e)}"
+        logger.error(f"[Process Worker] {job_id} failed: {error_msg}")
+
+        return {
+            "job_id": job_id,
+            "channel_id": channel_id,
+            "success": False,
+            "result": None,
+            "duration_seconds": duration,
+            "error": error_msg
+        }
+
+
+def batch_create_videos_parallel(
+    channels: List[str],
+    count: int,
+    max_workers: int = 3,
+    upload: bool = True
+) -> Dict:
+    """
+    Create videos in parallel using multiple processes.
+
+    Uses ProcessPoolExecutor for true parallel execution, ideal for
+    CPU-intensive video rendering tasks. Each video is processed in
+    a separate process to maximize throughput.
+
+    Args:
+        channels: List of channel IDs to process
+        count: Number of videos to create per channel
+        max_workers: Maximum parallel processes (default: 3)
+        upload: Whether to upload videos to YouTube (default: True)
+
+    Returns:
+        Dict containing:
+            - started_at: ISO timestamp when batch started
+            - completed_at: ISO timestamp when batch finished
+            - total_videos: Total number of videos attempted
+            - successful: Number of successfully created videos
+            - failed: Number of failed videos
+            - uploaded: Number of successfully uploaded videos
+            - results: List of individual job results
+            - statistics: Summary statistics
+
+    Example:
+        >>> results = batch_create_videos_parallel(
+        ...     channels=["money_blueprints", "mind_unlocked"],
+        ...     count=2,
+        ...     max_workers=3
+        ... )
+        >>> print(f"Created {results['successful']}/{results['total_videos']} videos")
+    """
+    total_videos = len(channels) * count
+    started_at = datetime.now()
+
+    logger.info(f"\n{'='*60}")
+    logger.info(f"PARALLEL VIDEO CREATION (ProcessPoolExecutor)")
+    logger.info(f"{'='*60}")
+    logger.info(f"Channels: {channels}")
+    logger.info(f"Videos per channel: {count}")
+    logger.info(f"Total videos: {total_videos}")
+    logger.info(f"Max workers: {max_workers}")
+    logger.info(f"Upload enabled: {upload}")
+    logger.info(f"{'='*60}\n")
+
+    # Build task list: (channel_id, video_index, upload)
+    tasks = []
+    for channel_id in channels:
+        for i in range(1, count + 1):
+            tasks.append((channel_id, i, upload))
+
+    # Track results
+    results_list = []
+    successful = 0
+    failed = 0
+    uploaded = 0
+
+    # Execute with ProcessPoolExecutor
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks
+        future_to_task = {
+            executor.submit(_process_video_task, task): task
+            for task in tasks
+        }
+
+        # Track progress
+        completed_count = 0
+
+        # Collect results as they complete
+        for future in as_completed(future_to_task):
+            task = future_to_task[future]
+            completed_count += 1
+
+            try:
+                result = future.result()
+                results_list.append(result)
+
+                if result["success"]:
+                    successful += 1
+                    video_url = result.get("result", {}).get("results", {}).get("video_url")
+                    if video_url:
+                        uploaded += 1
+
+                    title = result.get("result", {}).get("results", {}).get("title", "Unknown")
+                    logger.success(
+                        f"[{completed_count}/{total_videos}] "
+                        f"Completed {result['job_id']}: {title} "
+                        f"({result['duration_seconds']:.1f}s)"
+                    )
+                else:
+                    failed += 1
+                    logger.error(
+                        f"[{completed_count}/{total_videos}] "
+                        f"Failed {result['job_id']}: {result['error']}"
+                    )
+
+            except Exception as e:
+                failed += 1
+                error_msg = f"{type(e).__name__}: {str(e)}"
+                logger.error(
+                    f"[{completed_count}/{total_videos}] "
+                    f"Exception for task {task[0]}_{task[1]}: {error_msg}"
+                )
+                results_list.append({
+                    "job_id": f"{task[0]}_{task[1]}",
+                    "channel_id": task[0],
+                    "success": False,
+                    "result": None,
+                    "duration_seconds": 0,
+                    "error": error_msg
+                })
+
+    completed_at = datetime.now()
+    total_duration = (completed_at - started_at).total_seconds()
+
+    # Build summary
+    summary = {
+        "started_at": started_at.isoformat(),
+        "completed_at": completed_at.isoformat(),
+        "total_videos": total_videos,
+        "successful": successful,
+        "failed": failed,
+        "uploaded": uploaded,
+        "results": results_list,
+        "statistics": {
+            "total_duration_seconds": total_duration,
+            "avg_duration_per_video": total_duration / max(total_videos, 1),
+            "success_rate": f"{(successful / total_videos * 100):.1f}%" if total_videos > 0 else "0%",
+            "throughput_per_minute": total_videos / max(total_duration / 60, 0.1),
+            "parallelism_factor": max_workers
+        }
+    }
+
+    # Log summary
+    logger.info(f"\n{'='*60}")
+    logger.info(f"BATCH COMPLETE")
+    logger.info(f"{'='*60}")
+    logger.info(f"Total: {total_videos}")
+    logger.info(f"Successful: {successful}")
+    logger.info(f"Failed: {failed}")
+    logger.info(f"Uploaded: {uploaded}")
+    logger.info(f"Duration: {total_duration:.1f}s ({total_duration/60:.1f} min)")
+    logger.info(f"Avg per video: {total_duration/max(total_videos, 1):.1f}s")
+    logger.info(f"Throughput: {total_videos/max(total_duration/60, 0.1):.1f} videos/min")
+
+    # List uploaded videos
+    if uploaded > 0:
+        logger.info("\nUploaded Videos:")
+        for r in results_list:
+            if r.get("success"):
+                video_url = r.get("result", {}).get("results", {}).get("video_url")
+                if video_url:
+                    title = r.get("result", {}).get("results", {}).get("title", "Unknown")
+                    logger.info(f"  {video_url}")
+                    logger.info(f"    \"{title}\"")
+
+    # List failed jobs
+    if failed > 0:
+        logger.warning("\nFailed Jobs:")
+        for r in results_list:
+            if not r.get("success"):
+                logger.warning(f"  {r['job_id']}: {r.get('error', 'Unknown error')}")
+
+    return summary
 
 
 def main():

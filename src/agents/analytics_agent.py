@@ -157,7 +157,7 @@ class AnalyticsAgent:
         logger.info(f"AnalyticsAgent initialized with provider: {provider}")
 
     def _init_db(self):
-        """Initialize performance database."""
+        """Initialize performance database with optimized indexes."""
         self.performance_db.parent.mkdir(parents=True, exist_ok=True)
 
         with sqlite3.connect(self.performance_db) as conn:
@@ -175,6 +175,21 @@ class AnalyticsAgent:
                     uploaded_at DATETIME,
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
+            """)
+
+            # Create indexes for performance optimization
+            # These indexes speed up common queries by channel, niche, date, and views
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_channel ON video_performance(channel)
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_niche ON video_performance(niche)
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_uploaded_at ON video_performance(uploaded_at)
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_views ON video_performance(views)
             """)
 
     def record_video(
