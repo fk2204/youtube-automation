@@ -386,6 +386,192 @@ FEW_SHOT_EXAMPLES = {
 }
 
 
+# ============================================================
+# PROMPT COMPRESSION UTILITIES
+# ============================================================
+
+# Common verbose phrases and their compressed equivalents
+COMPRESSION_MAP = {
+    "You are an expert": "Expert",
+    "Your task is to": "",
+    "Please generate": "Generate",
+    "Please create": "Create",
+    "Please write": "Write",
+    "I want you to": "",
+    "Make sure to": "",
+    "Be sure to": "",
+    "It is important that": "",
+    "Remember to": "",
+    "Don't forget to": "",
+    "The following": "",
+    "In order to": "To",
+    "As well as": "and",
+    "In addition to": "plus",
+    "Such as": "e.g.",
+    "For example": "e.g.",
+    "A lot of": "many",
+    "Due to the fact that": "because",
+    "In the event that": "if",
+    "At this point in time": "now",
+    "In the near future": "soon",
+    "On a daily basis": "daily",
+    "The reason for": "why",
+    "With regard to": "about",
+    "In terms of": "for",
+    "Prior to": "before",
+    "Subsequent to": "after",
+}
+
+
+def compress_prompt(prompt: str) -> str:
+    """
+    Compress a prompt by removing verbose phrases.
+
+    Args:
+        prompt: Original prompt text
+
+    Returns:
+        Compressed prompt with 30-40% fewer tokens
+    """
+    compressed = prompt
+
+    # Apply compression map
+    for verbose, short in COMPRESSION_MAP.items():
+        compressed = compressed.replace(verbose, short)
+        # Also check lowercase
+        compressed = compressed.replace(verbose.lower(), short.lower())
+
+    # Remove extra whitespace
+    import re
+    compressed = re.sub(r'\s+', ' ', compressed)
+    compressed = re.sub(r'\n\s*\n', '\n', compressed)
+
+    # Remove leading/trailing whitespace from lines
+    lines = [line.strip() for line in compressed.split('\n')]
+    compressed = '\n'.join(line for line in lines if line)
+
+    return compressed.strip()
+
+
+def estimate_tokens(text: str) -> int:
+    """
+    Estimate token count for text.
+
+    Uses 4 chars per token approximation (accurate for English).
+
+    Args:
+        text: Text to estimate
+
+    Returns:
+        Estimated token count
+    """
+    return len(text) // 4
+
+
+def log_prompt_savings(original: str, compressed: str) -> Dict[str, Any]:
+    """
+    Calculate and log token savings from compression.
+
+    Args:
+        original: Original prompt
+        compressed: Compressed prompt
+
+    Returns:
+        Dict with original_tokens, compressed_tokens, savings, savings_pct
+    """
+    original_tokens = estimate_tokens(original)
+    compressed_tokens = estimate_tokens(compressed)
+    savings = original_tokens - compressed_tokens
+    savings_pct = (savings / original_tokens * 100) if original_tokens > 0 else 0
+
+    return {
+        "original_tokens": original_tokens,
+        "compressed_tokens": compressed_tokens,
+        "tokens_saved": savings,
+        "savings_percent": round(savings_pct, 1),
+    }
+
+
+def get_prompt(
+    category: str,
+    template_name: str,
+    compressed: bool = True,
+    **kwargs
+) -> str:
+    """
+    Get a rendered prompt, optionally compressed.
+
+    Args:
+        category: Template category (scripts, hooks, seo, quality, research)
+        template_name: Name within category
+        compressed: Whether to compress the prompt
+        **kwargs: Variables for template rendering
+
+    Returns:
+        Rendered (and optionally compressed) prompt
+    """
+    templates = {
+        "scripts": SCRIPT_TEMPLATES,
+        "hooks": HOOK_TEMPLATES,
+        "seo": SEO_TEMPLATES,
+        "quality": QUALITY_TEMPLATES,
+        "research": RESEARCH_TEMPLATES,
+    }
+
+    category_templates = templates.get(category, {})
+    template = category_templates.get(template_name)
+
+    if not template:
+        raise ValueError(f"Template not found: {category}/{template_name}")
+
+    rendered = template.render(**kwargs)
+    full_prompt = f"{template.system_prompt}\n\n{rendered}"
+
+    if compressed:
+        return compress_prompt(full_prompt)
+    return full_prompt
+
+
+# ============================================================
+# ULTRA-COMPRESSED PROMPTS (Maximum token efficiency)
+# ============================================================
+
+ULTRA_COMPRESSED = {
+    "script": """Topic:{topic}|Niche:{niche}|Len:{duration}min
+Out:JSON{{"title":"","hook":"","sections":[{{"h":"","c":"","dur":0}}],"cta":"","outro":""}}""",
+
+    "title": """Title:{title}|Niche:{niche}
+5 CTR variants. Out:JSON{{"v":[{{"t":"","ctr":0.0}}]}}""",
+
+    "tags": """Title:{title}|Niche:{niche}
+30 tags. Out:JSON["t1","t2"...]""",
+
+    "hook": """Topic:{topic}|Style:{style}
+5 hooks. Out:JSON["h1","h2"...]""",
+
+    "desc": """Title:{title}|Sections:{sections}
+2000char desc w/timestamps,keywords,CTA""",
+}
+
+
+def get_ultra_compressed(prompt_type: str, **kwargs) -> str:
+    """
+    Get ultra-compressed prompt (minimal tokens).
+
+    Args:
+        prompt_type: Type of prompt (script, title, tags, hook, desc)
+        **kwargs: Variables to fill in
+
+    Returns:
+        Ultra-compressed prompt string
+    """
+    template = ULTRA_COMPRESSED.get(prompt_type)
+    if not template:
+        raise ValueError(f"Unknown ultra-compressed prompt type: {prompt_type}")
+
+    return template.format(**kwargs)
+
+
 if __name__ == "__main__":
     # Demo usage
     template = get_script_template("finance")

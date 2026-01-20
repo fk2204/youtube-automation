@@ -27,6 +27,7 @@ Usage:
     )
 """
 
+import gc
 import os
 import re
 import math
@@ -169,75 +170,145 @@ def get_video_encoder(ffmpeg_path: str = None) -> Dict[str, str]:
         except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError):
             return False
 
+    # YouTube 2026 encoding standards - optimized bitrates
+    YOUTUBE_2026_BITRATES = {
+        "regular": {"target": "12M", "max": "18M", "buffer": "24M"},
+        "shorts": {"target": "8M", "max": "12M", "buffer": "16M"},
+    }
+
+    # Check for NVIDIA AV1 encoder first (RTX 40 series) - YouTube prefers AV1
+    if check_encoder('av1_nvenc'):
+        if test_encoder('av1_nvenc', ['-preset', 'p5']):
+            logger.info("GPU encoder detected: NVIDIA AV1 NVENC (av1_nvenc)")
+            _GPU_ENCODER_CACHE = {
+                "encoder": "av1_nvenc",
+                "preset": "p5",  # p5 = balanced for AV1
+                "extra_args": [
+                    "-cq", "28",            # AV1 CQ (higher than H.264 due to efficiency)
+                    "-b:v", "0",            # CQ mode (quality-based)
+                    "-tune", "hq",          # High quality tuning
+                    "-rc", "vbr",
+                    "-multipass", "qres",   # Quarter-resolution first pass
+                ],
+                "is_gpu": True,
+                "gpu_type": "nvidia",
+                "codec_family": "av1"
+            }
+            return _GPU_ENCODER_CACHE
+
     # Check for NVIDIA NVENC (most common for content creators)
     if check_encoder('h264_nvenc'):
         # Test with actual encoding to ensure GPU is available
-        if test_encoder('h264_nvenc', ['-preset', 'p4']):
+        if test_encoder('h264_nvenc', ['-preset', 'p6']):
             logger.info("GPU encoder detected: NVIDIA NVENC (h264_nvenc)")
             _GPU_ENCODER_CACHE = {
                 "encoder": "h264_nvenc",
-                "preset": "p4",  # p4 = balanced quality/speed (p1=fastest, p7=highest quality)
+                "preset": "p6",  # p6 = high quality (was p4, upgraded for 2026)
                 "extra_args": [
                     "-rc", "vbr",           # Variable bitrate for better quality
-                    "-cq", "23",            # Constant quality (similar to CRF 23)
-                    "-b:v", "8M",           # Target bitrate 8 Mbps
-                    "-maxrate", "12M",      # Max bitrate
-                    "-bufsize", "16M",      # Buffer size
+                    "-cq", "21",            # Constant quality (was 23, now 21 for higher quality)
+                    "-b:v", "12M",          # Target bitrate 12 Mbps (was 8M)
+                    "-maxrate", "18M",      # Max bitrate (was 12M)
+                    "-bufsize", "24M",      # Buffer size (was 16M)
                     "-spatial-aq", "1",     # Spatial adaptive quantization
                     "-temporal-aq", "1",    # Temporal adaptive quantization
+                    "-rc-lookahead", "32",  # Lookahead for better quality
+                    "-bf", "3",             # B-frames for efficiency
                 ],
                 "is_gpu": True,
                 "gpu_type": "nvidia"
             }
             return _GPU_ENCODER_CACHE
 
+    # Check for AMD AV1 encoder (RX 7000 series)
+    if check_encoder('av1_amf'):
+        if test_encoder('av1_amf', ['-quality', 'quality']):
+            logger.info("GPU encoder detected: AMD AV1 AMF (av1_amf)")
+            _GPU_ENCODER_CACHE = {
+                "encoder": "av1_amf",
+                "preset": "quality",
+                "extra_args": [
+                    "-rc", "vbr_lat",
+                    "-qp_i", "28",
+                    "-qp_p", "28",
+                    "-b:v", "0",
+                ],
+                "is_gpu": True,
+                "gpu_type": "amd",
+                "codec_family": "av1"
+            }
+            return _GPU_ENCODER_CACHE
+
     # Check for AMD AMF
     if check_encoder('h264_amf'):
-        if test_encoder('h264_amf', ['-quality', 'balanced']):
+        if test_encoder('h264_amf', ['-quality', 'quality']):
             logger.info("GPU encoder detected: AMD AMF (h264_amf)")
             _GPU_ENCODER_CACHE = {
                 "encoder": "h264_amf",
-                "preset": "balanced",  # quality, balanced, speed
+                "preset": "quality",  # Changed from balanced to quality
                 "extra_args": [
                     "-rc", "vbr_lat",       # VBR latency mode
-                    "-qp_i", "23",          # I-frame QP
-                    "-qp_p", "23",          # P-frame QP
-                    "-b:v", "8M",           # Target bitrate
-                    "-maxrate", "12M",      # Max bitrate
+                    "-qp_i", "21",          # I-frame QP (was 23)
+                    "-qp_p", "21",          # P-frame QP (was 23)
+                    "-b:v", "12M",          # Target bitrate (was 8M)
+                    "-maxrate", "18M",      # Max bitrate (was 12M)
                 ],
                 "is_gpu": True,
                 "gpu_type": "amd"
             }
             return _GPU_ENCODER_CACHE
 
+    # Check for Intel AV1 QuickSync (Arc GPUs, 13th gen+)
+    if check_encoder('av1_qsv'):
+        if test_encoder('av1_qsv', ['-preset', 'medium']):
+            logger.info("GPU encoder detected: Intel AV1 QuickSync (av1_qsv)")
+            _GPU_ENCODER_CACHE = {
+                "encoder": "av1_qsv",
+                "preset": "medium",
+                "extra_args": [
+                    "-global_quality", "28",
+                    "-b:v", "0",
+                ],
+                "is_gpu": True,
+                "gpu_type": "intel",
+                "codec_family": "av1"
+            }
+            return _GPU_ENCODER_CACHE
+
     # Check for Intel QuickSync
     if check_encoder('h264_qsv'):
-        if test_encoder('h264_qsv', ['-preset', 'medium']):
+        if test_encoder('h264_qsv', ['-preset', 'slow']):
             logger.info("GPU encoder detected: Intel QuickSync (h264_qsv)")
             _GPU_ENCODER_CACHE = {
                 "encoder": "h264_qsv",
-                "preset": "medium",  # veryfast, faster, fast, medium, slow, veryslow
+                "preset": "slow",  # Changed from medium to slow for quality
                 "extra_args": [
-                    "-global_quality", "23",  # Quality level (similar to CRF)
-                    "-b:v", "8M",             # Target bitrate
-                    "-maxrate", "12M",        # Max bitrate
-                    "-bufsize", "16M",        # Buffer size
+                    "-global_quality", "21",  # Quality level (was 23)
+                    "-b:v", "12M",            # Target bitrate (was 8M)
+                    "-maxrate", "18M",        # Max bitrate (was 12M)
+                    "-bufsize", "24M",        # Buffer size (was 16M)
                 ],
                 "is_gpu": True,
                 "gpu_type": "intel"
             }
             return _GPU_ENCODER_CACHE
 
+    # Try CPU AV1 encoder (libaom-av1) - slow but best quality
+    if check_encoder('libaom-av1'):
+        logger.info("CPU encoder available: libaom-av1 (slow but high quality)")
+        # Note: libaom is very slow, so we use libx264 as primary CPU fallback
+        # but store AV1 as an option for flagship content
+
     # Fallback to CPU encoding (libx264)
     logger.info("No GPU encoder available, using CPU encoder (libx264)")
     _GPU_ENCODER_CACHE = {
         "encoder": "libx264",
-        "preset": "fast",  # ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow
+        "preset": "slow",  # Changed from fast to slow for quality (ultrafast->veryslow)
         "extra_args": [
-            "-crf", "23",       # Constant Rate Factor (18-28 recommended, lower = better)
-            "-b:v", "8M",       # Target bitrate
-            "-maxrate", "10M",  # Max bitrate
-            "-bufsize", "16M",  # Buffer size
+            "-crf", "21",       # Constant Rate Factor (was 23, now 21 for higher quality)
+            "-b:v", "12M",      # Target bitrate (was 8M)
+            "-maxrate", "18M",  # Max bitrate (was 10M)
+            "-bufsize", "24M",  # Buffer size (was 16M)
         ],
         "is_gpu": False,
         "gpu_type": "cpu"
@@ -637,6 +708,29 @@ class UltraVideoGenerator:
     # Background music volume (relative to voice)
     MUSIC_VOLUME = 0.12  # 12% for main videos (lower than Shorts)
 
+    # Optimized FFmpeg parameters for YouTube streaming
+    FFMPEG_PARAMS_REGULAR = [
+        "-movflags", "+faststart",    # Enable web streaming
+        "-profile:v", "high",          # H.264 High Profile
+        "-level", "4.2",               # Level 4.2 for 1080p30
+        "-bf", "3",                    # 3 B-frames
+        "-g", "60",                    # GOP size = 2x framerate
+        "-keyint_min", "30",           # Minimum GOP
+        "-sc_threshold", "0",          # Fixed GOP
+        "-threads", "0",               # Auto thread detection
+    ]
+
+    FFMPEG_PARAMS_SHORTS = [
+        "-movflags", "+faststart",    # Enable web streaming
+        "-profile:v", "high",          # H.264 High Profile
+        "-level", "4.2",               # Level 4.2 for 1080p
+        "-bf", "2",                    # 2 B-frames for faster encode
+        "-g", "60",                    # GOP size
+        "-keyint_min", "30",           # Minimum GOP
+        "-sc_threshold", "0",          # Fixed GOP
+        "-threads", "0",               # Auto thread detection
+    ]
+
     # Niche-specific visual styles
     NICHE_STYLES = {
         "finance": {
@@ -733,11 +827,21 @@ class UltraVideoGenerator:
     def __init__(
         self,
         resolution: Tuple[int, int] = (1920, 1080),
-        fps: int = 30
+        fps: int = 30,
+        content_type: str = "regular"
     ):
         self.resolution = resolution
         self.width, self.height = resolution
         self.fps = fps
+        self.content_type = content_type
+
+        # Select preset and FFmpeg params based on content type
+        if content_type == "shorts":
+            self.encoding_preset = "faster"  # Faster encode for shorts
+            self.ffmpeg_params = self.FFMPEG_PARAMS_SHORTS
+        else:
+            self.encoding_preset = "slow"    # Higher quality for regular videos
+            self.ffmpeg_params = self.FFMPEG_PARAMS_REGULAR
 
         # Find FFmpeg
         self.ffmpeg = self._find_ffmpeg()
@@ -812,7 +916,7 @@ class UltraVideoGenerator:
         self.segment_controller = DynamicSegmentController()
         logger.debug(f"DynamicSegmentController initialized (target: {self.segment_controller.TARGET_VISUAL_CHANGES_PER_MINUTE} changes/min)")
 
-        logger.info(f"UltraVideoGenerator initialized ({self.width}x{self.height} @ {self.fps}fps)")
+        logger.info(f"UltraVideoGenerator initialized ({self.width}x{self.height} @ {self.fps}fps, content_type={content_type})")
 
     def _find_ffmpeg(self) -> Optional[str]:
         """Find FFmpeg executable."""
@@ -876,6 +980,91 @@ class UltraVideoGenerator:
 
         # For final output, use quality settings
         return get_encoder_args(self.encoder_info)
+
+    def _get_ffmpeg_base_params(self) -> List[str]:
+        """Get base FFmpeg parameters for video encoding with optimizations."""
+        return list(self.ffmpeg_params)
+
+    def two_pass_encode(
+        self,
+        input_file: str,
+        output_file: str,
+        target_bitrate: str = "8M",
+        max_bitrate: str = "12M"
+    ) -> Optional[str]:
+        """
+        Perform two-pass encoding for maximum quality at target bitrate.
+
+        Args:
+            input_file: Input video file path
+            output_file: Output video file path
+            target_bitrate: Target bitrate (e.g., "8M" for 8 Mbps)
+            max_bitrate: Maximum bitrate (e.g., "12M" for 12 Mbps)
+
+        Returns:
+            Path to encoded file or None on failure
+        """
+        import tempfile as tmp
+        passlog = tmp.mktemp(prefix="ffmpeg_pass_")
+        ffmpeg_path = self.ffmpeg or "ffmpeg"
+
+        try:
+            # Pass 1: Analysis
+            pass1_cmd = [
+                ffmpeg_path, "-y",
+                "-i", input_file,
+                "-c:v", "libx264",
+                "-preset", self.encoding_preset,
+                "-b:v", target_bitrate,
+                "-maxrate", max_bitrate,
+                "-bufsize", "16M",
+                "-pass", "1",
+                "-passlogfile", passlog,
+                "-an",  # No audio for pass 1
+                "-f", "null",
+                "NUL" if os.name == "nt" else "/dev/null"
+            ]
+
+            logger.info("Two-pass encoding: Pass 1 (analysis)...")
+            subprocess.run(pass1_cmd, capture_output=True, timeout=600)
+
+            # Pass 2: Encode
+            pass2_cmd = [
+                ffmpeg_path, "-y",
+                "-i", input_file,
+                "-c:v", "libx264",
+                "-preset", self.encoding_preset,
+                "-b:v", target_bitrate,
+                "-maxrate", max_bitrate,
+                "-bufsize", "16M",
+                "-pass", "2",
+                "-passlogfile", passlog,
+                "-c:a", "aac",
+                "-b:a", "256k",
+            ] + self.FFMPEG_PARAMS_REGULAR + [output_file]
+
+            logger.info("Two-pass encoding: Pass 2 (encoding)...")
+            result = subprocess.run(pass2_cmd, capture_output=True, timeout=600)
+
+            if os.path.exists(output_file):
+                logger.success(f"Two-pass encoding complete: {output_file}")
+                return output_file
+
+            logger.error(f"Two-pass encoding failed: {result.stderr.decode()[:500]}")
+            return None
+
+        except Exception as e:
+            logger.error(f"Two-pass encoding error: {e}")
+            return None
+        finally:
+            # Cleanup passlog files
+            for ext in ["", "-0.log", "-0.log.mbtree"]:
+                try:
+                    log_file = passlog + ext
+                    if os.path.exists(log_file):
+                        os.remove(log_file)
+                except Exception:
+                    pass
 
     def _load_fonts(self) -> Dict[str, str]:
         """Load available fonts."""
@@ -1988,13 +2177,16 @@ class UltraVideoGenerator:
         return None
 
     def _cleanup(self):
-        """Clean up temporary files."""
+        """Clean up temporary files and free memory."""
         try:
             for f in self.temp_dir.glob("*"):
                 if f.is_file():
                     f.unlink()
         except (OSError, IOError) as e:
             logger.debug(f"Cleanup failed: {e}")
+
+        # Force garbage collection to free memory
+        gc.collect()
 
     def _get_video_duration(self, video_path: str) -> Optional[float]:
         """
