@@ -180,6 +180,11 @@ class SuccessTracker:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_daily_date ON daily_metrics(date)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_daily_channel ON daily_metrics(channel_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_token_date ON token_usage(date)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_token_provider ON token_usage(provider)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_token_operation ON token_usage(operation)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_token_date_provider ON token_usage(date, provider)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_daily_date_channel ON daily_metrics(date, channel_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_goals_achieved ON goals(achieved, deadline)")
 
         conn.commit()
         conn.close()

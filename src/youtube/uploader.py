@@ -32,6 +32,36 @@ except ImportError:
 
 from .auth import YouTubeAuth
 
+# Import YouTube optimization utilities
+try:
+    from src.utils.youtube_optimizer import (
+        UploadTimingOptimizer,
+        FirstHourBooster,
+        TitlePatternAnalyzer,
+        generate_chapters_from_script,
+        optimize_description_keywords,
+    )
+    YOUTUBE_OPTIMIZER_AVAILABLE = True
+except ImportError:
+    YOUTUBE_OPTIMIZER_AVAILABLE = False
+    logger.debug("youtube_optimizer module not available - advanced optimizations disabled")
+
+# Import AI Disclosure Tracker
+try:
+    from src.compliance.ai_disclosure import AIDisclosureTracker, DisclosureMetadata
+    AI_DISCLOSURE_AVAILABLE = True
+except ImportError:
+    AI_DISCLOSURE_AVAILABLE = False
+    logger.debug("AI disclosure module not available")
+
+# Import Metadata Optimizer
+try:
+    from src.seo.metadata_optimizer import MetadataOptimizer, OptimizedMetadata
+    METADATA_OPTIMIZER_AVAILABLE = True
+except ImportError:
+    METADATA_OPTIMIZER_AVAILABLE = False
+    logger.debug("Metadata optimizer module not available")
+
 
 # ============================================================
 # SEO OPTIMIZATION CONSTANTS
@@ -839,6 +869,546 @@ class YouTubeUploader:
         except HttpError as e:
             logger.error(f"Failed to create playlist: {e}")
             return None
+
+    # ============================================================
+    # YOUTUBE ALGORITHM OPTIMIZATION METHODS
+    # ============================================================
+
+    def get_optimal_upload_time(
+        self,
+        niche: str = "default",
+        target_regions: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """
+        Calculate the optimal upload time for maximum algorithm boost.
+
+        Uses UploadTimingOptimizer to determine the best time to upload
+        based on target audience regions and niche-specific patterns.
+
+        Args:
+            niche: Content niche (finance, psychology, storytelling, etc.)
+            target_regions: List of region codes (US_EST, UK, etc.)
+
+        Returns:
+            Dict with recommended_datetime, reasoning, and alternatives
+
+        Example:
+            uploader = YouTubeUploader()
+            result = uploader.get_optimal_upload_time("finance", ["US_EST", "UK"])
+            print(f"Best time: {result['recommended_datetime']}")
+        """
+        if not YOUTUBE_OPTIMIZER_AVAILABLE:
+            logger.warning("YouTube optimizer not available")
+            return {
+                "error": "youtube_optimizer module not installed",
+                "recommended_datetime": None
+            }
+
+        optimizer = UploadTimingOptimizer()
+        result = optimizer.calculate_optimal_time(niche, target_regions)
+
+        return {
+            "recommended_datetime": result.recommended_datetime.isoformat(),
+            "target_regions": result.target_regions,
+            "peak_hours_utc": result.peak_hours_utc,
+            "confidence_score": result.confidence_score,
+            "reasoning": result.reasoning,
+            "alternative_times": [dt.isoformat() for dt in result.alternative_times]
+        }
+
+    def schedule_first_hour_actions(
+        self,
+        video_id: str,
+        niche: str = "default",
+        playlist_ids: Optional[List[str]] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Schedule engagement actions for the critical first hour after upload.
+
+        YouTube's algorithm heavily weights engagement in the first 60 minutes.
+        This schedules strategic actions to maximize early engagement signals.
+
+        Args:
+            video_id: The uploaded video's ID
+            niche: Content niche for customized engagement messages
+            playlist_ids: List of playlist IDs to add the video to
+
+        Returns:
+            List of scheduled actions with timing
+
+        Example:
+            uploader = YouTubeUploader()
+            actions = uploader.schedule_first_hour_actions("abc123", "finance")
+            for action in actions:
+                print(f"{action['delay_seconds']}s: {action['description']}")
+        """
+        if not YOUTUBE_OPTIMIZER_AVAILABLE:
+            logger.warning("YouTube optimizer not available")
+            return []
+
+        booster = FirstHourBooster()
+        actions = booster.schedule_post_upload_actions(
+            video_id=video_id,
+            niche=niche,
+            playlist_ids=playlist_ids
+        )
+
+        # Convert to dict format
+        return [
+            {
+                "delay_seconds": a.delay_seconds,
+                "action_type": a.action_type,
+                "description": a.description,
+                "priority": a.priority,
+                "parameters": a.parameters
+            }
+            for a in actions
+        ]
+
+    def execute_first_hour_action(
+        self,
+        action: Dict[str, Any]
+    ) -> bool:
+        """
+        Execute a single first-hour engagement action.
+
+        Args:
+            action: Action dict from schedule_first_hour_actions
+
+        Returns:
+            True if action was executed successfully
+        """
+        action_type = action.get("action_type", "")
+        video_id = action.get("parameters", {}).get("video_id", "")
+
+        logger.info(f"Executing first-hour action: {action_type}")
+
+        try:
+            if action_type == "add_to_playlist":
+                playlist_ids = action.get("parameters", {}).get("playlist_ids", [])
+                for playlist_id in playlist_ids:
+                    self.add_video_to_playlist(video_id, playlist_id)
+                return True
+
+            elif action_type == "pin_engagement_comment":
+                comment_text = action.get("parameters", {}).get("comment_text", "")
+                if comment_text:
+                    # Post comment (pinning requires separate API call)
+                    response = self.youtube.commentThreads().insert(
+                        part="snippet",
+                        body={
+                            "snippet": {
+                                "videoId": video_id,
+                                "topLevelComment": {
+                                    "snippet": {
+                                        "textOriginal": comment_text
+                                    }
+                                }
+                            }
+                        }
+                    ).execute()
+                    logger.success(f"Posted engagement comment: {response.get('id', 'unknown')}")
+                return True
+
+            else:
+                logger.info(f"Action '{action_type}' logged for manual execution")
+                return True
+
+        except HttpError as e:
+            logger.error(f"Failed to execute action {action_type}: {e}")
+            return False
+
+    def analyze_title(
+        self,
+        title: str,
+        niche: str = "default"
+    ) -> Dict[str, Any]:
+        """
+        Analyze a video title against viral patterns.
+
+        Uses TitlePatternAnalyzer to score titles and provide
+        improvement suggestions based on proven patterns.
+
+        Args:
+            title: The video title to analyze
+            niche: Content niche for pattern matching
+
+        Returns:
+            Dict with score, matches, and suggestions
+
+        Example:
+            uploader = YouTubeUploader()
+            result = uploader.analyze_title("5 Money Mistakes", "finance")
+            print(f"Score: {result['score']}/100")
+        """
+        if not YOUTUBE_OPTIMIZER_AVAILABLE:
+            logger.warning("YouTube optimizer not available")
+            return {"error": "youtube_optimizer module not installed", "score": 0}
+
+        analyzer = TitlePatternAnalyzer()
+        result = analyzer.analyze_title(title, niche)
+
+        return {
+            "title": result.title,
+            "score": result.score,
+            "viral_potential": result.viral_potential,
+            "has_number": result.has_number,
+            "has_power_word": result.has_power_word,
+            "has_question": result.has_question,
+            "has_brackets": result.has_brackets,
+            "character_count": result.character_count,
+            "pattern_matches": result.pattern_matches,
+            "suggestions": result.suggestions
+        }
+
+    def optimize_video_metadata(
+        self,
+        title: str,
+        description: str,
+        tags: List[str],
+        niche: str = "default",
+        target_keywords: Optional[List[str]] = None,
+        script: Optional[Dict[str, Any]] = None,
+        duration_seconds: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """
+        Fully optimize video metadata for YouTube algorithm.
+
+        Applies all available optimizations:
+        1. Title analysis and scoring
+        2. Description keyword density optimization
+        3. Auto-generated chapters from script
+        4. SEO-optimized tags
+
+        Args:
+            title: Video title
+            description: Video description
+            tags: Video tags
+            niche: Content niche
+            target_keywords: Keywords to optimize for
+            script: Optional script dict for chapter generation
+            duration_seconds: Video duration for chapter timestamps
+
+        Returns:
+            Dict with optimized metadata and analysis
+
+        Example:
+            uploader = YouTubeUploader()
+            result = uploader.optimize_video_metadata(
+                title="5 Money Mistakes",
+                description="Learn about money...",
+                tags=["money", "finance"],
+                niche="finance",
+                target_keywords=["money", "investing", "wealth"]
+            )
+            print(result["optimized_title"])
+            print(result["optimized_description"])
+        """
+        if not YOUTUBE_OPTIMIZER_AVAILABLE:
+            logger.warning("YouTube optimizer not available")
+            return {
+                "optimized_title": title,
+                "optimized_description": description,
+                "optimized_tags": tags,
+                "error": "youtube_optimizer module not installed"
+            }
+
+        result = {
+            "original_title": title,
+            "original_description": description,
+            "optimized_title": title,
+            "optimized_description": description,
+            "optimized_tags": list(tags) if tags else []
+        }
+
+        # 1. Analyze and potentially improve title
+        title_analysis = self.analyze_title(title, niche)
+        result["title_analysis"] = title_analysis
+
+        # 2. Optimize description keywords
+        keywords = target_keywords or []
+        if not keywords and tags:
+            keywords = list(tags)[:5]
+
+        if keywords:
+            keyword_result = optimize_description_keywords(
+                description,
+                keywords,
+                target_density=0.025
+            )
+            result["optimized_description"] = keyword_result.optimized_text
+            result["keyword_optimization"] = {
+                "original_density": keyword_result.original_density,
+                "optimized_density": keyword_result.optimized_density,
+                "keywords_added": keyword_result.keywords_added
+            }
+
+        # 3. Generate chapters if script provided
+        if script and duration_seconds:
+            chapters = generate_chapters_from_script(script, duration_seconds)
+            result["optimized_description"] = result["optimized_description"] + chapters
+            result["chapters_generated"] = True
+
+        # 4. Add niche-specific hashtags
+        niche_hashtags = NICHE_HASHTAGS.get(niche, NICHE_HASHTAGS.get("default", []))
+        if niche_hashtags:
+            # Add hashtags to end of description
+            hashtag_line = "\n\n" + " ".join(niche_hashtags[:5])
+            result["optimized_description"] += hashtag_line
+
+        logger.success("Video metadata optimized for YouTube algorithm")
+        return result
+
+    def upload_with_optimization(
+        self,
+        video_file: str,
+        title: str,
+        description: str,
+        tags: List[str] = None,
+        niche: str = "default",
+        target_keywords: List[str] = None,
+        script: Dict[str, Any] = None,
+        privacy: str = "unlisted",
+        thumbnail: str = None,
+        playlist_id: str = None,
+        schedule_first_hour: bool = True
+    ) -> Optional["UploadResult"]:
+        """
+        Upload a video with full YouTube algorithm optimization.
+
+        This method:
+        1. Optimizes all metadata before upload
+        2. Uploads the video
+        3. Optionally schedules first-hour engagement actions
+
+        Args:
+            video_file: Path to the video file
+            title: Video title
+            description: Video description
+            tags: Video tags
+            niche: Content niche for optimization
+            target_keywords: Keywords to optimize for
+            script: Script dict for chapter generation
+            privacy: Privacy status (public, unlisted, private)
+            thumbnail: Path to thumbnail image
+            playlist_id: Playlist to add video to
+            schedule_first_hour: Whether to schedule first-hour actions
+
+        Returns:
+            UploadResult with video details and scheduled actions
+
+        Example:
+            uploader = YouTubeUploader()
+            result = uploader.upload_with_optimization(
+                video_file="video.mp4",
+                title="5 Money Mistakes",
+                description="Learn about money...",
+                tags=["money", "finance"],
+                niche="finance",
+                target_keywords=["money", "investing"]
+            )
+            if result:
+                print(f"Video uploaded: {result.video_url}")
+        """
+        # Optimize metadata
+        duration_seconds = None
+        if script:
+            # Try to get duration from script
+            sections = script.get("sections", [])
+            duration_seconds = sum(
+                s.get("duration_seconds", 30) for s in sections
+            ) if sections else None
+
+        optimized = self.optimize_video_metadata(
+            title=title,
+            description=description,
+            tags=tags or [],
+            niche=niche,
+            target_keywords=target_keywords,
+            script=script,
+            duration_seconds=duration_seconds
+        )
+
+        # Upload with optimized metadata
+        result = self.upload_video(
+            video_file=video_file,
+            title=optimized.get("optimized_title", title),
+            description=optimized.get("optimized_description", description),
+            tags=optimized.get("optimized_tags", tags),
+            privacy=privacy,
+            thumbnail=thumbnail
+        )
+
+        if result and schedule_first_hour:
+            # Schedule first-hour engagement actions
+            playlist_ids = [playlist_id] if playlist_id else None
+            actions = self.schedule_first_hour_actions(
+                video_id=result.video_id,
+                niche=niche,
+                playlist_ids=playlist_ids
+            )
+            result.scheduled_actions = actions
+            logger.info(f"Scheduled {len(actions)} first-hour engagement actions")
+
+        return result
+
+
+    def upload_with_full_optimization(
+        self,
+        video_file: str,
+        title: str,
+        description: str,
+        tags: List[str] = None,
+        niche: str = "default",
+        video_id: str = None,
+        script: str = "",
+        duration_seconds: int = 600,
+        privacy: str = "unlisted",
+        thumbnail: str = None,
+        playlist_id: str = None,
+        ai_disclosure_enabled: bool = True,
+        metadata_optimization_enabled: bool = True,
+        auto_chapters: bool = True
+    ) -> UploadResult:
+        """
+        Upload a video with AI disclosure and full metadata optimization.
+
+        This method combines:
+        1. AI disclosure tracking and description append
+        2. Metadata optimization (IMPACT formula titles, keyword front-loading)
+        3. Auto-generated chapters from script
+        4. SEO-optimized tags
+
+        Args:
+            video_file: Path to the video file
+            title: Video title
+            description: Video description
+            tags: Video tags
+            niche: Content niche for optimization
+            video_id: Unique video ID for tracking (auto-generated if not provided)
+            script: Script text for chapter generation
+            duration_seconds: Video duration for chapter timestamps
+            privacy: Privacy status (public, unlisted, private)
+            thumbnail: Path to thumbnail image
+            playlist_id: Playlist to add video to
+            ai_disclosure_enabled: Add AI disclosure to description
+            metadata_optimization_enabled: Optimize title/description/tags
+            auto_chapters: Auto-generate chapters from script
+
+        Returns:
+            UploadResult with video details
+        """
+        import uuid
+
+        # Generate video ID if not provided
+        if not video_id:
+            video_id = f"vid_{uuid.uuid4().hex[:12]}"
+
+        optimized_title = title
+        optimized_description = description
+        optimized_tags = tags or []
+        chapters = []
+
+        # 1. Metadata Optimization
+        if metadata_optimization_enabled and METADATA_OPTIMIZER_AVAILABLE:
+            try:
+                optimizer = MetadataOptimizer()
+
+                # Get keywords from tags or generate from title
+                keywords = list(tags) if tags else [title.split()[0]] if title else []
+
+                # Create complete optimized metadata
+                metadata = optimizer.create_complete_metadata(
+                    topic=title,
+                    keywords=keywords,
+                    script=script,
+                    video_duration=duration_seconds
+                )
+
+                optimized_title = metadata.title
+                optimized_tags = metadata.tags
+                chapters = metadata.chapters
+
+                # Build optimized description with chapters
+                optimized_description = description
+
+                # Add chapters if generated and auto_chapters enabled
+                if auto_chapters and chapters:
+                    chapter_text = "\n\n" + "=" * 30 + "\nCHAPTERS:\n" + "=" * 30 + "\n"
+                    for chapter in chapters:
+                        timestamp = self._format_timestamp(chapter.get("start", 0))
+                        chapter_title = chapter.get("title", "Chapter")
+                        chapter_text += f"{timestamp} - {chapter_title}\n"
+                    optimized_description += chapter_text
+
+                logger.info(f"[Upload] Metadata optimized: title_score={metadata.title_score:.1f}")
+
+            except Exception as e:
+                logger.warning(f"[Upload] Metadata optimization failed: {e}")
+
+        # 2. AI Disclosure
+        if ai_disclosure_enabled and AI_DISCLOSURE_AVAILABLE:
+            try:
+                tracker = AIDisclosureTracker()
+
+                # Track AI usage (TTS and script generation are common)
+                tracker.track_voice_generation(video_id, "edge-tts")
+                tracker.track_script_generation(video_id, "groq")
+
+                # Get disclosure metadata
+                disclosure = tracker.get_disclosure_metadata(video_id)
+
+                if disclosure.requires_disclosure:
+                    # Append disclosure to description
+                    disclaimer = disclosure.get_description_disclaimer()
+                    optimized_description += disclaimer
+                    logger.info(f"[Upload] AI disclosure added: {disclosure.disclosure_level.value}")
+
+            except Exception as e:
+                logger.warning(f"[Upload] AI disclosure tracking failed: {e}")
+
+        # 3. SEO optimization (existing)
+        seo = YouTubeSEOOptimizer(niche=niche)
+        optimized_tags = seo.optimize_tags(optimized_tags, optimized_title)
+
+        # Add niche hashtags to description
+        hashtags = seo.get_hashtags()
+        optimized_description += "\n\n" + " ".join(hashtags[:5])
+
+        # 4. Upload with optimized metadata
+        return self._upload_video_internal(
+            video_file=video_file,
+            title=optimized_title,
+            description=optimized_description,
+            tags=optimized_tags,
+            category_id=seo.get_optimal_category(),
+            privacy=privacy,
+            thumbnail_file=thumbnail,
+            playlist_id=playlist_id
+        )
+
+    def _format_timestamp(self, seconds: float) -> str:
+        """Format seconds as MM:SS or HH:MM:SS."""
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        secs = int(seconds % 60)
+
+        if hours > 0:
+            return f"{hours}:{minutes:02d}:{secs:02d}"
+        return f"{minutes}:{secs:02d}"
+
+    def add_video_to_playlist(self, video_id: str, playlist_id: str) -> bool:
+        """
+        Add a video to a playlist (alias for add_to_playlist).
+
+        Args:
+            video_id: YouTube video ID
+            playlist_id: YouTube playlist ID
+
+        Returns:
+            True on success
+        """
+        return self.add_to_playlist(video_id, playlist_id)
 
 
 # Example usage

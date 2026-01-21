@@ -3,11 +3,12 @@ Token Optimization System for YouTube Automation
 
 Comprehensive system to reduce API costs by 50%+ through:
 1. Prompt caching - Cache repeated prompts with intelligent invalidation
-2. Response compression - Extract only needed data from responses
-3. Batch processing - Combine multiple small requests into one
-4. Smart provider routing - Use free providers when possible
-5. Token budget allocation - Per-agent budgets with enforcement
-6. Automatic fallback - Switch to cheaper providers when budget low
+2. Semantic caching - Find similar prompts even if not exact matches
+3. Response compression - Extract only needed data from responses
+4. Batch processing - Combine multiple small requests into one
+5. Smart provider routing - Use free providers when possible
+6. Token budget allocation - Per-agent budgets with enforcement
+7. Automatic fallback - Switch to cheaper providers when budget low
 
 Usage:
     from src.utils.token_optimizer import (
@@ -15,7 +16,9 @@ Usage:
         get_token_optimizer,
         optimize_prompt,
         batch_requests,
-        smart_route
+        smart_route,
+        SemanticCache,
+        check_semantic_cache,
     )
 
     optimizer = get_token_optimizer()
@@ -26,8 +29,29 @@ Usage:
     # Route to best provider based on task and budget
     provider = optimizer.smart_route(task_type="title_generation")
 
+    # Check cache (includes semantic matching by default)
+    cached = optimizer.get_cached(prompt)  # Tries exact, then semantic match
+
     # Batch multiple requests
     results = optimizer.batch_process(requests_list)
+
+Semantic Caching:
+    The semantic cache finds similar prompts using text similarity algorithms.
+    This allows cache hits even when prompts vary slightly:
+
+    # These prompts would match with semantic caching:
+    # - "Generate a title for Python tutorial"
+    # - "Generate title for a Python programming video"
+    # - "Create a title for Python lesson"
+
+    # Configure similarity threshold (default 0.85 = 85% similar)
+    optimizer = TokenOptimizer(semantic_threshold=0.80)
+
+    # Use the semantic cache directly
+    from src.utils.token_optimizer import SemanticCache
+    cache = SemanticCache(similarity_threshold=0.85)
+    cache.set("prompt", "response")
+    result = cache.get_similar("similar prompt")
 """
 
 import hashlib
@@ -55,6 +79,22 @@ from typing import (
 
 from loguru import logger
 
+# Try importing text similarity utilities
+try:
+    from src.utils.text_similarity import (
+        word_overlap_similarity,
+        character_ngram_similarity,
+        levenshtein_similarity,
+        combined_similarity,
+        prompt_similarity,
+        normalize_prompt_for_comparison,
+        fast_similarity,
+    )
+    TEXT_SIMILARITY_AVAILABLE = True
+except ImportError:
+    TEXT_SIMILARITY_AVAILABLE = False
+    # Fallback implementations will be provided in class methods
+
 # Try importing token_manager components
 try:
     from src.utils.token_manager import (
@@ -76,6 +116,47 @@ except ImportError:
         "claude": {"input": 3.00, "output": 15.00},
         "openai": {"input": 2.50, "output": 10.00},
     }
+
+
+# ============================================================
+# Task-Specific Token Limits (API Cost Optimization)
+# ============================================================
+
+# Maximum tokens for each task type to minimize API costs
+# These limits are calibrated to provide sufficient output while avoiding waste
+TASK_MAX_TOKENS = {
+    "title_generation": 50,
+    "tag_generation": 100,
+    "description_generation": 300,
+    "hook_generation": 150,
+    "script_outline": 500,
+    "full_script": 4000,
+    "thumbnail_text": 30,
+    "seo_keywords": 150,
+    "idea_generation": 200,
+    "trend_research": 300,
+    "script_revision": 1000,
+    "content_summary": 250,
+    "seo_optimization": 200,
+    "research_synthesis": 1500,
+    "creative_writing": 2000,
+    "technical_explanation": 1000,
+    "competitor_analysis": 500,
+}
+
+
+# ============================================================
+# Cache TTL by Content Type (Extended Caching)
+# ============================================================
+
+# Different TTLs based on content type for more efficient caching
+CACHE_TTL_BY_TYPE = {
+    "evergreen": 90,      # 90 days for timeless content
+    "trending": 7,        # 7 days for trending topics
+    "news": 1,            # 1 day for news-related content
+    "template": 365,      # 1 year for reusable templates
+    "default": 30,        # 30 days default
+}
 
 
 # ============================================================
@@ -431,6 +512,408 @@ class ResponseExtractor:
 
 
 # ============================================================
+# Semantic Cache
+# ============================================================
+
+class SemanticCache:
+    """
+    Cache that can find similar prompts using text similarity.
+    Falls back to exact matching if similarity libraries unavailable.
+
+    This cache is designed to find cached responses even when the prompts
+    are not exact matches, using various text similarity algorithms.
+
+    Features:
+    - Exact match lookup (fast, hash-based)
+    - Prefix-based candidate filtering (medium speed)
+    - Full semantic similarity calculation (slower but more accurate)
+    - Configurable similarity threshold
+    - TTL-based expiration
+    - Statistics tracking for semantic vs exact hits
+
+    Usage:
+        cache = SemanticCache(similarity_threshold=0.85)
+
+        # Store a response
+        cache.set("Generate a title for Python tutorial", "10 Python Tips...")
+
+        # Find similar - will match even with slight variations
+        response = cache.get_similar("Generate title for a Python video tutorial")
+        # Returns "10 Python Tips..." because similarity > 0.85
+    """
+
+    def __init__(
+        self,
+        db_path: str = "data/semantic_cache.db",
+        similarity_threshold: float = 0.85,
+        ttl_days: int = 30,
+        max_candidates: int = 50,
+    ):
+        """
+        Initialize the SemanticCache.
+
+        Args:
+            db_path: Path to SQLite database file
+            similarity_threshold: Minimum similarity score (0-1) to consider a match
+            ttl_days: Time-to-live in days for cache entries
+            max_candidates: Maximum number of candidates to check for similarity
+        """
+        self.db_path = Path(db_path)
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.similarity_threshold = similarity_threshold
+        self.ttl_days = ttl_days
+        self.max_candidates = max_candidates
+        self._lock = threading.Lock()
+        self._init_db()
+
+        # Statistics
+        self.exact_hits = 0
+        self.semantic_hits = 0
+        self.misses = 0
+
+    def _init_db(self):
+        """Initialize database with prompt prefixes for fast lookup."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS semantic_cache (
+                    prompt_hash TEXT PRIMARY KEY,
+                    prompt_text TEXT NOT NULL,
+                    prompt_prefix TEXT NOT NULL,
+                    normalized_prompt TEXT NOT NULL,
+                    response TEXT NOT NULL,
+                    provider TEXT DEFAULT '',
+                    token_count INTEGER DEFAULT 0,
+                    access_count INTEGER DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    last_accessed TEXT NOT NULL,
+                    expires_at TEXT NOT NULL
+                )
+            """)
+            # Indexes for fast lookup
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_semantic_prefix
+                ON semantic_cache(prompt_prefix)
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_semantic_expires
+                ON semantic_cache(expires_at)
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_semantic_accessed
+                ON semantic_cache(last_accessed)
+            """)
+
+    def _normalize_prompt(self, prompt: str) -> str:
+        """
+        Normalize prompt for comparison.
+
+        Removes extra whitespace, converts to lowercase, and strips
+        punctuation variations that don't affect meaning.
+        """
+        if TEXT_SIMILARITY_AVAILABLE:
+            return normalize_prompt_for_comparison(prompt)
+
+        # Fallback normalization
+        normalized = prompt.lower().strip()
+        # Remove extra whitespace
+        normalized = re.sub(r'\s+', ' ', normalized)
+        # Remove common punctuation variations
+        normalized = re.sub(r'["\']', '', normalized)
+        return normalized
+
+    def _calculate_similarity(self, prompt1: str, prompt2: str) -> float:
+        """
+        Calculate similarity between two prompts.
+
+        Uses the text_similarity module if available, otherwise
+        falls back to simple word overlap ratio.
+        """
+        if TEXT_SIMILARITY_AVAILABLE:
+            return prompt_similarity(prompt1, prompt2)
+
+        # Fallback: simple word overlap ratio
+        return self._word_overlap_similarity(prompt1, prompt2)
+
+    def _word_overlap_similarity(self, text1: str, text2: str) -> float:
+        """
+        Calculate simple word overlap (Jaccard) similarity.
+
+        This is a fallback when the text_similarity module is unavailable.
+        """
+        if not text1 or not text2:
+            return 0.0
+
+        words1 = set(text1.lower().split())
+        words2 = set(text2.lower().split())
+
+        if not words1 or not words2:
+            return 0.0
+
+        intersection = words1 & words2
+        union = words1 | words2
+
+        return len(intersection) / len(union) if union else 0.0
+
+    def _levenshtein_similarity(self, text1: str, text2: str) -> float:
+        """
+        Calculate Levenshtein-based similarity.
+
+        Uses the text_similarity module if available, otherwise
+        uses difflib as fallback.
+        """
+        if TEXT_SIMILARITY_AVAILABLE:
+            return levenshtein_similarity(text1, text2)
+
+        # Fallback: use difflib SequenceMatcher
+        try:
+            from difflib import SequenceMatcher
+            return SequenceMatcher(None, text1.lower(), text2.lower()).ratio()
+        except Exception:
+            # Ultimate fallback to word overlap
+            return self._word_overlap_similarity(text1, text2)
+
+    def _get_prompt_signature(self, prompt: str, length: int = 100) -> str:
+        """
+        Get a signature for fast prefix matching.
+
+        The signature is the normalized first N characters of the prompt,
+        used for quickly filtering candidates before full similarity check.
+        """
+        normalized = self._normalize_prompt(prompt)
+        return normalized[:length]
+
+    def _hash_prompt(self, prompt: str) -> str:
+        """Create a hash of the prompt for exact matching."""
+        return hashlib.sha256(prompt.encode()).hexdigest()
+
+    def _get_exact(self, prompt: str) -> Optional[str]:
+        """Try to get an exact match from the cache."""
+        prompt_hash = self._hash_prompt(prompt)
+        now = datetime.now().isoformat()
+
+        with self._lock:
+            with sqlite3.connect(self.db_path) as conn:
+                row = conn.execute(
+                    """SELECT response FROM semantic_cache
+                       WHERE prompt_hash = ? AND expires_at > ?""",
+                    (prompt_hash, now)
+                ).fetchone()
+
+                if row:
+                    # Update access stats
+                    conn.execute(
+                        """UPDATE semantic_cache
+                           SET access_count = access_count + 1, last_accessed = ?
+                           WHERE prompt_hash = ?""",
+                        (now, prompt_hash)
+                    )
+                    return row[0]
+
+        return None
+
+    def _find_candidates(self, signature: str) -> List[Tuple[str, str]]:
+        """
+        Find candidate prompts with similar prefix.
+
+        Returns list of (prompt_text, response) tuples for prompts
+        that have a similar prefix to the given signature.
+        """
+        now = datetime.now().isoformat()
+        # Use first 50 chars for prefix matching to get wider candidate pool
+        prefix_match = signature[:50] if len(signature) >= 50 else signature
+
+        with self._lock:
+            with sqlite3.connect(self.db_path) as conn:
+                # Get candidates with similar prefix
+                rows = conn.execute(
+                    """SELECT normalized_prompt, response
+                       FROM semantic_cache
+                       WHERE prompt_prefix LIKE ? AND expires_at > ?
+                       ORDER BY access_count DESC
+                       LIMIT ?""",
+                    (prefix_match[:20] + '%', now, self.max_candidates)
+                ).fetchall()
+
+                return [(row[0], row[1]) for row in rows]
+
+    def get_similar(self, prompt: str) -> Optional[str]:
+        """
+        Find cached response for similar prompt.
+
+        This method tries three strategies in order:
+        1. Exact match (fastest) - hash-based lookup
+        2. Prefix filtering - find candidates with similar beginnings
+        3. Full similarity - calculate similarity for candidates
+
+        Args:
+            prompt: The prompt to find a similar cached response for
+
+        Returns:
+            Cached response if found with similarity >= threshold, None otherwise
+        """
+        normalized = self._normalize_prompt(prompt)
+        signature = self._get_prompt_signature(normalized)
+
+        # First: try exact match
+        exact = self._get_exact(prompt)
+        if exact:
+            self.exact_hits += 1
+            logger.debug(f"Semantic cache exact hit")
+            return exact
+
+        # Second: find candidates with similar prefix
+        candidates = self._find_candidates(signature)
+
+        if not candidates:
+            self.misses += 1
+            return None
+
+        # Third: calculate full similarity for candidates
+        best_match = None
+        best_similarity = 0.0
+
+        for candidate_prompt, response in candidates:
+            # Quick filter using fast similarity
+            if TEXT_SIMILARITY_AVAILABLE:
+                quick_score = fast_similarity(normalized, candidate_prompt)
+                if quick_score < self.similarity_threshold * 0.7:
+                    continue
+
+            similarity = self._calculate_similarity(normalized, candidate_prompt)
+
+            if similarity >= self.similarity_threshold and similarity > best_similarity:
+                best_similarity = similarity
+                best_match = response
+
+        if best_match:
+            self.semantic_hits += 1
+            logger.debug(f"Semantic cache hit: {best_similarity:.2%} similarity")
+            return best_match
+
+        self.misses += 1
+        return None
+
+    def set(
+        self,
+        prompt: str,
+        response: str,
+        provider: str = "",
+        token_count: int = 0,
+        ttl_days: Optional[int] = None,
+    ):
+        """
+        Store prompt-response pair in the cache.
+
+        Args:
+            prompt: The original prompt
+            response: The AI response to cache
+            provider: Provider that generated the response
+            token_count: Token count for the response
+            ttl_days: Custom TTL in days (uses default if not specified)
+        """
+        prompt_hash = self._hash_prompt(prompt)
+        normalized = self._normalize_prompt(prompt)
+        prefix = self._get_prompt_signature(normalized)
+        now = datetime.now()
+        ttl = ttl_days if ttl_days is not None else self.ttl_days
+        expires_at = (now + timedelta(days=ttl)).isoformat()
+
+        with self._lock:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute(
+                    """INSERT OR REPLACE INTO semantic_cache
+                       (prompt_hash, prompt_text, prompt_prefix, normalized_prompt,
+                        response, provider, token_count, access_count,
+                        created_at, last_accessed, expires_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)""",
+                    (prompt_hash, prompt, prefix, normalized, response,
+                     provider, token_count, now.isoformat(), now.isoformat(),
+                     expires_at)
+                )
+
+        logger.debug(f"Semantic cache stored: {prompt_hash[:8]}...")
+
+    def get_stats(self) -> Dict[str, Any]:
+        """
+        Get cache statistics including semantic hit rate.
+
+        Returns:
+            Dictionary with cache statistics
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            total = conn.execute(
+                "SELECT COUNT(*) FROM semantic_cache"
+            ).fetchone()[0]
+
+            expired = conn.execute(
+                "SELECT COUNT(*) FROM semantic_cache WHERE expires_at < ?",
+                (datetime.now().isoformat(),)
+            ).fetchone()[0]
+
+            total_accesses = conn.execute(
+                "SELECT SUM(access_count) FROM semantic_cache"
+            ).fetchone()[0] or 0
+
+        total_lookups = self.exact_hits + self.semantic_hits + self.misses
+        exact_rate = self.exact_hits / total_lookups if total_lookups > 0 else 0
+        semantic_rate = self.semantic_hits / total_lookups if total_lookups > 0 else 0
+        total_hit_rate = (self.exact_hits + self.semantic_hits) / total_lookups if total_lookups > 0 else 0
+
+        return {
+            "total_entries": total,
+            "expired_entries": expired,
+            "active_entries": total - expired,
+            "total_accesses": total_accesses,
+            "exact_hits": self.exact_hits,
+            "semantic_hits": self.semantic_hits,
+            "misses": self.misses,
+            "exact_hit_rate": exact_rate,
+            "semantic_hit_rate": semantic_rate,
+            "total_hit_rate": total_hit_rate,
+            "similarity_threshold": self.similarity_threshold,
+        }
+
+    def clear_expired(self) -> int:
+        """
+        Clear expired cache entries.
+
+        Returns:
+            Number of entries deleted
+        """
+        now = datetime.now().isoformat()
+
+        with self._lock:
+            with sqlite3.connect(self.db_path) as conn:
+                result = conn.execute(
+                    "DELETE FROM semantic_cache WHERE expires_at < ?",
+                    (now,)
+                )
+                deleted = result.rowcount
+
+        logger.info(f"Cleared {deleted} expired semantic cache entries")
+        return deleted
+
+    def clear_all(self) -> int:
+        """
+        Clear all cache entries.
+
+        Returns:
+            Number of entries deleted
+        """
+        with self._lock:
+            with sqlite3.connect(self.db_path) as conn:
+                result = conn.execute("DELETE FROM semantic_cache")
+                deleted = result.rowcount
+
+        self.exact_hits = 0
+        self.semantic_hits = 0
+        self.misses = 0
+
+        logger.info(f"Cleared all {deleted} semantic cache entries")
+        return deleted
+
+
+# ============================================================
 # Advanced Prompt Cache
 # ============================================================
 
@@ -487,6 +970,19 @@ class AdvancedPromptCache:
             """)
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_last_accessed ON prompt_cache(last_accessed)
+            """)
+            # Additional indexes for optimization
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_cache_prefix ON prompt_cache(prompt_prefix)
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_cache_accessed ON prompt_cache(last_accessed)
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_cache_provider ON prompt_cache(provider)
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_cache_created ON prompt_cache(created_at)
             """)
 
     def _hash_prompt(self, prompt: str) -> str:
@@ -690,6 +1186,170 @@ class AdvancedPromptCache:
         logger.info(f"Cleared {deleted} expired cache entries")
         return deleted
 
+    # ============================================================
+    # Semantic Similarity Methods
+    # ============================================================
+
+    def get_semantic_similar(
+        self,
+        prompt: str,
+        threshold: float = 0.85,
+        max_candidates: int = 20,
+    ) -> Optional[str]:
+        """
+        Find similar cached responses using semantic similarity.
+
+        This method searches for cached responses that are semantically
+        similar to the given prompt, even if they don't match exactly.
+
+        Args:
+            prompt: The prompt to find similar cached responses for
+            threshold: Minimum similarity score (0-1) to consider a match
+            max_candidates: Maximum number of candidates to check
+
+        Returns:
+            Cached response if found with similarity >= threshold, None otherwise
+
+        Example:
+            # Original cached prompt: "Generate a title for Python tutorial"
+            # Query: "Generate title for a Python programming video"
+            # Will return the cached response if similarity >= threshold
+        """
+        # First try exact match (fast path)
+        exact_result = self.get(prompt)
+        if exact_result:
+            return exact_result
+
+        # Get prefix for candidate filtering
+        prompt_prefix = self._get_prefix(prompt, length=50)
+        cutoff = (datetime.now() - timedelta(hours=self.ttl_hours)).isoformat()
+
+        # Find candidates with similar prefix
+        with self._lock:
+            with sqlite3.connect(self.db_path) as conn:
+                # Get candidates with similar prefix (first 20 chars match)
+                rows = conn.execute(
+                    """SELECT prompt_prefix, response, compressed
+                       FROM prompt_cache
+                       WHERE prompt_prefix LIKE ? AND last_accessed > ?
+                       ORDER BY access_count DESC
+                       LIMIT ?""",
+                    (prompt_prefix[:20] + '%', cutoff, max_candidates)
+                ).fetchall()
+
+        if not rows:
+            return None
+
+        # Calculate similarity for each candidate
+        normalized_prompt = prompt.lower().strip()
+        best_match = None
+        best_similarity = 0.0
+
+        for candidate_prefix, response_data, compressed in rows:
+            # Calculate similarity between prompts
+            similarity = self._calculate_prompt_similarity(
+                normalized_prompt,
+                candidate_prefix
+            )
+
+            if similarity >= threshold and similarity > best_similarity:
+                best_similarity = similarity
+                # Decompress if needed
+                if compressed:
+                    best_match = self._decompress(response_data)
+                else:
+                    best_match = response_data
+                    if isinstance(best_match, bytes):
+                        best_match = best_match.decode('utf-8')
+
+        if best_match:
+            self.hits += 1
+            logger.debug(f"Semantic cache hit: {best_similarity:.2%} similarity")
+            return best_match
+
+        return None
+
+    def _calculate_prompt_similarity(self, prompt1: str, prompt2: str) -> float:
+        """
+        Calculate similarity between two prompts.
+
+        Uses the text_similarity module if available, otherwise falls back
+        to a combination of word overlap and Levenshtein similarity.
+
+        Args:
+            prompt1: First prompt (normalized)
+            prompt2: Second prompt
+
+        Returns:
+            Similarity score between 0.0 and 1.0
+        """
+        if TEXT_SIMILARITY_AVAILABLE:
+            return prompt_similarity(prompt1, prompt2)
+
+        # Fallback: combine word overlap and Levenshtein
+        word_sim = self._word_overlap_similarity(prompt1, prompt2)
+        lev_sim = self._levenshtein_similarity(prompt1, prompt2)
+
+        # Weight word overlap more heavily for prompts
+        return word_sim * 0.6 + lev_sim * 0.4
+
+    def _word_overlap_similarity(self, text1: str, text2: str) -> float:
+        """
+        Simple word overlap (Jaccard) similarity calculation.
+
+        Calculates the ratio of shared words to total unique words.
+
+        Args:
+            text1: First text to compare
+            text2: Second text to compare
+
+        Returns:
+            Similarity score between 0.0 and 1.0
+        """
+        if not text1 or not text2:
+            return 0.0
+
+        # Tokenize into words
+        words1 = set(re.findall(r'\b[a-z0-9]+\b', text1.lower()))
+        words2 = set(re.findall(r'\b[a-z0-9]+\b', text2.lower()))
+
+        if not words1 or not words2:
+            return 0.0
+
+        intersection = words1 & words2
+        union = words1 | words2
+
+        return len(intersection) / len(union) if union else 0.0
+
+    def _levenshtein_similarity(self, text1: str, text2: str) -> float:
+        """
+        Levenshtein-based similarity calculation.
+
+        Uses difflib SequenceMatcher as the implementation since it's
+        available in the standard library.
+
+        Args:
+            text1: First text to compare
+            text2: Second text to compare
+
+        Returns:
+            Similarity score between 0.0 and 1.0
+        """
+        if TEXT_SIMILARITY_AVAILABLE:
+            return levenshtein_similarity(text1, text2)
+
+        # Fallback: use difflib SequenceMatcher
+        try:
+            from difflib import SequenceMatcher
+
+            if not text1 or not text2:
+                return 0.0 if text1 != text2 else 1.0
+
+            return SequenceMatcher(None, text1.lower(), text2.lower()).ratio()
+        except Exception:
+            # Ultimate fallback
+            return self._word_overlap_similarity(text1, text2)
+
 
 # ============================================================
 # Batch Processor
@@ -805,27 +1465,33 @@ class SmartRouter:
     """
 
     # Task complexity definitions
+    # UPDATED: Route 90% of tasks to Groq (free) for cost optimization
+    # Only complex full scripts use paid providers
     TASK_COMPLEXITY = {
-        # Simple tasks - use free providers
+        # Simple tasks - use Groq (free)
         "title_generation": "simple",
         "tag_generation": "simple",
         "description_generation": "simple",
         "idea_brainstorm": "simple",
         "keyword_extraction": "simple",
+        "thumbnail_text": "simple",
+        "seo_keywords": "simple",
 
-        # Medium tasks - use mid-tier providers
-        "script_outline": "medium",
-        "hook_generation": "medium",
-        "script_revision": "medium",
-        "content_summary": "medium",
-        "seo_optimization": "medium",
+        # UPDATED: These tasks now use Groq (moved from medium to simple)
+        "script_outline": "simple",      # Use Groq - outlines don't need premium
+        "hook_generation": "simple",     # Use Groq - hooks are short
+        "script_revision": "simple",     # Use Groq - revisions are iterative
+        "content_summary": "simple",     # Use Groq - summaries are straightforward
+        "seo_optimization": "simple",    # Use Groq - SEO is formulaic
+        "idea_generation": "simple",     # Use Groq - idea generation is creative but simple
+        "trend_research": "simple",      # Use Groq - research can be done in steps
+        "competitor_analysis": "simple", # Use Groq - analysis can be done incrementally
 
-        # Complex tasks - may need premium providers
-        "full_script": "complex",
-        "research_synthesis": "complex",
-        "creative_writing": "complex",
-        "technical_explanation": "complex",
-        "competitor_analysis": "complex",
+        # Complex tasks - ONLY these use paid providers when budget allows
+        "full_script": "complex",        # Only full scripts justify paid providers
+        "research_synthesis": "medium",  # Medium complexity, use Gemini if available
+        "creative_writing": "medium",    # Medium complexity for creative tasks
+        "technical_explanation": "medium", # Medium complexity for technical content
     }
 
     # Quality scores per provider (1-10)
@@ -1033,6 +1699,8 @@ class TokenOptimizer:
         enable_compression: bool = True,
         enable_caching: bool = True,
         enable_batching: bool = True,
+        enable_semantic_cache: bool = True,
+        semantic_threshold: float = 0.85,
     ):
         """
         Initialize the TokenOptimizer.
@@ -1043,14 +1711,22 @@ class TokenOptimizer:
             enable_compression: Enable prompt compression
             enable_caching: Enable response caching
             enable_batching: Enable request batching
+            enable_semantic_cache: Enable semantic similarity caching
+            semantic_threshold: Similarity threshold for semantic cache (0-1)
         """
         self.daily_budget = daily_budget
         self.enable_compression = enable_compression
         self.enable_caching = enable_caching
         self.enable_batching = enable_batching
+        self.enable_semantic_cache = enable_semantic_cache
+        self.semantic_threshold = semantic_threshold
 
         # Initialize components
         self.cache = AdvancedPromptCache(ttl_hours=cache_ttl_hours) if enable_caching else None
+        self.semantic_cache = SemanticCache(
+            similarity_threshold=semantic_threshold,
+            ttl_days=cache_ttl_hours // 24 if cache_ttl_hours >= 24 else 1
+        ) if enable_semantic_cache else None
         self.router = SmartRouter(daily_budget=daily_budget)
         self.batch_processor = BatchProcessor() if enable_batching else None
 
@@ -1075,12 +1751,14 @@ class TokenOptimizer:
             "tokens_saved": 0,
             "cache_hits": 0,
             "cache_misses": 0,
+            "semantic_hits": 0,
             "requests_batched": 0,
             "routing_decisions": 0,
         }
 
         logger.info(f"TokenOptimizer initialized (budget=${daily_budget}, "
-                   f"compression={enable_compression}, caching={enable_caching})")
+                   f"compression={enable_compression}, caching={enable_caching}, "
+                   f"semantic_cache={enable_semantic_cache})")
 
     def optimize_prompt(
         self,
@@ -1138,26 +1816,103 @@ class TokenOptimizer:
             compression_applied=applied,
         )
 
-    def get_cached(self, prompt: str) -> Optional[str]:
+    def get_cached(
+        self,
+        prompt: str,
+        try_semantic: bool = True,
+        semantic_threshold: Optional[float] = None,
+    ) -> Optional[str]:
         """
         Get a cached response for a prompt.
 
+        This method tries multiple caching strategies in order:
+        1. Exact match from advanced cache (fastest)
+        2. Semantic similarity match from semantic cache (if enabled)
+        3. Semantic similarity match from advanced cache
+
         Args:
             prompt: The prompt to look up
+            try_semantic: Whether to try semantic matching if exact match fails
+            semantic_threshold: Override similarity threshold (uses instance default if None)
 
         Returns:
             Cached response or None
         """
-        if not self.enable_caching or not self.cache:
+        if not self.enable_caching:
             return None
 
-        result = self.cache.get(prompt)
-        if result:
-            self._stats["cache_hits"] += 1
-        else:
-            self._stats["cache_misses"] += 1
+        threshold = semantic_threshold if semantic_threshold is not None else self.semantic_threshold
 
-        return result
+        # Strategy 1: Try exact match from advanced cache
+        if self.cache:
+            result = self.cache.get(prompt)
+            if result:
+                self._stats["cache_hits"] += 1
+                logger.debug("Exact cache hit from advanced cache")
+                return result
+
+        # Strategy 2: Try semantic cache for similar prompts
+        if try_semantic and self.enable_semantic_cache and self.semantic_cache:
+            result = self.semantic_cache.get_similar(prompt)
+            if result:
+                self._stats["semantic_hits"] += 1
+                self._stats["cache_hits"] += 1
+                logger.debug("Semantic cache hit")
+                return result
+
+        # Strategy 3: Try semantic similarity from advanced cache
+        if try_semantic and self.cache:
+            result = self.cache.get_semantic_similar(
+                prompt,
+                threshold=threshold,
+            )
+            if result:
+                self._stats["semantic_hits"] += 1
+                self._stats["cache_hits"] += 1
+                logger.debug("Semantic hit from advanced cache")
+                return result
+
+        self._stats["cache_misses"] += 1
+        return None
+
+    def get_cached_with_similarity(
+        self,
+        prompt: str,
+        threshold: float = 0.85,
+    ) -> Tuple[Optional[str], float]:
+        """
+        Get cached response with similarity score.
+
+        Similar to get_cached but also returns the similarity score
+        of the match (1.0 for exact match, <1.0 for semantic match).
+
+        Args:
+            prompt: The prompt to look up
+            threshold: Minimum similarity threshold
+
+        Returns:
+            Tuple of (response or None, similarity score)
+        """
+        # Try exact match first
+        if self.cache:
+            result = self.cache.get(prompt)
+            if result:
+                return result, 1.0
+
+        # Try semantic match from semantic cache
+        if self.semantic_cache:
+            result = self.semantic_cache.get_similar(prompt)
+            if result:
+                # Estimate similarity (we know it's at least the threshold)
+                return result, self.semantic_threshold
+
+        # Try semantic match from advanced cache
+        if self.cache:
+            result = self.cache.get_semantic_similar(prompt, threshold=threshold)
+            if result:
+                return result, threshold
+
+        return None, 0.0
 
     def cache_response(
         self,
@@ -1169,14 +1924,22 @@ class TokenOptimizer:
         """
         Cache a response for future use.
 
+        Stores the response in both the advanced cache and semantic cache
+        for maximum retrieval options.
+
         Args:
             prompt: The original prompt
             response: The AI response
             provider: Provider that generated the response
             token_count: Token count for the response
         """
+        # Store in advanced cache
         if self.enable_caching and self.cache:
             self.cache.set(prompt, response, provider, token_count)
+
+        # Also store in semantic cache for similarity matching
+        if self.enable_semantic_cache and self.semantic_cache:
+            self.semantic_cache.set(prompt, response, provider, token_count)
 
     def route_request(
         self,
@@ -1286,12 +2049,223 @@ class TokenOptimizer:
         # Approximate: 1 token per 4 characters for English
         return len(text) // 4
 
+    def get_max_tokens_for_task(self, task_type: str) -> int:
+        """
+        Get the appropriate max_tokens limit for a task type.
+
+        Args:
+            task_type: Type of task (e.g., "title_generation", "full_script")
+
+        Returns:
+            Maximum tokens to request for this task type
+        """
+        return TASK_MAX_TOKENS.get(task_type, 1000)  # Default to 1000 if unknown
+
+    def truncate_response(
+        self,
+        response: str,
+        task_type: str,
+        preserve_structure: bool = True,
+    ) -> str:
+        """
+        Truncate response to appropriate length based on task type.
+
+        This helps reduce token usage by ensuring responses don't exceed
+        what's actually needed for each task type.
+
+        Args:
+            response: The AI response to truncate
+            task_type: Type of task for determining max length
+            preserve_structure: If True, try to preserve JSON/list structure
+
+        Returns:
+            Truncated response
+        """
+        max_tokens = self.get_max_tokens_for_task(task_type)
+        max_chars = max_tokens * 4  # Approximate chars from tokens
+
+        if len(response) <= max_chars:
+            return response
+
+        logger.debug(f"Truncating response from {len(response)} to {max_chars} chars for {task_type}")
+
+        if preserve_structure:
+            # Try to preserve JSON structure
+            if response.strip().startswith('{') or response.strip().startswith('['):
+                try:
+                    # Parse and re-serialize with limits
+                    import json
+                    data = json.loads(response)
+                    # Truncate string values recursively
+                    truncated_data = self._truncate_json_values(data, max_chars // 2)
+                    return json.dumps(truncated_data, separators=(',', ':'))
+                except json.JSONDecodeError:
+                    pass
+
+            # Try to preserve list structure
+            lines = response.split('\n')
+            if len(lines) > 1:
+                # Keep as many complete lines as possible
+                result = []
+                current_len = 0
+                for line in lines:
+                    if current_len + len(line) + 1 <= max_chars:
+                        result.append(line)
+                        current_len += len(line) + 1
+                    else:
+                        break
+                return '\n'.join(result)
+
+        # Simple truncation
+        return response[:max_chars]
+
+    def _truncate_json_values(self, data: Any, max_total_chars: int) -> Any:
+        """Recursively truncate string values in JSON data."""
+        if isinstance(data, str):
+            max_str_len = min(500, max_total_chars // 10)
+            return data[:max_str_len] if len(data) > max_str_len else data
+        elif isinstance(data, dict):
+            return {k: self._truncate_json_values(v, max_total_chars) for k, v in data.items()}
+        elif isinstance(data, list):
+            return [self._truncate_json_values(item, max_total_chars) for item in data[:20]]  # Max 20 items
+        return data
+
+    def batch_requests(
+        self,
+        requests: List[Dict[str, Any]],
+        combine_similar: bool = True,
+    ) -> List[Dict[str, Any]]:
+        """
+        Batch multiple similar requests into fewer API calls.
+
+        This method combines multiple requests of the same task type into
+        a single prompt, reducing API overhead and costs.
+
+        Args:
+            requests: List of request dicts with keys:
+                - prompt: The prompt text
+                - task_type: Type of task
+                - callback: Optional callback function for results
+            combine_similar: If True, combine requests of same task_type
+
+        Returns:
+            List of batched request dicts ready for processing
+
+        Example:
+            requests = [
+                {"prompt": "Generate title for: AI video", "task_type": "title_generation"},
+                {"prompt": "Generate title for: Python tutorial", "task_type": "title_generation"},
+                {"prompt": "Generate tags for: AI video", "task_type": "tag_generation"},
+            ]
+            batched = optimizer.batch_requests(requests)
+            # Returns 2 batched requests: one for titles, one for tags
+        """
+        if not combine_similar or len(requests) <= 1:
+            return requests
+
+        # Group by task type
+        grouped: Dict[str, List[Dict[str, Any]]] = {}
+        for req in requests:
+            task_type = req.get("task_type", "general")
+            if task_type not in grouped:
+                grouped[task_type] = []
+            grouped[task_type].append(req)
+
+        batched_requests = []
+        for task_type, group in grouped.items():
+            if len(group) == 1:
+                # Single request, no batching needed
+                batched_requests.append(group[0])
+            else:
+                # Combine multiple requests into one
+                combined_prompt = self._create_batch_prompt(group, task_type)
+                max_tokens = self.get_max_tokens_for_task(task_type) * len(group)
+
+                batched_requests.append({
+                    "prompt": combined_prompt,
+                    "task_type": task_type,
+                    "is_batch": True,
+                    "batch_size": len(group),
+                    "original_requests": group,
+                    "max_tokens": max_tokens,
+                })
+
+        self._stats["requests_batched"] += sum(len(g) for g in grouped.values() if len(g) > 1)
+        logger.info(f"Batched {len(requests)} requests into {len(batched_requests)} API calls")
+
+        return batched_requests
+
+    def _create_batch_prompt(self, requests: List[Dict[str, Any]], task_type: str) -> str:
+        """Create a combined prompt for batched requests."""
+        prompt = f"""Process the following {len(requests)} requests for {task_type}.
+For each request, provide a response labeled with its number.
+
+Format your response as:
+[1] <response for request 1>
+[2] <response for request 2>
+...
+
+---REQUESTS---
+
+"""
+        for i, req in enumerate(requests, 1):
+            prompt += f"[{i}] {req.get('prompt', '')}\n\n"
+
+        prompt += "---END REQUESTS---\n\nProvide responses for each request above:"
+        return prompt
+
+    def parse_batch_response(
+        self,
+        response: str,
+        batch_request: Dict[str, Any],
+    ) -> List[str]:
+        """
+        Parse a batched response back into individual responses.
+
+        Args:
+            response: The combined response from the AI
+            batch_request: The batched request dict (from batch_requests)
+
+        Returns:
+            List of individual responses in the same order as original requests
+        """
+        batch_size = batch_request.get("batch_size", 1)
+        results = []
+
+        for i in range(1, batch_size + 1):
+            # Look for the response section for this number
+            pattern = rf'\[{i}\]\s*(.*?)(?=\[{i+1}\]|\Z)'
+            match = re.search(pattern, response, re.DOTALL)
+
+            if match:
+                results.append(match.group(1).strip())
+            else:
+                results.append("")
+                logger.warning(f"Could not parse response for batch item {i}")
+
+        return results
+
+    def get_cache_ttl(self, content_type: str = "default") -> int:
+        """
+        Get the appropriate cache TTL (in days) for a content type.
+
+        Args:
+            content_type: Type of content ("evergreen", "trending", "news", "template")
+
+        Returns:
+            TTL in days
+        """
+        return CACHE_TTL_BY_TYPE.get(content_type, CACHE_TTL_BY_TYPE["default"])
+
     def get_stats(self) -> Dict[str, Any]:
         """Get optimization statistics."""
         stats = dict(self._stats)
 
         if self.cache:
             stats["cache_stats"] = self.cache.get_stats()
+
+        if self.semantic_cache:
+            stats["semantic_cache_stats"] = self.semantic_cache.get_stats()
 
         stats["agent_budgets"] = {
             name: self.get_agent_budget_status(name)
@@ -1316,11 +2290,27 @@ class TokenOptimizer:
             report += f"Avg Savings/Prompt: {avg_savings:.0f} tokens\n"
 
         report += f"\nCache Hits: {stats['cache_hits']:,}\n"
+        report += f"  - Semantic Hits: {stats.get('semantic_hits', 0):,}\n"
+        report += f"  - Exact Hits: {stats['cache_hits'] - stats.get('semantic_hits', 0):,}\n"
         report += f"Cache Misses: {stats['cache_misses']:,}\n"
 
         if stats['cache_hits'] + stats['cache_misses'] > 0:
             hit_rate = stats['cache_hits'] / (stats['cache_hits'] + stats['cache_misses'])
             report += f"Cache Hit Rate: {hit_rate:.1%}\n"
+
+            # Semantic contribution
+            if stats['cache_hits'] > 0:
+                semantic_contribution = stats.get('semantic_hits', 0) / stats['cache_hits']
+                report += f"Semantic Contribution: {semantic_contribution:.1%}\n"
+
+        # Semantic cache specific stats
+        if "semantic_cache_stats" in stats:
+            sem_stats = stats["semantic_cache_stats"]
+            report += f"\n--- Semantic Cache ---\n"
+            report += f"Total Entries: {sem_stats['total_entries']:,}\n"
+            report += f"Active Entries: {sem_stats['active_entries']:,}\n"
+            report += f"Similarity Threshold: {sem_stats['similarity_threshold']:.0%}\n"
+            report += f"Semantic Hit Rate: {sem_stats['semantic_hit_rate']:.1%}\n"
 
         report += f"\nRouting Decisions: {stats['routing_decisions']:,}\n"
 
@@ -1369,10 +2359,36 @@ def smart_route(task_type: str, estimated_tokens: int = 1000) -> str:
     return decision.provider
 
 
-def check_cache(prompt: str) -> Optional[str]:
-    """Convenience function to check cache for a prompt."""
+def check_cache(prompt: str, try_semantic: bool = True) -> Optional[str]:
+    """
+    Convenience function to check cache for a prompt.
+
+    Args:
+        prompt: The prompt to look up
+        try_semantic: Whether to try semantic matching if exact match fails
+
+    Returns:
+        Cached response or None
+    """
     optimizer = get_token_optimizer()
-    return optimizer.get_cached(prompt)
+    return optimizer.get_cached(prompt, try_semantic=try_semantic)
+
+
+def check_semantic_cache(prompt: str, threshold: float = 0.85) -> Optional[str]:
+    """
+    Convenience function to check semantic cache for similar prompts.
+
+    Args:
+        prompt: The prompt to find similar matches for
+        threshold: Minimum similarity threshold (0-1)
+
+    Returns:
+        Cached response from similar prompt or None
+    """
+    optimizer = get_token_optimizer()
+    if optimizer.semantic_cache:
+        return optimizer.semantic_cache.get_similar(prompt)
+    return None
 
 
 def cache_response(prompt: str, response: str, provider: str = "") -> None:
@@ -1381,18 +2397,40 @@ def cache_response(prompt: str, response: str, provider: str = "") -> None:
     optimizer.cache_response(prompt, response, provider)
 
 
+def get_semantic_cache() -> Optional[SemanticCache]:
+    """Get the semantic cache instance from the token optimizer."""
+    optimizer = get_token_optimizer()
+    return optimizer.semantic_cache
+
+
 # ============================================================
 # Decorators for Easy Integration
 # ============================================================
 
-def with_optimization(task_type: str = "general"):
+def with_optimization(task_type: str = "general", use_semantic: bool = True):
     """
     Decorator to automatically optimize prompts and cache responses.
+
+    This decorator:
+    1. Checks exact cache first (fastest)
+    2. If use_semantic=True, checks semantic cache for similar prompts
+    3. Optimizes the prompt to reduce tokens
+    4. Calls the wrapped function
+    5. Caches the response for future use
+
+    Args:
+        task_type: Type of task for context-aware optimization
+        use_semantic: Whether to try semantic matching if exact match fails
 
     Usage:
         @with_optimization(task_type="script")
         def generate_script(prompt: str) -> str:
             # Make API call
+            return response
+
+        @with_optimization(task_type="title_generation", use_semantic=True)
+        def generate_title(prompt: str) -> str:
+            # Will find similar cached prompts even with variations
             return response
     """
     def decorator(func: Callable) -> Callable:
@@ -1400,10 +2438,10 @@ def with_optimization(task_type: str = "general"):
         def wrapper(prompt: str, *args, **kwargs) -> str:
             optimizer = get_token_optimizer()
 
-            # Check cache first
-            cached = optimizer.get_cached(prompt)
+            # Check cache first (includes semantic matching if enabled)
+            cached = optimizer.get_cached(prompt, try_semantic=use_semantic)
             if cached:
-                logger.info(f"Cache hit for {func.__name__}")
+                logger.info(f"Cache hit for {func.__name__} (semantic={use_semantic})")
                 return cached
 
             # Optimize prompt
@@ -1412,7 +2450,7 @@ def with_optimization(task_type: str = "general"):
             # Call function with optimized prompt
             response = func(result.optimized_prompt, *args, **kwargs)
 
-            # Cache response
+            # Cache response (stores in both exact and semantic caches)
             optimizer.cache_response(prompt, response)
 
             return response

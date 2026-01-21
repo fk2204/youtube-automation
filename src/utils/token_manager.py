@@ -30,6 +30,8 @@ PROVIDER_COSTS = {
     "claude": {"input": 3.00, "output": 15.00},
     "openai": {"input": 2.50, "output": 10.00},
     "fish-audio": {"input": 0.0, "output": 0.01},  # Very cheap TTS
+    "hailuo": {"input": 0.0, "output": 0.0},  # Flat-rate video: ~$0.28/video
+    "pika": {"input": 0.0, "output": 0.0},    # Flat-rate video: $0.20-0.45/video
 }
 
 
@@ -70,6 +72,19 @@ class TokenTracker:
                     budget REAL NOT NULL,
                     spent REAL DEFAULT 0
                 )
+            """)
+            # Create indexes for optimized queries
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_usage_date ON token_usage(timestamp)
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_usage_provider ON token_usage(provider)
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_usage_operation ON token_usage(operation)
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_usage_date_provider ON token_usage(timestamp, provider)
             """)
 
     def record_usage(self, provider: str, input_tokens: int, output_tokens: int, operation: str = ""):
@@ -213,15 +228,32 @@ class CostOptimizer:
     """Automatically select the most cost-effective provider for each task"""
 
     # Task complexity ratings
+    # UPDATED: Route 90% of tasks to Groq (free) for cost optimization
+    # Only complex full scripts use paid providers
     TASK_COMPLEXITY = {
+        # Simple tasks - use Groq (free)
         "idea_generation": "simple",
         "trend_research": "simple",
-        "script_outline": "medium",
-        "script_full": "complex",
-        "script_revision": "medium",
         "title_generation": "simple",
         "description_generation": "simple",
         "tag_generation": "simple",
+        "thumbnail_text": "simple",
+        "seo_keywords": "simple",
+
+        # UPDATED: These tasks now use Groq (moved from medium to simple)
+        "script_outline": "simple",      # Use Groq - outlines don't need premium
+        "hook_generation": "simple",     # Use Groq - hooks are short
+        "script_revision": "simple",     # Use Groq - revisions are iterative
+        "content_summary": "simple",     # Use Groq - summaries are straightforward
+        "seo_optimization": "simple",    # Use Groq - SEO is formulaic
+        "competitor_analysis": "simple", # Use Groq - analysis can be done incrementally
+
+        # Complex tasks - ONLY these use paid providers when budget allows
+        "script_full": "complex",
+        "full_script": "complex",        # Only full scripts justify paid providers
+        "research_synthesis": "medium",  # Medium complexity, use Gemini if available
+        "creative_writing": "medium",    # Medium complexity for creative tasks
+        "technical_explanation": "medium", # Medium complexity for technical content
     }
 
     # Provider quality ratings (1-10)

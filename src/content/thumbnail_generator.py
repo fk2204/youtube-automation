@@ -11,6 +11,11 @@ Features:
 - Vignette effect for visual focus
 - High contrast for readability
 - Gradient backgrounds with color overlays
+- Face detection for auto-framing
+- High-contrast color palettes
+- Power word overlays
+- Template library by niche
+- A/B variant generation (3 versions)
 
 Usage:
     from src.content.thumbnail_generator import ThumbnailGenerator
@@ -18,25 +23,159 @@ Usage:
     generator = ThumbnailGenerator()
     path = generator.generate("How I Made $10,000", "finance", "output/thumb.png")
 
+    # Generate 3 A/B test variants
+    variants = generator.generate_ab_variants("My Title", "finance", count=3)
+
+    # Use template library
+    path = generator.generate_from_template("money_reveal", title="$10,000", niche="finance")
+
 CLI:
     python run.py thumbnail "My Title" --niche finance --output thumb.png
+    python run.py thumbnail "My Title" --niche finance --variants 3
 """
 
 import os
 import re
 import math
 from pathlib import Path
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional, List, Dict, Any
 from loguru import logger
 
 try:
     from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
+    PIL_AVAILABLE = True
 except ImportError:
     logger.warning("PIL/Pillow not installed. Install with: pip install pillow")
+    PIL_AVAILABLE = False
     Image = None
+
+try:
+    import cv2
+    import numpy as np
+    OPENCV_AVAILABLE = True
+except ImportError:
+    logger.debug("OpenCV not installed. Face detection disabled. Install with: pip install opencv-python")
+    OPENCV_AVAILABLE = False
 
 # Import brand colors from channel_branding
 from .channel_branding import BRAND_COLORS, BrandColors
+
+
+# High-contrast color palettes for maximum visibility
+HIGH_CONTRAST_PALETTES = {
+    "finance": [
+        {"bg": "#0a0a14", "text": "#FFD700", "accent": "#00FF88"},  # Dark + Gold + Green
+        {"bg": "#1a1a2e", "text": "#FFFFFF", "accent": "#FF6B35"},  # Dark Blue + White + Orange
+        {"bg": "#0d1117", "text": "#58a6ff", "accent": "#f0883e"},  # GitHub dark + Blue + Orange
+    ],
+    "psychology": [
+        {"bg": "#0f0f1a", "text": "#E0E0FF", "accent": "#FF4081"},  # Deep purple + Light + Pink
+        {"bg": "#1a0a1a", "text": "#FFFFFF", "accent": "#9b59b6"},  # Dark + White + Purple
+        {"bg": "#0a0a14", "text": "#00D4AA", "accent": "#FF6B6B"},  # Dark + Teal + Red
+    ],
+    "storytelling": [
+        {"bg": "#0d0d0d", "text": "#FFFFFF", "accent": "#e74c3c"},  # Black + White + Red
+        {"bg": "#1a0000", "text": "#FFD700", "accent": "#FF4136"},  # Dark Red + Gold + Bright Red
+        {"bg": "#0a0a14", "text": "#FF6B35", "accent": "#FFFFFF"},  # Dark + Orange + White
+    ],
+    "default": [
+        {"bg": "#1a1a2e", "text": "#FFFFFF", "accent": "#3498db"},  # Dark + White + Blue
+        {"bg": "#0a0a14", "text": "#00D4AA", "accent": "#FFD700"},  # Dark + Teal + Gold
+        {"bg": "#0d1117", "text": "#f0883e", "accent": "#58a6ff"},  # Dark + Orange + Blue
+    ]
+}
+
+
+# Power words that increase CTR
+POWER_WORDS = {
+    "curiosity": ["Secret", "Hidden", "Revealed", "Truth", "Unknown", "Mystery", "Exposed"],
+    "urgency": ["Now", "Today", "Urgent", "Warning", "Breaking", "Alert", "Stop"],
+    "emotion": ["Shocking", "Incredible", "Amazing", "Terrifying", "Heartbreaking", "Mind-Blowing"],
+    "value": ["Free", "$", "Proven", "Guaranteed", "Easy", "Simple", "Fast"],
+    "numbers": ["#1", "Top 10", "5 Ways", "3 Steps", "100%", "10X", "1000+"],
+    "social": ["Everyone", "Nobody", "They", "Experts", "Rich People", "Successful"],
+}
+
+
+# Thumbnail templates by niche
+THUMBNAIL_TEMPLATES = {
+    "finance": {
+        "money_reveal": {
+            "layout": "split",
+            "text_position": "left",
+            "power_word": "REVEALED",
+            "icon": "dollar",
+            "color_scheme": 0,
+        },
+        "mistake_warning": {
+            "layout": "centered",
+            "text_position": "bottom",
+            "power_word": "STOP",
+            "icon": "warning",
+            "color_scheme": 1,
+        },
+        "success_story": {
+            "layout": "thirds",
+            "text_position": "top",
+            "power_word": "HOW I",
+            "icon": "chart",
+            "color_scheme": 2,
+        },
+        "comparison": {
+            "layout": "split",
+            "text_position": "center",
+            "power_word": "VS",
+            "icon": None,
+            "color_scheme": 0,
+        },
+    },
+    "psychology": {
+        "dark_truth": {
+            "layout": "centered",
+            "text_position": "center",
+            "power_word": "DARK",
+            "icon": "brain",
+            "color_scheme": 0,
+        },
+        "mind_tricks": {
+            "layout": "split",
+            "text_position": "right",
+            "power_word": "TRICKS",
+            "icon": "eye",
+            "color_scheme": 1,
+        },
+        "secrets": {
+            "layout": "thirds",
+            "text_position": "bottom",
+            "power_word": "SECRET",
+            "icon": "lock",
+            "color_scheme": 2,
+        },
+    },
+    "storytelling": {
+        "untold_story": {
+            "layout": "cinematic",
+            "text_position": "bottom",
+            "power_word": "UNTOLD",
+            "icon": "book",
+            "color_scheme": 0,
+        },
+        "true_crime": {
+            "layout": "centered",
+            "text_position": "center",
+            "power_word": "TRUE",
+            "icon": "skull",
+            "color_scheme": 1,
+        },
+        "mystery": {
+            "layout": "thirds",
+            "text_position": "top",
+            "power_word": "MYSTERY",
+            "icon": "question",
+            "color_scheme": 2,
+        },
+    },
+}
 
 
 class ThumbnailGenerator:
@@ -85,11 +224,21 @@ class ThumbnailGenerator:
         Args:
             output_dir: Directory for output files (default: assets/thumbnails/)
         """
-        if Image is None:
+        if not PIL_AVAILABLE:
             raise ImportError("PIL/Pillow is required. Install with: pip install pillow")
 
         self.output_dir = Path(output_dir or "assets/thumbnails")
         self.output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Initialize face detector if OpenCV available
+        self.face_cascade = None
+        if OPENCV_AVAILABLE:
+            try:
+                cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+                self.face_cascade = cv2.CascadeClassifier(cascade_path)
+                logger.debug("Face detection initialized")
+            except Exception as e:
+                logger.debug(f"Face detection not available: {e}")
 
         logger.info(f"ThumbnailGenerator initialized. Output: {self.output_dir}")
 
@@ -588,6 +737,543 @@ class ThumbnailGenerator:
             variants.append(path)
 
         return variants
+
+    def detect_faces(self, image_path: str) -> List[Dict[str, int]]:
+        """
+        Detect faces in an image for auto-framing.
+
+        Args:
+            image_path: Path to image file
+
+        Returns:
+            List of face bounding boxes as dicts with x, y, width, height
+        """
+        if not OPENCV_AVAILABLE or self.face_cascade is None:
+            logger.debug("Face detection not available")
+            return []
+
+        try:
+            # Read image
+            img = cv2.imread(image_path)
+            if img is None:
+                return []
+
+            # Convert to grayscale for face detection
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+            # Detect faces
+            faces = self.face_cascade.detectMultiScale(
+                gray,
+                scaleFactor=1.1,
+                minNeighbors=5,
+                minSize=(30, 30)
+            )
+
+            # Convert to list of dicts
+            face_boxes = []
+            for (x, y, w, h) in faces:
+                face_boxes.append({
+                    "x": int(x),
+                    "y": int(y),
+                    "width": int(w),
+                    "height": int(h),
+                    "center_x": int(x + w // 2),
+                    "center_y": int(y + h // 2)
+                })
+
+            logger.debug(f"Detected {len(face_boxes)} faces in {image_path}")
+            return face_boxes
+
+        except Exception as e:
+            logger.warning(f"Face detection failed: {e}")
+            return []
+
+    def auto_frame_with_face(
+        self,
+        image_path: str,
+        output_path: Optional[str] = None,
+        face_position: str = "right"  # left, right, center
+    ) -> str:
+        """
+        Auto-frame an image to center on detected face.
+
+        Args:
+            image_path: Path to source image
+            output_path: Optional output path
+            face_position: Where to position face (left, right, center)
+
+        Returns:
+            Path to framed image
+        """
+        faces = self.detect_faces(image_path)
+
+        # Load image
+        img = Image.open(image_path)
+        orig_width, orig_height = img.size
+
+        if not faces:
+            # No faces detected, use rule of thirds
+            logger.debug("No faces detected, using standard crop")
+            crop_box = self._calculate_rule_of_thirds_crop(orig_width, orig_height)
+        else:
+            # Use largest face
+            largest_face = max(faces, key=lambda f: f["width"] * f["height"])
+            crop_box = self._calculate_face_crop(
+                orig_width, orig_height, largest_face, face_position
+            )
+
+        # Crop image
+        cropped = img.crop(crop_box)
+
+        # Resize to thumbnail dimensions
+        cropped = cropped.resize((self.WIDTH, self.HEIGHT), Image.Resampling.LANCZOS)
+
+        # Save
+        if not output_path:
+            safe_name = Path(image_path).stem
+            output_path = str(self.output_dir / f"{safe_name}_framed.png")
+
+        cropped.save(output_path, "PNG", quality=95)
+        logger.info(f"Auto-framed image saved: {output_path}")
+
+        return output_path
+
+    def _calculate_rule_of_thirds_crop(
+        self,
+        width: int,
+        height: int
+    ) -> Tuple[int, int, int, int]:
+        """Calculate crop box using rule of thirds."""
+        target_aspect = self.WIDTH / self.HEIGHT
+        source_aspect = width / height
+
+        if source_aspect > target_aspect:
+            # Source is wider, crop width
+            new_width = int(height * target_aspect)
+            x_offset = (width - new_width) // 3  # Rule of thirds
+            return (x_offset, 0, x_offset + new_width, height)
+        else:
+            # Source is taller, crop height
+            new_height = int(width / target_aspect)
+            y_offset = (height - new_height) // 3  # Rule of thirds
+            return (0, y_offset, width, y_offset + new_height)
+
+    def _calculate_face_crop(
+        self,
+        width: int,
+        height: int,
+        face: Dict[str, int],
+        face_position: str
+    ) -> Tuple[int, int, int, int]:
+        """Calculate crop box to position face correctly."""
+        target_aspect = self.WIDTH / self.HEIGHT
+
+        # Determine target position for face center
+        if face_position == "left":
+            target_x_ratio = 0.3
+        elif face_position == "right":
+            target_x_ratio = 0.7
+        else:  # center
+            target_x_ratio = 0.5
+
+        # Calculate crop dimensions maintaining aspect ratio
+        source_aspect = width / height
+
+        if source_aspect > target_aspect:
+            # Source is wider
+            new_width = int(height * target_aspect)
+            new_height = height
+
+            # Position crop to put face at target position
+            face_target_x = int(new_width * target_x_ratio)
+            x_offset = face["center_x"] - face_target_x
+            x_offset = max(0, min(x_offset, width - new_width))
+
+            return (x_offset, 0, x_offset + new_width, height)
+        else:
+            # Source is taller
+            new_width = width
+            new_height = int(width / target_aspect)
+
+            # Center on face vertically with some headroom
+            face_target_y = int(new_height * 0.35)  # Face in upper third
+            y_offset = face["center_y"] - face_target_y
+            y_offset = max(0, min(y_offset, height - new_height))
+
+            return (0, y_offset, width, y_offset + new_height)
+
+    def get_high_contrast_palette(self, niche: str, variant: int = 0) -> Dict[str, str]:
+        """
+        Get a high-contrast color palette for a niche.
+
+        Args:
+            niche: Content niche
+            variant: Palette variant (0, 1, or 2)
+
+        Returns:
+            Dict with bg, text, and accent colors
+        """
+        palettes = HIGH_CONTRAST_PALETTES.get(niche, HIGH_CONTRAST_PALETTES["default"])
+        return palettes[variant % len(palettes)]
+
+    def add_power_word_overlay(
+        self,
+        image: Image.Image,
+        word: str,
+        position: str = "top-left",
+        style: str = "banner"
+    ) -> Image.Image:
+        """
+        Add a power word overlay to the thumbnail.
+
+        Args:
+            image: PIL Image to modify
+            word: Power word to add
+            position: Position (top-left, top-right, bottom-left, bottom-right)
+            style: Style (banner, badge, stamp)
+
+        Returns:
+            Modified PIL Image
+        """
+        result = image.copy()
+        draw = ImageDraw.Draw(result)
+
+        # Get font
+        font_size = 48
+        font = self._get_font(font_size, bold=True)
+
+        # Calculate text size
+        bbox = draw.textbbox((0, 0), word, font=font)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+
+        # Determine position
+        padding = 20
+        if "left" in position:
+            x = padding
+        else:
+            x = self.WIDTH - text_width - padding * 3
+
+        if "top" in position:
+            y = padding
+        else:
+            y = self.HEIGHT - text_height - padding * 3
+
+        if style == "banner":
+            # Draw angled banner
+            banner_height = text_height + padding * 2
+            banner_points = [
+                (x - padding, y),
+                (x + text_width + padding * 2, y),
+                (x + text_width + padding * 2 + 20, y + banner_height),
+                (x - padding - 20, y + banner_height)
+            ]
+            draw.polygon(banner_points, fill=(255, 0, 0))
+            draw.text((x, y + padding // 2), word, fill=(255, 255, 255), font=font)
+
+        elif style == "badge":
+            # Draw circular badge
+            badge_size = max(text_width, text_height) + padding * 2
+            badge_x = x + text_width // 2
+            badge_y = y + text_height // 2 + padding
+            draw.ellipse(
+                [badge_x - badge_size//2, badge_y - badge_size//2,
+                 badge_x + badge_size//2, badge_y + badge_size//2],
+                fill=(255, 0, 0),
+                outline=(255, 255, 255),
+                width=3
+            )
+            # Center text in badge
+            text_x = badge_x - text_width // 2
+            text_y = badge_y - text_height // 2
+            draw.text((text_x, text_y), word, fill=(255, 255, 255), font=font)
+
+        else:  # stamp
+            # Draw stamp-style with border
+            draw.rectangle(
+                [x - padding, y,
+                 x + text_width + padding, y + text_height + padding],
+                fill=(200, 0, 0),
+                outline=(255, 255, 255),
+                width=3
+            )
+            draw.text((x, y + padding // 2), word, fill=(255, 255, 255), font=font)
+
+        return result
+
+    def generate_from_template(
+        self,
+        template_name: str,
+        title: str,
+        niche: str,
+        background_image: Optional[str] = None,
+        output_path: Optional[str] = None
+    ) -> str:
+        """
+        Generate thumbnail from a predefined template.
+
+        Args:
+            template_name: Name of template (e.g., "money_reveal", "dark_truth")
+            title: Main title text
+            niche: Content niche
+            background_image: Optional background image path
+            output_path: Optional output path
+
+        Returns:
+            Path to generated thumbnail
+        """
+        templates = THUMBNAIL_TEMPLATES.get(niche, THUMBNAIL_TEMPLATES.get("default", {}))
+        template = templates.get(template_name)
+
+        if not template:
+            logger.warning(f"Template '{template_name}' not found for niche '{niche}'. Using default.")
+            return self.generate(title, niche, output_path, background_image)
+
+        # Get color scheme from template
+        palette = self.get_high_contrast_palette(niche, template.get("color_scheme", 0))
+
+        # Create custom brand colors from palette
+        from dataclasses import replace
+        colors = self._get_brand_colors(niche)
+
+        # Generate base thumbnail
+        if background_image and os.path.exists(background_image):
+            img = Image.open(background_image)
+            img = img.resize((self.WIDTH, self.HEIGHT), Image.Resampling.LANCZOS)
+            img = img.convert('RGB')
+
+            # Apply color overlay from palette
+            overlay = Image.new('RGB', (self.WIDTH, self.HEIGHT), self._hex_to_rgb(palette["bg"]))
+            img = Image.blend(img, overlay, 0.5)
+        else:
+            img = self._create_gradient_background(colors, "radial")
+
+        # Apply vignette
+        img = self._apply_vignette(img, strength=0.7)
+
+        # Add power word if in template
+        power_word = template.get("power_word")
+        if power_word:
+            img = self.add_power_word_overlay(img, power_word, "top-left", "banner")
+
+        # Extract key words and add text
+        key_words = self._extract_key_words(title)
+        text_position = template.get("text_position", "center")
+        img = self._add_text_overlay(img, key_words, niche, text_position)
+
+        # Generate output path
+        if not output_path:
+            safe_title = re.sub(r'[^\w\s-]', '', title)[:20].strip().replace(' ', '_')
+            output_path = str(self.output_dir / f"thumb_{template_name}_{safe_title}.png")
+
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        img.save(output_path, "PNG", quality=95)
+
+        logger.success(f"Template thumbnail saved: {output_path}")
+        return output_path
+
+    def _hex_to_rgb(self, hex_color: str) -> Tuple[int, int, int]:
+        """Convert hex color to RGB tuple."""
+        hex_color = hex_color.lstrip('#')
+        return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+
+    def generate_ab_variants(
+        self,
+        title: str,
+        niche: str,
+        count: int = 3,
+        background_image: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Generate A/B test variants with different designs.
+
+        Creates variants with different:
+        - Color palettes
+        - Text positions
+        - Power words
+        - Vignette strengths
+
+        Args:
+            title: Video title
+            niche: Content niche
+            count: Number of variants (default 3)
+            background_image: Optional background image
+
+        Returns:
+            List of dicts with variant info and paths
+        """
+        logger.info(f"Generating {count} A/B test variants for: {title}")
+
+        variants = []
+        positions = ["center", "top", "bottom"]
+        power_word_categories = list(POWER_WORDS.keys())[:count]
+        vignette_strengths = [0.5, 0.7, 0.9]
+
+        for i in range(count):
+            # Get variant-specific settings
+            palette = self.get_high_contrast_palette(niche, i)
+            position = positions[i % len(positions)]
+            vignette = vignette_strengths[i % len(vignette_strengths)]
+
+            # Select power word
+            if i < len(power_word_categories):
+                category = power_word_categories[i]
+                power_word = POWER_WORDS[category][0]
+            else:
+                power_word = None
+
+            # Generate safe filename
+            safe_title = re.sub(r'[^\w\s-]', '', title)[:20].strip().replace(' ', '_')
+            output_path = str(self.output_dir / f"thumb_{safe_title}_{niche}_ab{i+1}.png")
+
+            # Create custom colors for this variant
+            colors = self._get_brand_colors(niche)
+
+            # Generate thumbnail
+            if background_image and os.path.exists(background_image):
+                img = Image.open(background_image)
+                img = img.resize((self.WIDTH, self.HEIGHT), Image.Resampling.LANCZOS)
+                img = img.convert('RGB')
+
+                # Apply color overlay
+                overlay = Image.new('RGB', (self.WIDTH, self.HEIGHT), self._hex_to_rgb(palette["bg"]))
+                img = Image.blend(img, overlay, 0.4)
+            else:
+                img = self._create_gradient_background(colors, "radial")
+
+            # Apply vignette
+            img = self._apply_vignette(img, strength=vignette)
+
+            # Add power word overlay for some variants
+            if power_word and i > 0:  # First variant without power word
+                img = self.add_power_word_overlay(img, power_word, "top-left", "banner")
+
+            # Add accent elements
+            img = self._add_accent_elements(img, niche)
+
+            # Add text
+            key_words = self._extract_key_words(title)
+            img = self._add_text_overlay(img, key_words, niche, position)
+
+            # Save
+            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+            img.save(output_path, "PNG", quality=95)
+
+            variants.append({
+                "variant_id": f"ab{i+1}",
+                "path": output_path,
+                "palette": palette,
+                "text_position": position,
+                "power_word": power_word,
+                "vignette_strength": vignette,
+                "settings": {
+                    "niche": niche,
+                    "title": title,
+                    "background_image": background_image,
+                }
+            })
+
+            logger.info(f"Generated variant {i+1}: {output_path}")
+
+        return variants
+
+    def get_available_templates(self, niche: str = None) -> Dict[str, List[str]]:
+        """
+        Get list of available templates.
+
+        Args:
+            niche: Optional niche to filter by
+
+        Returns:
+            Dict of niche -> list of template names
+        """
+        if niche:
+            templates = THUMBNAIL_TEMPLATES.get(niche, {})
+            return {niche: list(templates.keys())}
+
+        return {n: list(t.keys()) for n, t in THUMBNAIL_TEMPLATES.items()}
+
+    def get_power_words(self, category: str = None) -> Dict[str, List[str]]:
+        """
+        Get available power words.
+
+        Args:
+            category: Optional category to filter by
+
+        Returns:
+            Dict of category -> list of power words
+        """
+        if category:
+            return {category: POWER_WORDS.get(category, [])}
+        return POWER_WORDS
+
+    def generate_batch(
+        self,
+        configs: List[Dict],
+        max_workers: int = 4
+    ) -> List[str]:
+        """
+        Generate multiple thumbnails in parallel.
+
+        Args:
+            configs: List of thumbnail configs, each with keys:
+                     - title: Video title
+                     - niche: Content niche
+                     - output_path: Optional output path
+                     - text_position: Optional text position
+                     - vignette_strength: Optional vignette strength
+            max_workers: Number of parallel workers
+
+        Returns:
+            List of paths to generated thumbnails
+        """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        logger.info(f"Generating {len(configs)} thumbnails in parallel with {max_workers} workers")
+
+        results = []
+
+        def generate_single(config: Dict) -> Optional[str]:
+            """Generate a single thumbnail from config."""
+            try:
+                return self.generate(
+                    title=config.get("title", "Untitled"),
+                    niche=config.get("niche", "default"),
+                    output_path=config.get("output_path"),
+                    background_image=config.get("background_image"),
+                    text_position=config.get("text_position", "center"),
+                    vignette_strength=config.get("vignette_strength", 0.7)
+                )
+            except Exception as e:
+                logger.warning(f"Thumbnail generation failed for '{config.get('title', 'unknown')}': {e}")
+                return None
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [executor.submit(generate_single, config) for config in configs]
+
+            for future in as_completed(futures):
+                result = future.result()
+                if result:
+                    results.append(result)
+
+        logger.success(f"Generated {len(results)}/{len(configs)} thumbnails")
+        return results
+
+
+def generate_thumbnails_batch(configs: List[Dict], output_dir: str = None, max_workers: int = 4) -> List[str]:
+    """
+    Convenience function to generate multiple thumbnails in parallel.
+
+    Args:
+        configs: List of thumbnail configs (see ThumbnailGenerator.generate_batch)
+        output_dir: Output directory (default: assets/thumbnails/)
+        max_workers: Number of parallel workers
+
+    Returns:
+        List of paths to generated thumbnails
+    """
+    generator = ThumbnailGenerator(output_dir=output_dir)
+    return generator.generate_batch(configs, max_workers=max_workers)
 
 
 def main():

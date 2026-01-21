@@ -189,6 +189,14 @@ class OptimalTimeCalculator:
                 CREATE INDEX IF NOT EXISTS idx_upload_perf_channel
                 ON upload_performance(channel_id, upload_hour, upload_day)
             """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_upload_perf_created
+                ON upload_performance(created_at)
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_upload_perf_views
+                ON upload_performance(views_24h)
+            """)
 
     async def calculate_optimal_time(
         self,
@@ -479,6 +487,14 @@ class CompetitorAvoidance:
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_competitor_niche
                 ON competitor_uploads(niche, upload_hour, upload_day)
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_competitor_observed
+                ON competitor_uploads(observed_at)
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_competitor_id
+                ON competitor_uploads(competitor_id)
             """)
 
     async def record_competitor_upload(
@@ -805,6 +821,18 @@ class BatchScheduler:
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_scheduled_time
                 ON scheduled_content(scheduled_time, status)
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_scheduled_channel
+                ON scheduled_content(channel_id)
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_scheduled_status
+                ON scheduled_content(status, created_at)
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_scheduled_priority
+                ON scheduled_content(priority, scheduled_time)
             """)
 
     async def batch_schedule(

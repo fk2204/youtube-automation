@@ -1,0 +1,118 @@
+[project]
+name = "youtube-automation"
+version = "2.0.0"
+description = "AI-powered YouTube content automation system"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "pytest-mock>=3.14.0",
+    "black>=24.10.0",
+    "isort>=5.13.0",
+    "flake8>=7.1.0",
+    "mypy>=1.13.0",
+    "pre-commit>=4.0.0",
+]
+sentiment = [
+    "textblob>=0.17.1",
+    "vaderSentiment>=3.3.2",
+]
+prediction = [
+    "prophet>=1.1.4",
+    "statsmodels>=0.14.0",
+]
+whisper = [
+    "openai-whisper>=20231117",
+]
+thumbnails = [
+    "face-recognition>=1.3.0",
+    "opencv-python>=4.8.0",
+]
+notifications = [
+    "discord-webhook>=1.3.0",
+]
+all = [
+    "youtube-automation[dev,sentiment,prediction,whisper,thumbnails,notifications]",
+]
+
+[tool.black]
+line-length = 100
+target-version = ['py310']
+exclude = '''
+/(
+    \.git
+    | \.mypy_cache
+    | \.pytest_cache
+    | __pycache__
+    | \.venv
+    | venv
+    | build
+    | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
+skip_gitignore = true
+known_first_party = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+python_files = ["test_*.py", "*_test.py"]
+python_functions = ["test_*"]
+python_classes = ["Test*"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+]
+markers = [
+    "integration: marks tests as integration tests (may require external services)",
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "whisper: marks tests that require Whisper model",
+    "reddit: marks tests that require Reddit API",
+    "api: marks tests that require external API access",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/conftest.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+show_missing = true
+fail_under = 50
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+exclude = [
+    "venv",
+    ".venv",
+    "build",
+    "dist",
+]

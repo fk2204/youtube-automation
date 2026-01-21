@@ -22,11 +22,11 @@ Usage:
 import os
 import re
 import json
-import shutil
 import subprocess
 import tempfile
 import random
 from pathlib import Path
+import shutil
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
 from loguru import logger
@@ -95,14 +95,32 @@ class ProVideoGenerator:
     def __init__(
         self,
         resolution: Tuple[int, int] = (1920, 1080),
-        fps: int = 30
+        fps: int = 30,
+        use_gpu: bool = True,
+        prefer_quality: bool = False
     ):
         self.resolution = resolution
         self.width, self.height = resolution
         self.fps = fps
 
-        # Find FFmpeg
+        # Find FFmpeg and ffprobe
         self.ffmpeg = self._find_ffmpeg()
+        self.ffprobe = self._find_ffprobe() if self.ffmpeg else None
+
+        # Initialize GPU acceleration
+        self.use_gpu = use_gpu
+        self.gpu = None
+        if use_gpu and self.ffmpeg:
+            try:
+                from ..utils.gpu_utils import GPUAccelerator
+                self.gpu = GPUAccelerator(self.ffmpeg, prefer_quality)
+                if self.gpu.is_available():
+                    logger.success(f"GPU acceleration enabled: {self.gpu.get_gpu_type().value}")
+                else:
+                    logger.info("GPU not available, using CPU encoding")
+            except Exception as e:
+                logger.warning(f"GPU initialization failed: {e}")
+                self.gpu = None
 
         # Initialize stock footage client
         try:
@@ -116,11 +134,46 @@ class ProVideoGenerator:
         self.temp_dir = Path(tempfile.gettempdir()) / "video_pro"
         self.temp_dir.mkdir(exist_ok=True)
 
-        logger.info(f"ProVideoGenerator initialized ({self.width}x{self.height})")
+        gpu_status = "GPU" if self.gpu and self.gpu.is_available() else "CPU"
+        logger.info(f"ProVideoGenerator initialized ({self.width}x{self.height}, {gpu_status})")
+
+    def _run_ffmpeg(self, cmd: list, timeout: int = 120) -> bool:
+        """Run FFmpeg command with error handling."""
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+            if result.returncode != 0:
+                logger.error(f"FFmpeg error: {result.stderr[:200]}")
+                return False
+            return True
+        except subprocess.TimeoutExpired:
+            logger.error(f"FFmpeg command timed out after {timeout}s")
+            return False
+        except Exception as e:
+            logger.error(f"FFmpeg command failed: {e}")
+            return False
+
+    def _get_encoder_args(self, bitrate: str = "8M", quality: int = 23) -> List[str]:
+        """Get encoder arguments based on GPU availability."""
+        if self.gpu and self.gpu.is_available():
+            return self.gpu.get_ffmpeg_args(
+                preset="fast",
+                bitrate=bitrate,
+                quality=quality,
+                width=self.width,
+                height=self.height
+            )
+        else:
+            # CPU fallback
+            return [
+                "-c:v", "libx264",
+                "-preset", "fast",
+                "-crf", str(quality),
+                "-b:v", bitrate,
+                "-pix_fmt", "yuv420p"
+            ]
 
     def _find_ffmpeg(self) -> Optional[str]:
         """Find FFmpeg executable."""
-        import shutil
         if shutil.which("ffmpeg"):
             return "ffmpeg"
 
@@ -133,6 +186,21 @@ class ProVideoGenerator:
                     for root, dirs, files in os.walk(package_path):
                         if "ffmpeg.exe" in files:
                             return os.path.join(root, "ffmpeg.exe")
+        return None
+
+    def _find_ffprobe(self) -> Optional[str]:
+        """Find ffprobe executable (companion to ffmpeg)."""
+        # Try system PATH first
+        if shutil.which("ffprobe"):
+            return "ffprobe"
+
+        # If ffmpeg is found, ffprobe is usually in the same directory
+        if self.ffmpeg:
+            ffmpeg_dir = os.path.dirname(self.ffmpeg)
+            ffprobe_path = os.path.join(ffmpeg_dir, 'ffprobe.exe' if os.name == 'nt' else 'ffprobe')
+            if os.path.exists(ffprobe_path):
+                return ffprobe_path
+
         return None
 
     def create_text_clip(
@@ -351,8 +419,9 @@ class ProVideoGenerator:
         frame_path = self.temp_dir / f"title_frame_{hash(title)}.png"
         img.save(str(frame_path))
 
-        # Create video with fade effects
+        # Create video with fade effects (using GPU if available)
         if self.ffmpeg:
+            encoder_args = self._get_encoder_args(bitrate="6M", quality=20)
             cmd = [
                 self.ffmpeg, '-y',
                 '-loop', '1',
@@ -360,11 +429,9 @@ class ProVideoGenerator:
                 '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo',
                 '-t', str(duration),
                 '-vf', f'fade=in:0:30,fade=out:st={duration-0.5}:d=0.5',
-                '-c:v', 'libx264',
-                '-pix_fmt', 'yuv420p',
-                '-c:a', 'aac',
-                str(output_path)
             ]
+            cmd.extend(encoder_args)
+            cmd.extend(['-c:a', 'aac', str(output_path)])
             subprocess.run(cmd, capture_output=True, timeout=60)
 
         return str(output_path) if output_path.exists() else None
@@ -418,35 +485,42 @@ class ProVideoGenerator:
 
             filter_str = ",".join(filters)
 
+            # Get encoder args with GPU support
+            encoder_args = self._get_encoder_args(bitrate="8M", quality=23)
+
             # Handle duration (loop if needed, trim if too long)
             if input_duration < target_duration:
                 # Loop the video
                 loop_count = int(target_duration / input_duration) + 1
-                cmd = [
-                    self.ffmpeg, '-y',
+                cmd = [self.ffmpeg, '-y']
+
+                # Add GPU input args if available
+                if self.gpu and self.gpu.is_available():
+                    cmd.extend(self.gpu.get_input_args(use_hwaccel=True))
+
+                cmd.extend([
                     '-stream_loop', str(loop_count),
                     '-i', input_path,
                     '-t', str(target_duration),
                     '-vf', filter_str,
-                    '-c:v', 'libx264',
-                    '-preset', 'fast',
-                    '-an',  # Remove audio from stock clips
-                    '-pix_fmt', 'yuv420p',
-                    output_path
-                ]
+                ])
+                cmd.extend(encoder_args)
+                cmd.extend(['-an', output_path])  # Remove audio from stock clips
             else:
                 # Trim the video
-                cmd = [
-                    self.ffmpeg, '-y',
+                cmd = [self.ffmpeg, '-y']
+
+                # Add GPU input args if available
+                if self.gpu and self.gpu.is_available():
+                    cmd.extend(self.gpu.get_input_args(use_hwaccel=True))
+
+                cmd.extend([
                     '-i', input_path,
                     '-t', str(target_duration),
                     '-vf', filter_str,
-                    '-c:v', 'libx264',
-                    '-preset', 'fast',
-                    '-an',
-                    '-pix_fmt', 'yuv420p',
-                    output_path
-                ]
+                ])
+                cmd.extend(encoder_args)
+                cmd.extend(['-an', output_path])
 
             subprocess.run(cmd, capture_output=True, timeout=120)
             return output_path if os.path.exists(output_path) else None
@@ -488,29 +562,26 @@ class ProVideoGenerator:
 
         try:
             # Get audio duration using FFprobe
-            ffprobe = self.ffmpeg.replace('ffmpeg.exe', 'ffprobe.exe') if 'ffmpeg.exe' in self.ffmpeg else self.ffmpeg.replace('ffmpeg', 'ffprobe')
-
-            # Check if ffprobe exists
-            if not os.path.exists(ffprobe) and not shutil.which(ffprobe):
-                # Try to find ffprobe in same directory as ffmpeg
-                ffmpeg_dir = os.path.dirname(self.ffmpeg)
-                ffprobe = os.path.join(ffmpeg_dir, 'ffprobe.exe') if os.name == 'nt' else os.path.join(ffmpeg_dir, 'ffprobe')
-
-            probe_cmd = [
-                ffprobe, '-v', 'error',
-                '-show_entries', 'format=duration',
-                '-of', 'default=noprint_wrappers=1:nokey=1',
-                audio_file
-            ]
-            result = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=30)
-
-            if result.returncode != 0 or not result.stdout.strip():
-                # Fallback: estimate duration from file size (rough estimate)
+            if not self.ffprobe:
+                logger.warning("ffprobe not found, will estimate duration")
                 file_size = os.path.getsize(audio_file)
                 audio_duration = file_size / 16000  # Rough estimate for 128kbps audio
-                logger.warning(f"Could not get exact duration, estimating: {audio_duration:.1f}s")
             else:
-                audio_duration = float(result.stdout.strip())
+                probe_cmd = [
+                    self.ffprobe, '-v', 'error',
+                    '-show_entries', 'format=duration',
+                    '-of', 'default=noprint_wrappers=1:nokey=1',
+                    audio_file
+                ]
+                result = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=30)
+
+                if result.returncode != 0 or not result.stdout.strip():
+                    # Fallback: estimate duration from file size (rough estimate)
+                    file_size = os.path.getsize(audio_file)
+                    audio_duration = file_size / 16000  # Rough estimate for 128kbps audio
+                    logger.warning(f"Could not get exact duration, estimating: {audio_duration:.1f}s")
+                else:
+                    audio_duration = float(result.stdout.strip())
 
             logger.info(f"Audio duration: {audio_duration:.1f}s")
 
@@ -603,16 +674,17 @@ class ProVideoGenerator:
                     f.write(f"file '{seg}'\n")
 
             video_only = self.temp_dir / "video_only.mp4"
+            encoder_args = self._get_encoder_args(bitrate="8M", quality=23)
+
             concat_cmd = [
                 self.ffmpeg, '-y',
                 '-f', 'concat',
                 '-safe', '0',
                 '-i', str(concat_file),
-                '-c:v', 'libx264',
-                '-preset', 'fast',
-                '-pix_fmt', 'yuv420p',
-                str(video_only)
             ]
+            concat_cmd.extend(encoder_args)
+            concat_cmd.append(str(video_only))
+
             subprocess.run(concat_cmd, capture_output=True, timeout=300)
 
             # Combine with audio
@@ -675,19 +747,18 @@ class ProVideoGenerator:
         frame_path = Path(output_path).with_suffix('.bg.png')
         img.save(str(frame_path))
 
-        # Create video
+        # Create video (with GPU support)
         if self.ffmpeg:
+            encoder_args = self._get_encoder_args(bitrate="6M", quality=23)
             cmd = [
                 self.ffmpeg, '-y',
                 '-loop', '1',
                 '-i', str(frame_path),
                 '-t', str(duration),
                 '-vf', 'fade=in:0:15,fade=out:st=' + str(duration - 0.5) + ':d=0.5',
-                '-c:v', 'libx264',
-                '-pix_fmt', 'yuv420p',
-                '-an',
-                output_path
             ]
+            cmd.extend(encoder_args)
+            cmd.extend(['-an', output_path])
             subprocess.run(cmd, capture_output=True, timeout=60)
 
         # Cleanup frame

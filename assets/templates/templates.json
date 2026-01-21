@@ -1,0 +1,935 @@
+{
+  "version": "1.0",
+  "templates": [
+    {
+      "id": "finance_standard",
+      "name": "Finance Standard",
+      "description": "Standard finance video with title card and lower thirds",
+      "resolution": [
+        1920,
+        1080
+      ],
+      "duration": 60.0,
+      "fps": 30,
+      "placeholders": [
+        {
+          "id": "title",
+          "type": "text",
+          "position": [
+            100,
+            100
+          ],
+          "size": [
+            1720,
+            200
+          ],
+          "default_value": null,
+          "font_size": 72,
+          "font_color": "#FFD700",
+          "font_file": null,
+          "background_color": null,
+          "opacity": 1.0,
+          "duration": 5.0,
+          "start_time": 0.0,
+          "animation": "fade_in",
+          "layer": 0
+        },
+        {
+          "id": "subtitle",
+          "type": "text",
+          "position": [
+            100,
+            200
+          ],
+          "size": [
+            1720,
+            100
+          ],
+          "default_value": null,
+          "font_size": 36,
+          "font_color": "#ffffff",
+          "font_file": null,
+          "background_color": null,
+          "opacity": 1.0,
+          "duration": 4.5,
+          "start_time": 0.5,
+          "animation": "fade_in",
+          "layer": 0
+        },
+        {
+          "id": "lower_third",
+          "type": "text",
+          "position": [
+            100,
+            900
+          ],
+          "size": [
+            800,
+            80
+          ],
+          "default_value": null,
+          "font_size": 28,
+          "font_color": "#00d4aa",
+          "font_file": null,
+          "background_color": "#1a1a2e@0.8",
+          "opacity": 1.0,
+          "duration": null,
+          "start_time": 2.0,
+          "animation": "slide_left",
+          "layer": 0
+        },
+        {
+          "id": "cta",
+          "type": "text",
+          "position": [
+            100,
+            980
+          ],
+          "size": [
+            400,
+            50
+          ],
+          "default_value": "Subscribe for more!",
+          "font_size": 24,
+          "font_color": "#ffffff",
+          "font_file": null,
+          "background_color": null,
+          "opacity": 1.0,
+          "duration": null,
+          "start_time": 0.0,
+          "animation": null,
+          "layer": 1
+        }
+      ],
+      "base_video": null,
+      "base_image": null,
+      "background_color": "#1a1a2e",
+      "created_at": "2026-01-19T19:05:19.557828",
+      "niche": "finance",
+      "tags": [
+        "finance",
+        "educational",
+        "professional"
+      ]
+    },
+    {
+      "id": "psychology_standard",
+      "name": "Psychology Standard",
+      "description": "Psychology video with ethereal, thought-provoking design",
+      "resolution": [
+        1920,
+        1080
+      ],
+      "duration": 60.0,
+      "fps": 30,
+      "placeholders": [
+        {
+          "id": "title",
+          "type": "text",
+          "position": [
+            100,
+            150
+          ],
+          "size": [
+            1720,
+            200
+          ],
+          "default_value": null,
+          "font_size": 68,
+          "font_color": "#E0E0FF",
+          "font_file": null,
+          "background_color": null,
+          "opacity": 1.0,
+          "duration": null,
+          "start_time": 0.0,
+          "animation": "fade_in",
+          "layer": 0
+        },
+        {
+          "id": "hook_question",
+          "type": "text",
+          "position": [
+            200,
+            400
+          ],
+          "size": [
+            1520,
+            150
+          ],
+          "default_value": null,
+          "font_size": 48,
+          "font_color": "#9b59b6",
+          "font_file": null,
+          "background_color": null,
+          "opacity": 1.0,
+          "duration": null,
+          "start_time": 1.0,
+          "animation": "fade_in",
+          "layer": 0
+        },
+        {
+          "id": "key_point",
+          "type": "text",
+          "position": [
+            100,
+            700
+          ],
+          "size": [
+            1000,
+            100
+          ],
+          "default_value": null,
+          "font_size": 32,
+          "font_color": "#ffffff",
+          "font_file": null,
+          "background_color": "#0f0f1a@0.7",
+          "opacity": 1.0,
+          "duration": null,
+          "start_time": 3.0,
+          "animation": "slide_up",
+          "layer": 0
+        },
+        {
+          "id": "source_citation",
+          "type": "text",
+          "position": [
+            100,
+            1000
+          ],
+          "size": [
+            600,
+            40
+          ],
+          "default_value": "",
+          "font_size": 18,
+          "font_color": "#888888",
+          "font_file": null,
+          "background_color": null,
+          "opacity": 1.0,
+          "duration": null,
+          "start_time": 0.0,
+          "animation": null,
+          "layer": 1
+        }
+      ],
+      "base_video": null,
+      "base_image": null,
+      "background_color": "#0f0f1a",
+      "created_at": "2026-01-19T19:05:19.557848",
+      "niche": "psychology",
+      "tags": [
+        "psychology",
+        "self-improvement",
+        "educational"
+      ]
+    },
+    {
+      "id": "storytelling_standard",
+      "name": "Storytelling Standard",
+      "description": "Dramatic storytelling template with cinematic feel",
+      "resolution": [
+        1920,
+        1080
+      ],
+      "duration": 60.0,
+      "fps": 30,
+      "placeholders": [
+        {
+          "id": "chapter_title",
+          "type": "text",
+          "position": [
+            100,
+            80
+          ],
+          "size": [
+            1720,
+            100
+          ],
+          "default_value": null,
+          "font_size": 56,
+          "font_color": "#FFD700",
+          "font_file": null,
+          "background_color": null,
+          "opacity": 1.0,
+          "duration": 4.0,
+          "start_time": 0.0,
+          "animation": "fade_in",
+          "layer": 0
+        },
+        {
+          "id": "story_text",
+          "type": "text",
+          "position": [
+            150,
+            450
+          ],
+          "size": [
+            1620,
+            300
+          ],
+          "default_value": null,
+          "font_size": 42,
+          "font_color": "#ffffff",
+          "font_file": null,
+          "background_color": null,
+          "opacity": 1.0,
+          "duration": null,
+          "start_time": 0.5,
+          "animation": "fade_in",
+          "layer": 0
+        },
+        {
+          "id": "dramatic_quote",
+          "type": "text",
+          "position": [
+            200,
+            300
+          ],
+          "size": [
+            1520,
+            200
+          ],
+          "default_value": null,
+          "font_size": 52,
+          "font_color": "#e74c3c",
+          "font_file": null,
+          "background_color": null,
+          "opacity": 1.0,
+          "duration": 5.0,
+          "start_time": 2.0,
+          "animation": "slide_right",
+          "layer": 0
+        },
+        {
+          "id": "date_location",
+          "type": "text",
+          "position": [
+            100,
+            950
+          ],
+          "size": [
+            500,
+            40
+          ],
+          "default_value": null,
+          "font_size": 22,
+          "font_color": "#cccccc",
+          "font_file": null,
+          "background_color": null,
+          "opacity": 1.0,
+          "duration": null,
+          "start_time": 0.0,
+          "animation": null,
+          "layer": 1
+        }
+      ],
+      "base_video": null,
+      "base_image": null,
+      "background_color": "#0d0d0d",
+      "created_at": "2026-01-19T19:05:19.557865",
+      "niche": "storytelling",
+      "tags": [
+        "storytelling",
+        "documentary",
+        "dramatic"
+      ]
+    },
+    {
+      "id": "shorts_standard",
+      "name": "Shorts Standard",
+      "description": "Standard vertical shorts template",
+      "resolution": [
+        1080,
+        1920
+      ],
+      "duration": 30.0,
+      "fps": 30,
+      "placeholders": [
+        {
+          "id": "hook_text",
+          "type": "text",
+          "position": [
+            50,
+            200
+          ],
+          "size": [
+            980,
+            300
+          ],
+          "default_value": null,
+          "font_size": 64,
+          "font_color": "#ffffff",
+          "font_file": null,
+          "background_color": null,
+          "opacity": 1.0,
+          "duration": 3.0,
+          "start_time": 0.0,
+          "animation": "slide_down",
+          "layer": 0
+        },
+        {
+          "id": "main_text",
+          "type": "text",
+          "position": [
+            50,
+            750
+          ],
+          "size": [
+            980,
+            400
+          ],
+          "default_value": null,
+          "font_size": 52,
+          "font_color": "#ffffff",
+          "font_file": null,
+          "background_color": null,
+          "opacity": 1.0,
+          "duration": null,
+          "start_time": 1.5,
+          "animation": "fade_in",
+          "layer": 0
+        },
+        {
+          "id": "emphasis",
+          "type": "text",
+          "position": [
+            100,
+            1200
+          ],
+          "size": [
+            880,
+            150
+          ],
+          "default_value": null,
+          "font_size": 72,
+          "font_color": "#FFD700",
+          "font_file": null,
+          "background_color": null,
+          "opacity": 1.0,
+          "duration": null,
+          "start_time": 3.0,
+          "animation": "fade_in",
+          "layer": 0
+        },
+        {
+          "id": "cta",
+          "type": "text",
+          "position": [
+            50,
+            1700
+          ],
+          "size": [
+            980,
+            100
+          ],
+          "default_value": "Follow for more!",
+          "font_size": 36,
+          "font_color": "#00d4aa",
+          "font_file": null,
+          "background_color": null,
+          "opacity": 1.0,
+          "duration": null,
+          "start_time": 25.0,
+          "animation": "slide_up",
+          "layer": 0
+        }
+      ],
+      "base_video": null,
+      "base_image": null,
+      "background_color": "#1a1a2e",
+      "created_at": "2026-01-19T19:05:19.557874",
+      "niche": null,
+      "tags": [
+        "shorts",
+        "vertical",
+        "quick"
+      ]
+    },
+    {
+      "id": "tutorial_standard",
+      "name": "Tutorial Standard",
+      "description": "Clean tutorial template with step indicators",
+      "resolution": [
+        1920,
+        1080
+      ],
+      "duration": 60.0,
+      "fps": 30,
+      "placeholders": [
+        {
+          "id": "title",
+          "type": "text",
+          "position": [
+            100,
+            50
+          ],
+          "size": [
+            1720,
+            100
+          ],
+          "default_value": null,
+          "font_size": 56,
+          "font_color": "#ffffff",
+          "font_file": null,
+          "background_color": null,
+          "opacity": 1.0,
+          "duration": null,
+          "start_time": 0.0,
+          "animation": "fade_in",
+          "layer": 0
+        },
+        {
+          "id": "step_number",
+          "type": "text",
+          "position": [
+            100,
+            200
+          ],
+          "size": [
+            200,
+            100
+          ],
+          "default_value": "1",
+          "font_size": 72,
+          "font_color": "#3498db",
+          "font_file": null,
+          "background_color": null,
+          "opacity": 1.0,
+          "duration": null,
+          "start_time": 0.0,
+          "animation": "slide_left",
+          "layer": 0
+        },
+        {
+          "id": "step_text",
+          "type": "text",
+          "position": [
+            320,
+            220
+          ],
+          "size": [
+            1500,
+            80
+          ],
+          "default_value": null,
+          "font_size": 42,
+          "font_color": "#ffffff",
+          "font_file": null,
+          "background_color": null,
+          "opacity": 1.0,
+          "duration": null,
+          "start_time": 0.3,
+          "animation": "fade_in",
+          "layer": 0
+        },
+        {
+          "id": "tip_box",
+          "type": "text",
+          "position": [
+            100,
+            850
+          ],
+          "size": [
+            700,
+            120
+          ],
+          "default_value": null,
+          "font_size": 28,
+          "font_color": "#ffffff",
+          "font_file": null,
+          "background_color": "#27ae60@0.9",
+          "opacity": 1.0,
+          "duration": null,
+          "start_time": 2.0,
+          "animation": "slide_up",
+          "layer": 0
+        },
+        {
+          "id": "progress",
+          "type": "text",
+          "position": [
+            1700,
+            50
+          ],
+          "size": [
+            150,
+            50
+          ],
+          "default_value": "1/5",
+          "font_size": 24,
+          "font_color": "#888888",
+          "font_file": null,
+          "background_color": null,
+          "opacity": 1.0,
+          "duration": null,
+          "start_time": 0.0,
+          "animation": null,
+          "layer": 2
+        }
+      ],
+      "base_video": null,
+      "base_image": null,
+      "background_color": "#1a1a2e",
+      "created_at": "2026-01-19T19:05:19.557886",
+      "niche": null,
+      "tags": [
+        "tutorial",
+        "educational",
+        "how-to"
+      ]
+    },
+    {
+      "id": "listicle_standard",
+      "name": "Listicle Standard",
+      "description": "Template for top-N and list-style videos",
+      "resolution": [
+        1920,
+        1080
+      ],
+      "duration": 60.0,
+      "fps": 30,
+      "placeholders": [
+        {
+          "id": "list_title",
+          "type": "text",
+          "position": [
+            100,
+            50
+          ],
+          "size": [
+            1720,
+            100
+          ],
+          "default_value": null,
+          "font_size": 52,
+          "font_color": "#ffffff",
+          "font_file": null,
+          "background_color": null,
+          "opacity": 1.0,
+          "duration": null,
+          "start_time": 0.0,
+          "animation": null,
+          "layer": 0
+        },
+        {
+          "id": "item_number",
+          "type": "text",
+          "position": [
+            100,
+            300
+          ],
+          "size": [
+            300,
+            300
+          ],
+          "default_value": null,
+          "font_size": 200,
+          "font_color": "#e74c3c",
+          "font_file": null,
+          "background_color": null,
+          "opacity": 1.0,
+          "duration": null,
+          "start_time": 0.0,
+          "animation": "slide_left",
+          "layer": 0
+        },
+        {
+          "id": "item_title",
+          "type": "text",
+          "position": [
+            450,
+            350
+          ],
+          "size": [
+            1400,
+            100
+          ],
+          "default_value": null,
+          "font_size": 56,
+          "font_color": "#FFD700",
+          "font_file": null,
+          "background_color": null,
+          "opacity": 1.0,
+          "duration": null,
+          "start_time": 0.3,
+          "animation": "fade_in",
+          "layer": 0
+        },
+        {
+          "id": "item_description",
+          "type": "text",
+          "position": [
+            450,
+            480
+          ],
+          "size": [
+            1400,
+            200
+          ],
+          "default_value": null,
+          "font_size": 36,
+          "font_color": "#ffffff",
+          "font_file": null,
+          "background_color": null,
+          "opacity": 1.0,
+          "duration": null,
+          "start_time": 0.6,
+          "animation": "fade_in",
+          "layer": 0
+        },
+        {
+          "id": "countdown",
+          "type": "text",
+          "position": [
+            1750,
+            50
+          ],
+          "size": [
+            100,
+            50
+          ],
+          "default_value": null,
+          "font_size": 28,
+          "font_color": "#888888",
+          "font_file": null,
+          "background_color": null,
+          "opacity": 1.0,
+          "duration": null,
+          "start_time": 0.0,
+          "animation": null,
+          "layer": 2
+        }
+      ],
+      "base_video": null,
+      "base_image": null,
+      "background_color": "#0d0d0d",
+      "created_at": "2026-01-19T19:05:19.557895",
+      "niche": null,
+      "tags": [
+        "listicle",
+        "top-n",
+        "countdown"
+      ]
+    },
+    {
+      "id": "money_blueprints_finance_standard",
+      "name": "money_blueprints - Finance Standard",
+      "description": "Standard finance video with title card and lower thirds",
+      "resolution": [
+        1920,
+        1080
+      ],
+      "duration": 60.0,
+      "fps": 30,
+      "placeholders": [
+        {
+          "id": "title",
+          "type": "text",
+          "position": [
+            100,
+            100
+          ],
+          "size": [
+            1720,
+            200
+          ],
+          "default_value": null,
+          "font_size": 72,
+          "font_color": "#FFD700",
+          "font_file": null,
+          "background_color": null,
+          "opacity": 1.0,
+          "duration": 5.0,
+          "start_time": 0.0,
+          "animation": "fade_in",
+          "layer": 0
+        },
+        {
+          "id": "subtitle",
+          "type": "text",
+          "position": [
+            100,
+            200
+          ],
+          "size": [
+            1720,
+            100
+          ],
+          "default_value": null,
+          "font_size": 36,
+          "font_color": "#ffffff",
+          "font_file": null,
+          "background_color": null,
+          "opacity": 1.0,
+          "duration": 4.5,
+          "start_time": 0.5,
+          "animation": "fade_in",
+          "layer": 0
+        },
+        {
+          "id": "lower_third",
+          "type": "text",
+          "position": [
+            100,
+            900
+          ],
+          "size": [
+            800,
+            80
+          ],
+          "default_value": null,
+          "font_size": 28,
+          "font_color": "#00d4aa",
+          "font_file": null,
+          "background_color": "#1a1a2e@0.8",
+          "opacity": 1.0,
+          "duration": null,
+          "start_time": 2.0,
+          "animation": "slide_left",
+          "layer": 0
+        },
+        {
+          "id": "cta",
+          "type": "text",
+          "position": [
+            100,
+            980
+          ],
+          "size": [
+            400,
+            50
+          ],
+          "default_value": "Subscribe for more!",
+          "font_size": 24,
+          "font_color": "#ffffff",
+          "font_file": null,
+          "background_color": null,
+          "opacity": 1.0,
+          "duration": null,
+          "start_time": 0.0,
+          "animation": null,
+          "layer": 1
+        }
+      ],
+      "base_video": null,
+      "base_image": null,
+      "background_color": "#1a1a2e",
+      "created_at": "2026-01-19T19:15:00.362928",
+      "niche": "finance",
+      "tags": [
+        "money_blueprints",
+        "finance"
+      ]
+    },
+    {
+      "id": "money_blueprints_shorts_standard",
+      "name": "money_blueprints - Shorts Standard",
+      "description": "Standard vertical shorts template",
+      "resolution": [
+        1080,
+        1920
+      ],
+      "duration": 30.0,
+      "fps": 30,
+      "placeholders": [
+        {
+          "id": "hook_text",
+          "type": "text",
+          "position": [
+            50,
+            200
+          ],
+          "size": [
+            980,
+            300
+          ],
+          "default_value": null,
+          "font_size": 64,
+          "font_color": "#ffffff",
+          "font_file": null,
+          "background_color": null,
+          "opacity": 1.0,
+          "duration": 3.0,
+          "start_time": 0.0,
+          "animation": "slide_down",
+          "layer": 0
+        },
+        {
+          "id": "main_text",
+          "type": "text",
+          "position": [
+            50,
+            750
+          ],
+          "size": [
+            980,
+            400
+          ],
+          "default_value": null,
+          "font_size": 52,
+          "font_color": "#ffffff",
+          "font_file": null,
+          "background_color": null,
+          "opacity": 1.0,
+          "duration": null,
+          "start_time": 1.5,
+          "animation": "fade_in",
+          "layer": 0
+        },
+        {
+          "id": "emphasis",
+          "type": "text",
+          "position": [
+            100,
+            1200
+          ],
+          "size": [
+            880,
+            150
+          ],
+          "default_value": null,
+          "font_size": 72,
+          "font_color": "#FFD700",
+          "font_file": null,
+          "background_color": null,
+          "opacity": 1.0,
+          "duration": null,
+          "start_time": 3.0,
+          "animation": "fade_in",
+          "layer": 0
+        },
+        {
+          "id": "cta",
+          "type": "text",
+          "position": [
+            50,
+            1700
+          ],
+          "size": [
+            980,
+            100
+          ],
+          "default_value": "Follow for more!",
+          "font_size": 36,
+          "font_color": "#00d4aa",
+          "font_file": null,
+          "background_color": null,
+          "opacity": 1.0,
+          "duration": null,
+          "start_time": 25.0,
+          "animation": "slide_up",
+          "layer": 0
+        }
+      ],
+      "base_video": null,
+      "base_image": null,
+      "background_color": "#1a1a2e",
+      "created_at": "2026-01-19T19:15:00.362934",
+      "niche": "finance",
+      "tags": [
+        "money_blueprints",
+        "finance"
+      ]
+    }
+  ]
+}

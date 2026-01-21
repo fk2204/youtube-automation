@@ -40,6 +40,7 @@ Date: 2026-01-19
 """
 
 import os
+import gc
 import math
 import random
 import subprocess
@@ -2204,6 +2205,9 @@ class ProVideoEngine:
                     except Exception:
                         pass
 
+            # Force garbage collection to free memory
+            gc.collect()
+
             if os.path.exists(output_video):
                 logger.success(f"Processed video saved: {output_video}")
                 return output_video
@@ -2218,6 +2222,9 @@ class ProVideoEngine:
                         os.remove(temp_file)
                     except Exception:
                         pass
+
+            # Force garbage collection even on error
+            gc.collect()
 
         return None
 

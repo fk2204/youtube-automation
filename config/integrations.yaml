@@ -1,0 +1,236 @@
+# YouTube Automation - Integrations Config
+# This file configures the integration of all free modules into the pipeline
+
+# ============================================================
+# CAPTIONING INTEGRATION
+# ============================================================
+captioning:
+  provider: whisper
+  model: base  # tiny, base, small, medium, large
+  auto_captions: true  # Auto-generate captions for every video
+  burn_captions: false  # Burn captions into video (default: upload as separate track)
+  styles:
+    default:
+      font_size: 24
+      font_color: "#FFFFFF"
+      background_color: "rgba(0,0,0,0.7)"
+      position: bottom
+    shorts:
+      font_size: 32
+      font_color: "#FFFFFF"
+      background_color: "rgba(0,0,0,0.8)"
+      position: center
+    minimal:
+      font_size: 20
+      font_color: "#FFFFFF"
+      background_color: transparent
+      position: bottom
+    cinematic:
+      font_size: 28
+      font_color: "#FFFFFF"
+      background_color: "rgba(0,0,0,0.5)"
+      position: bottom
+
+# ============================================================
+# AI DISCLOSURE INTEGRATION
+# ============================================================
+ai_disclosure:
+  enabled: true
+  auto_track: true  # Automatically track AI usage during pipeline
+  add_to_description: true  # Add disclosure to video description
+  methods_to_track:
+    - tts  # Text-to-speech
+    - script_generation  # AI-generated scripts
+    - thumbnail_generation  # AI-generated thumbnails
+
+# ============================================================
+# ANALYTICS FEEDBACK INTEGRATION
+# ============================================================
+feedback_loop:
+  enabled: true
+  analyze_after_upload: true  # Analyze video performance 24h after upload
+  analysis_delay_hours: 24
+  update_template_scores: true  # Update template scores based on performance
+  generate_recommendations: true  # Auto-generate improvement recommendations
+  thresholds:
+    good_ctr: 5.0  # 5% CTR is considered good
+    good_retention: 50.0  # 50% average view duration is good
+    good_engagement: 4.0  # 4% engagement rate is good
+    drop_off_threshold: 10.0  # 10% drop in retention is significant
+
+# ============================================================
+# VIRAL HOOKS INTEGRATION
+# ============================================================
+viral_hooks:
+  enabled: true
+  auto_enhance: true  # Automatically enhance scripts with retention features
+  min_open_loops: 3  # Minimum open loops per video
+  pattern_interrupt_interval: 45  # Seconds between pattern interrupts
+  add_micro_payoffs: true  # Add micro-payoffs every 4-5 paragraphs
+  hook_styles:
+    - curiosity  # Highest performing
+    - contrarian
+    - action
+    - emotional
+    - value
+
+# ============================================================
+# METADATA OPTIMIZER INTEGRATION
+# ============================================================
+metadata_optimizer:
+  enabled: true
+  auto_optimize_titles: true  # Optimize titles with IMPACT formula
+  front_load_keywords: true  # Put main keyword in first 40 chars
+  add_year_to_titles: true  # Add current year for freshness
+  auto_generate_chapters: true  # Auto-generate chapters from script
+  min_chapters: 3  # Minimum chapters required
+  optimize_tags: true  # Optimize tags with trending keywords
+  max_tags: 30  # Maximum number of tags
+  power_words:
+    - Secret
+    - Hidden
+    - Proven
+    - Guaranteed
+    - Revolutionary
+    - Ultimate
+
+# ============================================================
+# KEYWORD RESEARCH INTEGRATION
+# ============================================================
+keyword_research:
+  enabled: true
+  provider: google_trends  # Uses pytrends (free)
+  auto_research: false  # Run keyword research for each video
+  cache_duration_hours: 24  # Cache keyword results for 24 hours
+  max_keywords: 20  # Maximum keywords to research per topic
+  include_longtails: true  # Generate long-tail variations
+  trend_analysis: true  # Analyze trend direction
+
+# ============================================================
+# TTS PROVIDER SELECTION
+# ============================================================
+tts:
+  default_provider: edge  # edge (free), fish (premium), chatterbox (MIT)
+  fallback_provider: edge  # Fallback if primary fails
+  providers:
+    edge:
+      enabled: true
+      default_voice: en-US-GuyNeural
+      voices:
+        male: en-US-GuyNeural
+        female: en-US-JennyNeural
+        storytelling: en-US-DavisNeural
+    fish:
+      enabled: false  # Enable if you have Fish Audio API key
+      api_key_env: FISH_AUDIO_API_KEY
+    chatterbox:
+      enabled: true
+      fallback_to_edge: true  # Use Edge-TTS if Chatterbox unavailable
+
+# ============================================================
+# PIPELINE SETTINGS
+# ============================================================
+pipeline:
+  # Standard video pipeline stages
+  stages:
+    - research
+    - script_generation
+    - script_enhancement  # NEW: Add viral hooks/retention features
+    - tts_generation
+    - caption_generation  # NEW: Auto-generate captions
+    - video_assembly
+    - metadata_optimization  # NEW: Optimize title/description/tags
+    - ai_disclosure_tracking  # NEW: Track AI usage
+    - upload
+    - feedback_analysis  # NEW: Analyze performance after upload
+
+  # Hooks to run at specific points
+  hooks:
+    pre_upload:
+      - validate_metadata
+      - check_ai_disclosure
+      - optimize_thumbnail
+    post_upload:
+      - schedule_feedback_analysis
+      - send_notification
+
+# ============================================================
+# NICHE-SPECIFIC SETTINGS
+# ============================================================
+niches:
+  finance:
+    hook_styles:
+      - curiosity
+      - contrarian
+      - value
+    metadata_optimizer:
+      power_words:
+        - Wealth
+        - Passive
+        - Secret
+        - Proven
+      category: blogs  # People & Blogs performs better for finance
+    tts:
+      voice: en-US-GuyNeural
+      rate: "+5%"  # Slightly faster for educational content
+
+  psychology:
+    hook_styles:
+      - curiosity
+      - emotional
+      - contrarian
+    metadata_optimizer:
+      power_words:
+        - Dark
+        - Hidden
+        - Mind
+        - Psychology
+      category: education
+    tts:
+      voice: en-US-GuyNeural
+      rate: "+0%"  # Normal pace for psychological content
+
+  storytelling:
+    hook_styles:
+      - action
+      - curiosity
+      - emotional
+    metadata_optimizer:
+      power_words:
+        - Untold
+        - True
+        - Story
+        - Shocking
+      category: entertainment
+    tts:
+      voice: en-US-DavisNeural  # More storytelling-friendly voice
+      rate: "-5%"  # Slower for dramatic effect
+      add_dramatic_pauses: true
+
+# ============================================================
+# REDDIT RESEARCH INTEGRATION
+# ============================================================
+reddit_research:
+  enabled: true
+  use_for_ideas: true  # Use Reddit for video idea generation
+  subreddits_per_niche:
+    finance:
+      - personalfinance
+      - investing
+      - financialindependence
+      - wallstreetbets
+      - stocks
+    psychology:
+      - psychology
+      - selfimprovement
+      - getdisciplined
+      - socialskills
+    storytelling:
+      - TrueOffMyChest
+      - tifu
+      - relationships
+      - nosleep
+      - UnresolvedMysteries
+  time_filter: week  # hot, new, top, week, month, year, all
+  min_upvotes: 100  # Minimum upvotes for consideration
+  max_ideas_per_search: 10

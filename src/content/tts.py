@@ -864,11 +864,11 @@ def get_tts_provider(provider: str = "edge", **kwargs):
     Factory function to get a TTS provider.
 
     Args:
-        provider: TTS provider to use ("edge" or "fish")
+        provider: TTS provider to use ("edge", "fish", or "chatterbox")
         **kwargs: Additional arguments passed to the provider
 
     Returns:
-        TTS provider instance (TextToSpeech or FishAudioTTS)
+        TTS provider instance (TextToSpeech, FishAudioTTS, or ChatterboxTTS)
 
     Example:
         # Use Edge-TTS (default, free)
@@ -877,6 +877,9 @@ def get_tts_provider(provider: str = "edge", **kwargs):
         # Use Fish Audio (premium quality)
         tts = get_tts_provider("fish")
         tts = get_tts_provider("fish", api_key="your_api_key")
+
+        # Use Chatterbox (MIT licensed, beat ElevenLabs in blind tests)
+        tts = get_tts_provider("chatterbox")
     """
     provider = provider.lower().strip()
 
@@ -895,6 +898,16 @@ def get_tts_provider(provider: str = "edge", **kwargs):
         api_key = kwargs.get("api_key")
         logger.info("Using Fish Audio TTS provider")
         return FishAudioTTS(api_key=api_key)
+
+    elif provider in ("chatterbox", "chatter"):
+        try:
+            from src.content.tts_chatterbox import ChatterboxTTS
+        except ImportError:
+            # Handle relative import when running as module
+            from .tts_chatterbox import ChatterboxTTS
+
+        logger.info("Using Chatterbox TTS provider (MIT licensed)")
+        return ChatterboxTTS(**kwargs)
 
     else:
         logger.warning(f"Unknown TTS provider '{provider}', falling back to Edge-TTS")

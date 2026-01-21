@@ -1,0 +1,461 @@
+# Subreddit Configuration for Reddit Research
+# Used by RedditResearcher to find content ideas by niche
+#
+# Each niche contains:
+#   - subreddits: List of subreddit names (without r/)
+#   - min_upvotes: Minimum upvotes to consider a post
+#   - keywords: Topic keywords for relevance filtering
+#   - content_types: Types of content to look for
+
+# ============================================================
+# FINANCE / WEALTH BUILDING
+# Target: Money Blueprints channel
+# CPM: $10-25 (highest earning)
+# ============================================================
+finance:
+  subreddits:
+    # Core personal finance
+    - personalfinance
+    - financialindependence
+    - FinancialPlanning
+
+    # Investing & stocks
+    - investing
+    - stocks
+    - ValueInvesting
+    - options
+    - SecurityAnalysis
+
+    # Passive income & wealth
+    - passive_income
+    - Fire
+    - dividends
+    - Bogleheads
+
+    # Crypto & alternative
+    - CryptoCurrency
+    - Bitcoin
+
+    # Frugal & savings
+    - Frugal
+    - povertyfinance
+
+    # Side hustles & entrepreneurship
+    - Entrepreneur
+    - smallbusiness
+    - startups
+
+    # Real estate
+    - realestateinvesting
+    - RealEstate
+
+  min_upvotes: 100
+
+  keywords:
+    - money
+    - invest
+    - stock
+    - wealth
+    - income
+    - budget
+    - savings
+    - retire
+    - dividend
+    - portfolio
+    - ETF
+    - index fund
+    - compound
+    - passive
+    - side hustle
+
+  content_types:
+    - questions about investing
+    - success stories
+    - money mistakes
+    - passive income ideas
+    - stock analysis requests
+    - retirement planning
+    - debt payoff strategies
+
+  # Viral content triggers for this niche
+  viral_triggers:
+    - "finally paid off"
+    - "just hit"
+    - "milestone"
+    - "passive income"
+    - "mistake"
+    - "wish I knew"
+
+# ============================================================
+# PSYCHOLOGY / SELF-IMPROVEMENT
+# Target: Mind Unlocked channel
+# CPM: $5-12 (high engagement)
+# ============================================================
+psychology:
+  subreddits:
+    # Core psychology
+    - psychology
+    - psychologystudents
+    - behavioral_psychology
+
+    # Self-improvement
+    - selfimprovement
+    - getdisciplined
+    - DecidingToBeBetter
+    - productivity
+    - GetMotivated
+
+    # Social skills & relationships
+    - socialskills
+    - confidence
+    - introvert
+    - socialanxiety
+
+    # Mental health (educational only)
+    - mentalhealth
+    - Anxiety
+    - therapy
+
+    # Philosophy & mindset
+    - Stoicism
+    - philosophy
+    - ZenHabits
+
+    # Personality & behavior
+    - mbti
+    - INTP
+    - INFJ
+    - narcissism
+    - BPD
+
+    # Brain & cognition
+    - neuro
+    - CognitiveScience
+
+  min_upvotes: 50
+
+  keywords:
+    - mind
+    - brain
+    - habit
+    - motivation
+    - anxiety
+    - behavior
+    - therapy
+    - narcissist
+    - introvert
+    - psychology
+    - manipulation
+    - cognitive
+    - bias
+    - emotional
+    - personality
+
+  content_types:
+    - behavior explanations
+    - psychology facts
+    - manipulation awareness
+    - personality types
+    - cognitive biases
+    - self-improvement tips
+    - body language analysis
+
+  viral_triggers:
+    - "finally realized"
+    - "therapist told me"
+    - "narcissist"
+    - "manipulation"
+    - "changed my life"
+    - "anyone else"
+    - "signs of"
+
+# ============================================================
+# STORYTELLING / ENTERTAINMENT
+# Target: Untold Stories channel
+# CPM: $4-15 (viral potential)
+# ============================================================
+storytelling:
+  subreddits:
+    # Story subreddits
+    - nosleep
+    - LetsNotMeet
+    - creepyencounters
+    - Glitch_in_the_Matrix
+
+    # Confession/drama
+    - tifu
+    - AmItheAsshole
+    - relationship_advice
+    - TrueOffMyChest
+    - confession
+    - offmychest
+
+    # Revenge stories
+    - pettyrevenge
+    - ProRevenge
+    - MaliciousCompliance
+    - NuclearRevenge
+
+    # Entitled people
+    - entitledparents
+    - ChoosingBeggars
+    - IDontWorkHereLady
+
+    # Work stories
+    - talesfromtechsupport
+    - TalesFromRetail
+    - talesfromcallcenters
+    - antiwork
+
+    # Unexplained
+    - UnresolvedMysteries
+    - UnsolvedMysteries
+    - mystery
+    - conspiracytheories
+
+    # True crime adjacent
+    - TrueCrime
+    - TrueCrimeDiscussion
+
+  min_upvotes: 500
+
+  keywords:
+    - story
+    - happened
+    - experience
+    - never
+    - finally
+    - realized
+    - revenge
+    - entitled
+    - karma
+    - creepy
+    - unexplained
+    - mystery
+    - confession
+    - secret
+
+  content_types:
+    - personal stories
+    - revenge tales
+    - creepy experiences
+    - workplace drama
+    - relationship stories
+    - mystery cases
+    - confession content
+
+  viral_triggers:
+    - "finally got revenge"
+    - "happened to me"
+    - "never told anyone"
+    - "can't explain"
+    - "update"
+    - "my boss"
+    - "my neighbor"
+    - "happened last night"
+
+# ============================================================
+# TECHNOLOGY / PROGRAMMING
+# Target: Additional tech content
+# CPM: $8-15
+# ============================================================
+technology:
+  subreddits:
+    # Programming
+    - programming
+    - learnprogramming
+    - webdev
+    - coding
+
+    # Languages
+    - Python
+    - javascript
+    - java
+    - golang
+    - rust
+
+    # AI/ML
+    - MachineLearning
+    - artificial
+    - LocalLLaMA
+    - ChatGPT
+
+    # General tech
+    - technology
+    - Futurology
+    - gadgets
+    - tech
+
+    # Career
+    - cscareerquestions
+    - experienceddevs
+
+  min_upvotes: 100
+
+  keywords:
+    - code
+    - developer
+    - software
+    - AI
+    - tech
+    - build
+    - learn
+    - programming
+    - Python
+    - JavaScript
+    - automation
+    - API
+    - tutorial
+
+  content_types:
+    - coding tutorials
+    - tech news analysis
+    - AI developments
+    - career advice
+    - project ideas
+    - tool reviews
+
+  viral_triggers:
+    - "just built"
+    - "I made"
+    - "AI"
+    - "ChatGPT"
+    - "replaced by"
+    - "finally learned"
+
+# ============================================================
+# EDUCATION / EXPLAINERS
+# General educational content
+# ============================================================
+education:
+  subreddits:
+    - explainlikeimfive
+    - eli5
+    - NoStupidQuestions
+    - OutOfTheLoop
+    - TooAfraidToAsk
+    - YouShouldKnow
+    - todayilearned
+    - LifeProTips
+    - Showerthoughts
+    - AskScience
+    - askscience
+    - AskHistorians
+
+  min_upvotes: 200
+
+  keywords:
+    - explain
+    - why
+    - how
+    - what
+    - learn
+    - understand
+    - work
+    - happen
+
+  content_types:
+    - explainer videos
+    - educational content
+    - life tips
+    - interesting facts
+    - science explanations
+
+  viral_triggers:
+    - "ELI5"
+    - "why do"
+    - "how does"
+    - "TIL"
+    - "LPT"
+    - "nobody tells you"
+
+# ============================================================
+# HEALTH & WELLNESS
+# Health-focused content
+# ============================================================
+health:
+  subreddits:
+    - fitness
+    - nutrition
+    - loseit
+    - intermittentfasting
+    - keto
+    - sleep
+    - Biohackers
+    - longevity
+    - Nootropics
+    - Supplements
+    - HealthyFood
+
+  min_upvotes: 100
+
+  keywords:
+    - health
+    - fitness
+    - diet
+    - weight
+    - sleep
+    - nutrition
+    - exercise
+    - wellness
+    - energy
+    - supplement
+
+  content_types:
+    - health tips
+    - fitness advice
+    - diet information
+    - sleep optimization
+    - biohacking tips
+
+  viral_triggers:
+    - "lost weight"
+    - "finally"
+    - "changed my life"
+    - "mistake"
+    - "wish I knew"
+
+# ============================================================
+# GLOBAL SETTINGS
+# ============================================================
+global:
+  # Rate limiting (Reddit API limit: 60 requests/minute)
+  requests_per_minute: 55
+  request_buffer: 5
+
+  # Default time filters for fetching
+  default_time_filter: week
+
+  # Minimum engagement for viral consideration
+  viral_threshold_multiplier: 3.0
+
+  # Question detection patterns (used by all niches)
+  question_patterns:
+    - "^how (do|can|to|does)"
+    - "^what (is|are|does)"
+    - "^why (do|does|is|are)"
+    - "^should (i|you|we)"
+    - "\\?$"
+    - "help"
+    - "advice"
+
+  # Sentiment analysis keywords
+  positive_keywords:
+    - love
+    - amazing
+    - great
+    - excellent
+    - best
+    - helpful
+    - finally
+    - success
+
+  negative_keywords:
+    - hate
+    - terrible
+    - awful
+    - worst
+    - scam
+    - avoid
+    - warning
+    - mistake

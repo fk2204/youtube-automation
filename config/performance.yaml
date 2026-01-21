@@ -1,0 +1,264 @@
+# Performance Configuration
+# Advanced settings for async operations, GPU acceleration, and parallel processing
+
+# Async Download Settings
+async:
+  # Maximum concurrent downloads (5-10 recommended for best performance)
+  max_concurrent_downloads: 5
+
+  # Download timeout in seconds (default: 60)
+  download_timeout: 60
+
+  # Maximum retry attempts for failed downloads
+  max_retries: 3
+
+  # Delay between retries in seconds
+  retry_delay: 1.0
+
+  # Enable async downloads (requires aiohttp: pip install aiohttp)
+  enabled: true
+
+
+# GPU Acceleration Settings
+gpu:
+  # Enable GPU acceleration for video encoding (2-3x faster)
+  enabled: true
+
+  # Prefer quality over speed (slower but better quality)
+  # false = prefer speed (recommended for bulk processing)
+  # true = prefer quality (recommended for final exports)
+  prefer_quality: false
+
+  # Fallback to CPU if GPU not available
+  fallback_to_cpu: true
+
+  # Encoder presets by use case
+  presets:
+    # Fast encoding (bulk processing, drafts)
+    fast:
+      preset: "fast"
+      bitrate: "8M"
+      quality: 23  # CRF/CQ value
+
+    # Balanced (default for most videos)
+    balanced:
+      preset: "medium"
+      bitrate: "10M"
+      quality: 21
+
+    # High quality (final exports, important videos)
+    high_quality:
+      preset: "slow"
+      bitrate: "12M"
+      quality: 18
+
+    # Ultra quality (archive, promotional content)
+    ultra:
+      preset: "slow"
+      bitrate: "15M"
+      quality: 16
+
+
+# Parallel Processing Settings
+parallel:
+  # Maximum worker processes (auto = CPU count - 1)
+  max_workers: auto
+
+  # Number of tasks per processing batch
+  chunk_size: 10
+
+  # Enable parallel video rendering
+  enabled: true
+
+  # Task priorities (higher = processed first)
+  priorities:
+    full_video: 10
+    short: 8
+    thumbnail: 5
+    subtitle: 3
+
+
+# Memory Optimization Settings
+memory:
+  # Maximum video cache size in MB (500 MB default)
+  max_video_cache_mb: 500
+
+  # Automatically cleanup temp files after processing
+  cleanup_temp_files: true
+
+  # Clear cache older than N days
+  cache_retention_days: 7
+
+  # Use memory-mapped files for large assets (experimental)
+  use_mmap: false
+
+  # Generator-based frame processing to reduce memory usage
+  use_generators: true
+
+
+# Stock Footage Cache Settings
+stock_cache:
+  # Enable query-based caching (saves 80% download time)
+  enabled: true
+
+  # Cache TTL in seconds (default: 1 hour)
+  ttl_seconds: 3600
+
+  # Maximum cached videos per query
+  max_cached_per_query: 20
+
+  # Automatically cleanup old cache entries
+  auto_cleanup: true
+
+  # Cache cleanup interval in days
+  cleanup_interval_days: 30
+
+
+# Video Processing Optimization
+video:
+  # Use chunked file reading for large videos
+  chunked_reading: true
+
+  # Chunk size in MB for video processing
+  chunk_size_mb: 10
+
+  # FFmpeg thread count (auto = optimal based on CPU)
+  ffmpeg_threads: auto
+
+  # Enable hardware-accelerated decoding (GPU only)
+  hwaccel_decode: true
+
+  # Enable hardware-accelerated scaling (GPU only)
+  hwaccel_scale: true
+
+
+# Performance Monitoring
+monitoring:
+  # Enable performance metrics collection
+  enabled: true
+
+  # Log slow operations (threshold in seconds)
+  log_slow_ops_threshold: 5.0
+
+  # Track memory usage
+  track_memory: true
+
+  # Track GPU usage (if available)
+  track_gpu: true
+
+
+# Benchmark Settings
+benchmark:
+  # Test video duration in seconds
+  test_duration: 30
+
+  # Number of iterations per benchmark
+  iterations: 3
+
+  # Warm-up runs before actual benchmark
+  warmup_runs: 1
+
+  # Test scenarios
+  scenarios:
+    - name: "CPU Encoding"
+      use_gpu: false
+      parallel: false
+
+    - name: "GPU Encoding"
+      use_gpu: true
+      parallel: false
+
+    - name: "Parallel CPU"
+      use_gpu: false
+      parallel: true
+      workers: 4
+
+    - name: "Parallel GPU"
+      use_gpu: true
+      parallel: true
+      workers: 4
+
+
+# Advanced FFmpeg Settings
+ffmpeg:
+  # Global FFmpeg flags
+  global_flags:
+    - "-hide_banner"
+    - "-loglevel"
+    - "error"
+
+  # Audio encoding settings
+  audio:
+    codec: "aac"
+    bitrate: "192k"
+    sample_rate: 44100
+
+  # Video encoding settings
+  video:
+    pixel_format: "yuv420p"
+
+    # GOP size (keyframe interval)
+    # Recommended: 2x framerate (60 for 30fps)
+    gop_size: 60
+
+    # B-frames (0-3, higher = better compression but slower)
+    bf: 2
+
+  # Subtitle settings
+  subtitle:
+    codec: "mov_text"  # MP4 compatible
+    style: "FontSize=24,PrimaryColour=&HFFFFFF"
+
+
+# Resource Limits
+limits:
+  # Maximum concurrent API requests
+  max_api_requests: 10
+
+  # Maximum file upload size in MB
+  max_upload_size_mb: 2000
+
+  # Maximum video duration in seconds (0 = no limit)
+  max_video_duration: 3600  # 1 hour
+
+  # Maximum resolution (width x height)
+  max_resolution:
+    width: 3840  # 4K
+    height: 2160
+
+
+# Environment-Specific Settings
+profiles:
+  # Development profile (fast, lower quality)
+  development:
+    gpu:
+      enabled: true
+      prefer_quality: false
+    parallel:
+      max_workers: 2
+    video:
+      preset: "fast"
+
+  # Production profile (balanced)
+  production:
+    gpu:
+      enabled: true
+      prefer_quality: false
+    parallel:
+      max_workers: auto
+    video:
+      preset: "balanced"
+
+  # High-quality profile (slow but best results)
+  high_quality:
+    gpu:
+      enabled: true
+      prefer_quality: true
+    parallel:
+      max_workers: 2
+    video:
+      preset: "ultra"
+
+
+# Active profile (development, production, high_quality)
+active_profile: "production"

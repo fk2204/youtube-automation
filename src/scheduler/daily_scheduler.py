@@ -11,10 +11,10 @@ Usage:
     python src/scheduler/daily_scheduler.py --videos  # Run regular videos only
 
 Schedule (UTC):
-    Regular Videos:
-        Money Blueprints:  06:00, 14:00, 20:00
-        Mind Unlocked:     08:00, 15:00, 21:00
-        Untold Stories:    10:00, 16:00, 22:00
+    Regular Videos (2 per day):
+        Money Blueprints:  14:00, 18:00 (Tue-Thu)
+        Mind Unlocked:     15:00, 20:00 (Tue-Thu)
+        Untold Stories:    13:00, 19:00 (Daily)
 
     Shorts (posted after regular videos):
         Configured via channels.yaml shorts_schedule
@@ -60,13 +60,13 @@ logger.add(
 # SCHEDULE CONFIGURATION
 # ============================================================
 
-# OPTIMIZED for YouTube Views:
-# - Best upload window: 3-5 PM EST (19:00-21:00 UTC)
-# - Best days: Wednesday-Friday for highest engagement
-# - 3 posts per channel, spaced throughout the day (UTC times)
+# OPTIMIZED for YouTube Views (2026 Algorithm Research):
+# - 2 videos per day per channel for better spacing
+# - Shorts follow each video at +1.5h/+3h (finance) or +2h/+4h (psychology/stories)
+# - Times optimized for US morning + UK afternoon, US afternoon + UK evening
 POSTING_SCHEDULE = {
     "money_blueprints": {
-        "times": ["15:00", "19:00", "21:00"],  # Optimized: afternoon + prime time EST
+        "times": ["14:00", "18:00"],  # 2 videos/day: US morning (9AM EST) + afternoon (1PM EST)
         "topics": [
             "passive income ideas for beginners",
             "how to save money fast",
@@ -80,7 +80,7 @@ POSTING_SCHEDULE = {
         "voice": "en-US-GuyNeural"
     },
     "mind_unlocked": {
-        "times": ["16:00", "19:30", "21:30"],  # Optimized: staggered from money_blueprints
+        "times": ["15:00", "20:00"],  # 2 videos/day: US morning (10AM EST) + prime evening (3PM EST)
         "topics": [
             "dark psychology tricks",
             "stoicism life lessons",
@@ -94,7 +94,7 @@ POSTING_SCHEDULE = {
         "voice": "en-US-JennyNeural"
     },
     "untold_stories": {
-        "times": ["17:00", "20:00", "22:00"],  # Optimized: evening prime time EST
+        "times": ["13:00", "19:00"],  # 2 videos/day: lunch viewers + prime evening slot
         "topics": [
             "unsolved mysteries",
             "true crime documentary",
@@ -207,28 +207,58 @@ def convert_posting_days_to_cron(posting_days: Optional[List[int]]) -> Optional[
     return ",".join(cron_days) if cron_days else None
 
 
-def calculate_shorts_times(regular_times: List[str], delay_hours: int = 2) -> List[str]:
+def calculate_shorts_times(regular_times: List[str], delay_hours: Any = 2) -> List[tuple]:
     """
     Calculate Shorts posting times based on regular video times.
 
+    Supports multiple Shorts per video by accepting a list of delays.
+
     Args:
         regular_times: List of regular video posting times (e.g., ["06:00", "14:00"])
-        delay_hours: Hours to wait after regular video (default: 2)
+        delay_hours: Hours to wait after regular video.
+                    Can be int (single delay) or list of ints (multiple delays for multiple Shorts)
+                    Example: [2, 4] creates 2 Shorts per video at +2h and +4h
 
     Returns:
-        List of Shorts posting times
+        List of tuples: (shorts_time, short_index) where short_index is 0 for first Short, 1 for second, etc.
+        This allows scheduling unique content for each Short.
     """
     shorts_times = []
+
+    # Normalize delay_hours to a list
+    if isinstance(delay_hours, (int, float)):
+        delays = [int(delay_hours)]
+    elif isinstance(delay_hours, list):
+        delays = [int(d) for d in delay_hours]
+    else:
+        delays = [2]  # Default fallback
 
     for time_str in regular_times:
         hour, minute = map(int, time_str.split(":"))
 
-        # Add delay hours
-        new_hour = (hour + delay_hours) % 24
-        shorts_time = f"{new_hour:02d}:{minute:02d}"
-        shorts_times.append(shorts_time)
+        # Create a Short for each delay
+        for short_index, delay in enumerate(delays):
+            new_hour = (hour + delay) % 24
+            shorts_time = f"{new_hour:02d}:{minute:02d}"
+            shorts_times.append((shorts_time, short_index))
 
     return shorts_times
+
+
+def get_shorts_times_flat(regular_times: List[str], delay_hours: Any = 2) -> List[str]:
+    """
+    Get flat list of Shorts times (for display purposes).
+
+    Args:
+        regular_times: List of regular video posting times
+        delay_hours: Hours to wait (int or list of ints)
+
+    Returns:
+        Flat list of unique Shorts times (sorted)
+    """
+    shorts_with_index = calculate_shorts_times(regular_times, delay_hours)
+    times = sorted(set([t[0] for t in shorts_with_index]))
+    return times
 
 
 # ============================================================
@@ -347,12 +377,20 @@ Subscribe for more content!
 def create_and_upload_short(
     channel_id: str,
     topic: Optional[str] = None,
-    privacy: str = DEFAULT_PRIVACY
+    privacy: str = DEFAULT_PRIVACY,
+    short_index: int = 0
 ) -> dict:
     """
     Create and upload a YouTube Short to a specific channel.
 
     Uses the Shorts pipeline from runner.py for vertical video creation.
+
+    Args:
+        channel_id: The channel to upload to
+        topic: Optional specific topic (if None, randomly selected)
+        privacy: Video privacy setting
+        short_index: Index of this Short (0 = first, 1 = second, etc.)
+                    Used to vary topic selection when multiple Shorts per video
 
     Returns:
         dict with success status and details
@@ -363,13 +401,22 @@ def create_and_upload_short(
     if not config:
         return {"success": False, "error": f"Unknown channel: {channel_id}"}
 
-    # Pick random topic if not specified
+    # Pick topic based on short_index to ensure variety
     if not topic:
-        topic = random.choice(config["topics"])
+        topics = config["topics"]
+        # Use different topic selection strategy based on short_index
+        # This ensures each Short in a batch gets a different topic
+        if short_index == 0:
+            # First Short: random from first half of topics
+            topic = random.choice(topics[:max(1, len(topics)//2)])
+        else:
+            # Second/subsequent Shorts: random from second half of topics
+            topic = random.choice(topics[max(1, len(topics)//2):])
 
+    short_num = short_index + 1
     logger.info(f"")
     logger.info(f"{'='*60}")
-    logger.info(f"  CREATING YOUTUBE SHORT FOR: {channel_id.upper()}")
+    logger.info(f"  CREATING YOUTUBE SHORT #{short_num} FOR: {channel_id.upper()}")
     logger.info(f"  Topic: {topic}")
     logger.info(f"  Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     logger.info(f"  Format: 1080x1920 vertical (9:16)")
@@ -520,28 +567,41 @@ def run_scheduler(include_videos: bool = True, include_shorts: bool = True):
             posting_days = get_channel_posting_days(channel_id)
             day_of_week = convert_posting_days_to_cron(posting_days)
 
-            shorts_times = []
+            # List of (time_str, short_index) tuples for scheduled Shorts
+            shorts_schedule_list = []
 
-            # Add Shorts scheduled after regular videos
+            # Add Shorts scheduled after regular videos (supports multiple Shorts per video)
             if shorts_config.get("post_after_regular", True):
-                delay_hours = shorts_config.get("delay_hours", 2)
+                delay_hours = shorts_config.get("delay_hours", [2])  # Default to [2] if not specified
                 regular_times = config["times"]
-                after_video_times = calculate_shorts_times(regular_times, delay_hours)
-                shorts_times.extend(after_video_times)
-                logger.info(f"  Shorts for {channel_id} after regular videos (+{delay_hours}h): {after_video_times}")
+                after_video_shorts = calculate_shorts_times(regular_times, delay_hours)
+                shorts_schedule_list.extend(after_video_shorts)
 
-            # Add standalone Shorts times
+                # Display the delays being used
+                if isinstance(delay_hours, list):
+                    delays_str = ", ".join([f"+{d}h" for d in delay_hours])
+                    shorts_per_video = len(delay_hours)
+                else:
+                    delays_str = f"+{delay_hours}h"
+                    shorts_per_video = 1
+                times_flat = get_shorts_times_flat(regular_times, delay_hours)
+                logger.info(f"  Shorts for {channel_id}: {shorts_per_video} per video ({delays_str}): {times_flat}")
+
+            # Add standalone Shorts times (these are always short_index=0)
             standalone_times = shorts_config.get("standalone_times", [])
             for time_str in standalone_times:
-                if time_str not in shorts_times:
-                    shorts_times.append(time_str)
+                # Check if this time already exists in the schedule
+                existing_times = [t[0] for t in shorts_schedule_list]
+                if time_str not in existing_times:
+                    shorts_schedule_list.append((time_str, 0))  # Standalone Shorts use index 0
             if standalone_times:
                 logger.info(f"  Standalone Shorts for {channel_id}: {standalone_times}")
 
-            # Schedule each Shorts time
-            for time_str in shorts_times:
+            # Schedule each Short with its index
+            for time_str, short_index in shorts_schedule_list:
                 hour, minute = time_str.split(":")
-                job_id = f"{channel_id}_short_{time_str.replace(':', '')}"
+                # Include short_index in job_id to make it unique
+                job_id = f"{channel_id}_short_{time_str.replace(':', '')}_{short_index}"
 
                 # Build trigger with day_of_week if configured
                 if day_of_week:
@@ -551,16 +611,18 @@ def run_scheduler(include_videos: bool = True, include_shorts: bool = True):
                     trigger = CronTrigger(hour=int(hour), minute=int(minute))
                     days_str = "daily"
 
+                # Pass short_index as keyword argument for topic variation
                 scheduler.add_job(
                     create_and_upload_short,
                     trigger,
                     args=[channel_id],
+                    kwargs={"short_index": short_index},
                     id=job_id,
-                    name=f"{channel_id} short at {time_str}",
+                    name=f"{channel_id} short #{short_index+1} at {time_str}",
                     misfire_grace_time=3600  # 1 hour grace period
                 )
                 shorts_job_count += 1
-                logger.info(f"  Scheduled short: {channel_id} at {time_str} UTC")
+                logger.info(f"  Scheduled short #{short_index+1}: {channel_id} at {time_str} UTC")
 
     total_job_count = video_job_count + shorts_job_count + 1  # +1 for cleanup job
 
@@ -595,11 +657,16 @@ def run_scheduler(include_videos: bool = True, include_shorts: bool = True):
         for channel_id, config in POSTING_SCHEDULE.items():
             shorts_config = get_channel_shorts_config(channel_id)
             if shorts_config.get("enabled", True):
-                delay = shorts_config.get("delay_hours", 2)
-                shorts_times = calculate_shorts_times(config["times"], delay)
+                delay_hours = shorts_config.get("delay_hours", [2])
+                shorts_times_flat = get_shorts_times_flat(config["times"], delay_hours)
                 standalone = shorts_config.get("standalone_times", [])
-                all_times = sorted(set(shorts_times + standalone))
-                print(f"    {channel_id}: {', '.join(all_times)}")
+                all_times = sorted(set(shorts_times_flat + standalone))
+                # Calculate shorts per video
+                if isinstance(delay_hours, list):
+                    shorts_per_video = len(delay_hours)
+                else:
+                    shorts_per_video = 1
+                print(f"    {channel_id}: {', '.join(all_times)} ({shorts_per_video} per video)")
             else:
                 print(f"    {channel_id}: (disabled)")
     else:
@@ -747,24 +814,39 @@ def show_status():
         print(f"    Topics: {len(config['topics'])} available")
 
         if shorts_enabled:
-            delay = shorts_config.get("delay_hours", 2)
-            shorts_times = []
+            delay_hours = shorts_config.get("delay_hours", [2])
+            shorts_per_video = shorts_config.get("shorts_per_video", 1)
+
+            # Handle both list and single value for delay_hours
+            if isinstance(delay_hours, list):
+                delays = delay_hours
+                shorts_per_video = len(delays)
+            else:
+                delays = [delay_hours]
+
+            shorts_times_flat = []
 
             if shorts_config.get("post_after_regular", True):
-                after_times = calculate_shorts_times(config["times"], delay)
-                shorts_times.extend(after_times)
+                after_times = get_shorts_times_flat(config["times"], delay_hours)
+                shorts_times_flat.extend(after_times)
 
             standalone = shorts_config.get("standalone_times", [])
             for t in standalone:
-                if t not in shorts_times:
-                    shorts_times.append(t)
+                if t not in shorts_times_flat:
+                    shorts_times_flat.append(t)
 
-            shorts_times = sorted(set(shorts_times))
-            num_shorts = len(shorts_times)
+            shorts_times_flat = sorted(set(shorts_times_flat))
+            # Total Shorts = (videos * shorts_per_video) + standalone
+            num_shorts_from_videos = len(config["times"]) * shorts_per_video
+            num_standalone = len([t for t in standalone if t not in get_shorts_times_flat(config["times"], delay_hours)])
+            num_shorts = num_shorts_from_videos + num_standalone
             total_shorts += num_shorts
 
-            print(f"    Shorts (UTC): {', '.join(shorts_times)}")
-            print(f"    Shorts delay: {delay} hours after regular videos")
+            print(f"    Shorts (UTC): {', '.join(shorts_times_flat)}")
+            delays_str = ", ".join([f"+{d}h" for d in delays])
+            print(f"    Shorts per video: {shorts_per_video} (delays: {delays_str})")
+            if shorts_config.get("vary_topics", False):
+                print(f"    Topic variation: ENABLED (unique content per Short)")
         else:
             print(f"    Shorts: DISABLED")
 
@@ -779,12 +861,21 @@ def show_status():
     print()
 
     # Show Shorts configuration summary
-    print("  Shorts Configuration:")
-    print("  ---------------------")
+    print("  Shorts Configuration (Global):")
+    print("  -------------------------------")
     global_config = load_shorts_config()
     print(f"  Enabled: {global_config.get('enabled', True)}")
     print(f"  Post after regular: {global_config.get('post_after_regular', True)}")
-    print(f"  Delay hours: {global_config.get('delay_hours', 2)}")
+    delay_hours = global_config.get("delay_hours", [2])
+    if isinstance(delay_hours, list):
+        shorts_per_video = len(delay_hours)
+        delays_str = ", ".join([f"+{d}h" for d in delay_hours])
+        print(f"  Shorts per video: {shorts_per_video}")
+        print(f"  Delay hours: {delays_str}")
+    else:
+        print(f"  Shorts per video: 1")
+        print(f"  Delay hours: +{delay_hours}h")
+    print(f"  Vary topics: {global_config.get('vary_topics', False)}")
     print(f"  Standalone times: {global_config.get('standalone_times', [])}")
     print()
 

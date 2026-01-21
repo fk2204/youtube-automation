@@ -1,0 +1,191 @@
+# AI Video Generation Configuration
+# Supports Runway ML, Pika Labs, and future providers
+
+# Runway ML Configuration
+runway:
+  # Environment variable containing API key
+  api_key_env: "RUNWAYML_API_SECRET"
+
+  # Default model to use
+  # Options: "gen3a_turbo" (faster, cheaper), "gen3a_alpha" (higher quality)
+  default_model: "gen3a_turbo"
+
+  # Default video duration in seconds (5 or 10)
+  default_duration: 5
+
+  # Default aspect ratio
+  # Options: "1280:720" (16:9), "720:1280" (9:16), "1680:720" (21:9)
+  default_ratio: "1280:720"
+
+  # Maximum retry attempts for failed requests
+  max_retries: 3
+
+  # Timeout for task completion in seconds
+  task_timeout: 300
+
+  # Polling interval for task status in seconds
+  poll_interval: 5
+
+# Pika Labs Configuration
+pika:
+  # Environment variable containing API key
+  api_key_env: "FAL_KEY"
+
+  # Default resolution
+  # Options: "720p", "1080p"
+  default_resolution: "720p"
+
+  # Default video duration in seconds
+  default_duration: 5
+
+  # Default aspect ratio
+  # Options: "16:9", "9:16", "1:1"
+  default_aspect_ratio: "16:9"
+
+  # Maximum retry attempts
+  max_retries: 3
+
+# Provider Router Configuration
+router:
+  # Preferred provider order (first available will be used)
+  preferred_providers:
+    - "runway"
+    - "pika"
+
+  # Default provider for different use cases
+  default_provider: "runway"
+  quality_provider: "runway"  # Use Runway alpha for quality
+  speed_provider: "runway"    # Use Runway turbo for speed
+  budget_provider: "pika"     # Use Pika for cost savings
+
+  # Automatically fallback to next provider if primary fails
+  enable_fallback: true
+
+  # Maximum concurrent API requests
+  max_concurrent: 2
+
+# Cost Limits
+# These limits are enforced via the token_manager integration
+cost_limits:
+  # Maximum daily spend on AI video generation (USD)
+  daily_max: 10.00
+
+  # Maximum cost per single video generation (USD)
+  per_video_max: 2.00
+
+  # Warning threshold (percentage of daily budget)
+  warning_threshold: 0.8
+
+  # Enforce budget limits (if false, only warns)
+  enforce: true
+
+# B-roll Generation Settings
+broll:
+  # Default style for B-roll clips
+  # Options: "cinematic", "documentary", "corporate", "abstract", "dramatic", "calm"
+  default_style: "cinematic"
+
+  # Default duration for B-roll clips (seconds)
+  default_duration: 5
+
+  # Niche-specific visual mappings
+  niche_visuals:
+    finance:
+      keywords: ["money", "charts", "business", "investment", "professional"]
+      style: "corporate"
+    psychology:
+      keywords: ["brain", "emotion", "thinking", "mind", "human"]
+      style: "cinematic"
+    storytelling:
+      keywords: ["dramatic", "narrative", "atmospheric", "mysterious"]
+      style: "cinematic"
+    technology:
+      keywords: ["futuristic", "digital", "tech", "innovation", "modern"]
+      style: "corporate"
+    health:
+      keywords: ["wellness", "fitness", "nature", "healthy", "medical"]
+      style: "documentary"
+
+# Quality Presets
+# Quick configurations for common use cases
+presets:
+  # Maximum quality preset
+  quality:
+    provider: "runway"
+    model: "gen3a_alpha"
+    duration: 10
+
+  # Balanced quality/speed preset
+  balanced:
+    provider: "runway"
+    model: "gen3a_turbo"
+    duration: 5
+
+  # Fast/cheap preset
+  turbo:
+    provider: "pika"
+    resolution: "720p"
+    duration: 5
+
+  # YouTube Shorts preset (vertical video)
+  shorts:
+    provider: "runway"
+    model: "gen3a_turbo"
+    aspect_ratio: "9:16"
+    duration: 5
+
+# Prompt Templates
+# Templates for generating video prompts from script segments
+prompt_templates:
+  # Generic B-roll template
+  broll: |
+    B-roll footage visualizing: {segment}.
+    Style: {style}.
+    {niche_context}.
+    16:9 widescreen, high quality, smooth motion.
+
+  # Cinematic template
+  cinematic: |
+    Cinematic shot of: {segment}.
+    Shallow depth of field, dramatic lighting, film grain.
+    Professional cinematography, smooth camera movement.
+    16:9 widescreen.
+
+  # Documentary template
+  documentary: |
+    Documentary-style footage of: {segment}.
+    Natural lighting, realistic, observational.
+    Handheld camera feel, authentic.
+    16:9 aspect ratio.
+
+  # Abstract/conceptual template
+  abstract: |
+    Abstract visual representation of: {segment}.
+    Artistic, creative, symbolic imagery.
+    Visual metaphor, thought-provoking.
+    High quality, professional.
+
+# Cache Settings
+cache:
+  # Enable caching of generated videos
+  enabled: true
+
+  # Cache directory
+  directory: "cache/ai_video"
+
+  # Maximum cache age in days
+  max_age_days: 30
+
+  # Maximum cache size in GB
+  max_size_gb: 10
+
+# Logging
+logging:
+  # Log AI video generation details
+  log_generation: true
+
+  # Log cost tracking
+  log_costs: true
+
+  # Log API responses
+  log_responses: false  # Enable for debugging

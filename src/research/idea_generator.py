@@ -23,6 +23,18 @@ load_dotenv()
 from .trends import TrendResearcher, TrendTopic
 from .reddit import RedditResearcher, VideoIdea
 
+# Import new enhanced researcher (optional - falls back to basic if unavailable)
+try:
+    from .reddit_researcher import (
+        RedditResearcher as EnhancedRedditResearcher,
+        RedditResearchReport,
+        VideoIdea as EnhancedVideoIdea,
+    )
+    ENHANCED_REDDIT_AVAILABLE = True
+except ImportError:
+    ENHANCED_REDDIT_AVAILABLE = False
+    EnhancedRedditResearcher = None
+
 
 @dataclass
 class ScoredIdea:
@@ -1033,6 +1045,240 @@ Return as JSON."""
             "Tips and tricks",
             "Analysis content",
         ])
+
+    # ============================================================
+    # ENHANCED REDDIT INTEGRATION (New Methods)
+    # ============================================================
+
+    def get_enhanced_reddit_researcher(self) -> Optional[Any]:
+        """
+        Get the enhanced Reddit researcher if available.
+
+        Returns:
+            EnhancedRedditResearcher instance or None
+        """
+        if not ENHANCED_REDDIT_AVAILABLE:
+            logger.debug("Enhanced Reddit researcher not available")
+            return None
+
+        try:
+            researcher = EnhancedRedditResearcher()
+            if researcher.reddit:
+                return researcher
+            logger.warning("Enhanced Reddit researcher has no credentials")
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to create enhanced Reddit researcher: {e}")
+            return None
+
+    def get_reddit_trending_topics(self, niche: str, limit: int = 20) -> List[str]:
+        """
+        Get trending topics from Reddit for a niche.
+
+        Uses enhanced Reddit researcher for comprehensive analysis.
+
+        Args:
+            niche: Content niche (finance, psychology, storytelling)
+            limit: Number of topics to return
+
+        Returns:
+            List of trending topic strings
+        """
+        researcher = self.get_enhanced_reddit_researcher()
+
+        if researcher:
+            try:
+                return researcher.get_trending_topics(niche, limit=limit)
+            except Exception as e:
+                logger.warning(f"Enhanced Reddit trending failed: {e}")
+
+        # Fallback to basic researcher
+        if self.reddit_researcher and self.reddit_researcher.reddit:
+            try:
+                return self.reddit_researcher.get_trending_topics(limit=limit)
+            except Exception as e:
+                logger.warning(f"Basic Reddit trending failed: {e}")
+
+        return []
+
+    def get_reddit_questions(self, niche: str, limit: int = 30) -> List[ScoredIdea]:
+        """
+        Get questions from Reddit for FAQ-style videos.
+
+        Args:
+            niche: Content niche
+            limit: Number of questions to return
+
+        Returns:
+            List of ScoredIdea objects from questions
+        """
+        researcher = self.get_enhanced_reddit_researcher()
+
+        if not researcher:
+            logger.warning("No Reddit researcher available for questions")
+            return []
+
+        try:
+            questions = researcher.get_questions(niche, limit=limit)
+
+            # Convert to ScoredIdea format
+            ideas = []
+            for q in questions:
+                ideas.append(ScoredIdea(
+                    title=q.title_suggestion,
+                    description=f"FAQ video based on Reddit question: {q.source_title}",
+                    keywords=q.keywords if q.keywords else [niche, "questions", "faq"],
+                    niche=niche,
+                    score=int(min(100, q.viral_score / 10)),  # Normalize score
+                    trend_score=int(min(100, q.popularity_score / 10)),
+                    competition_score=60,  # Questions usually have moderate competition
+                    engagement_score=75,   # Questions drive high engagement
+                    source=f"reddit_question:{q.subreddit}",
+                    reasoning=f"Popular question from r/{q.subreddit} with {q.popularity_score} upvotes"
+                ))
+
+            return ideas
+
+        except Exception as e:
+            logger.error(f"Failed to get Reddit questions: {e}")
+            return []
+
+    def get_reddit_viral_ideas(self, niche: str, limit: int = 15) -> List[ScoredIdea]:
+        """
+        Get viral content ideas from Reddit.
+
+        Analyzes hot, rising, and top posts to find high-potential topics.
+
+        Args:
+            niche: Content niche
+            limit: Number of ideas to return
+
+        Returns:
+            List of ScoredIdea objects from viral content
+        """
+        researcher = self.get_enhanced_reddit_researcher()
+
+        if not researcher:
+            logger.warning("No Reddit researcher available for viral ideas")
+            return []
+
+        try:
+            viral_ideas = researcher.find_viral_content(niche, limit=limit)
+
+            # Convert to ScoredIdea format
+            ideas = []
+            for v in viral_ideas:
+                # Calculate scores based on viral metrics
+                viral_normalized = min(100, int(v.viral_score / 20))
+
+                ideas.append(ScoredIdea(
+                    title=v.title_suggestion,
+                    description=f"Viral topic from Reddit: {v.source_title[:100]}",
+                    keywords=v.keywords if v.keywords else [niche, "viral", "trending"],
+                    niche=niche,
+                    score=viral_normalized,
+                    trend_score=viral_normalized,
+                    competition_score=50,  # Viral topics usually have competition
+                    engagement_score=viral_normalized,
+                    source=f"reddit_viral:{v.subreddit}",
+                    reasoning=f"High-engagement post from r/{v.subreddit} (Score: {v.viral_score:.0f})"
+                ))
+
+            return ideas
+
+        except Exception as e:
+            logger.error(f"Failed to get Reddit viral ideas: {e}")
+            return []
+
+    def full_reddit_research(self, niche: str) -> Optional[Dict[str, Any]]:
+        """
+        Perform comprehensive Reddit research for a niche.
+
+        Args:
+            niche: Content niche
+
+        Returns:
+            Dict with full research report or None
+        """
+        researcher = self.get_enhanced_reddit_researcher()
+
+        if not researcher:
+            logger.warning("No Reddit researcher available for full research")
+            return None
+
+        try:
+            report = researcher.full_research(niche)
+            return report.to_dict()
+        except Exception as e:
+            logger.error(f"Full Reddit research failed: {e}")
+            return None
+
+    def generate_ideas_with_reddit(
+        self,
+        niche: str,
+        count: int = 10,
+        include_questions: bool = True,
+        include_viral: bool = True
+    ) -> List[ScoredIdea]:
+        """
+        Generate video ideas combining AI and Reddit research.
+
+        This method provides the most comprehensive idea generation
+        by combining multiple data sources.
+
+        Args:
+            niche: Content niche
+            count: Total number of ideas to return
+            include_questions: Include Reddit questions
+            include_viral: Include Reddit viral content
+
+        Returns:
+            List of ScoredIdea objects from all sources, sorted by score
+        """
+        all_ideas = []
+
+        # Get AI-generated ideas
+        try:
+            ai_ideas = self.generate_ideas(niche, count=count // 2)
+            all_ideas.extend(ai_ideas)
+            logger.info(f"Got {len(ai_ideas)} AI-generated ideas")
+        except Exception as e:
+            logger.warning(f"AI idea generation failed: {e}")
+
+        # Get Reddit questions
+        if include_questions:
+            try:
+                questions = self.get_reddit_questions(niche, limit=count // 3)
+                all_ideas.extend(questions)
+                logger.info(f"Got {len(questions)} Reddit questions")
+            except Exception as e:
+                logger.warning(f"Reddit questions failed: {e}")
+
+        # Get Reddit viral content
+        if include_viral:
+            try:
+                viral = self.get_reddit_viral_ideas(niche, limit=count // 3)
+                all_ideas.extend(viral)
+                logger.info(f"Got {len(viral)} Reddit viral ideas")
+            except Exception as e:
+                logger.warning(f"Reddit viral ideas failed: {e}")
+
+        # Deduplicate by title similarity
+        seen_titles = set()
+        unique_ideas = []
+
+        for idea in all_ideas:
+            # Simple dedup by first 5 words of title
+            title_key = ' '.join(idea.title.lower().split()[:5])
+            if title_key not in seen_titles:
+                seen_titles.add(title_key)
+                unique_ideas.append(idea)
+
+        # Sort by score and limit
+        unique_ideas.sort(key=lambda x: x.score, reverse=True)
+
+        logger.success(f"Generated {len(unique_ideas[:count])} combined ideas for {niche}")
+        return unique_ideas[:count]
 
 
 # Example usage

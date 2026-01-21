@@ -19,12 +19,8 @@ from .keyword_intelligence import (
 )
 
 from .metadata_optimizer import (
-    TitleOptimizer,
-    DescriptionBuilder,
-    TagGenerator,
-    HashtagStrategy,
-    EndScreenOptimizer,
     MetadataOptimizer,
+    OptimizedMetadata,
 )
 
 __all__ = [
@@ -37,10 +33,6 @@ __all__ = [
     "SeasonalityDetector",
     "KeywordIntelligence",
     # Metadata Optimization
-    "TitleOptimizer",
-    "DescriptionBuilder",
-    "TagGenerator",
-    "HashtagStrategy",
-    "EndScreenOptimizer",
     "MetadataOptimizer",
+    "OptimizedMetadata",
 ]

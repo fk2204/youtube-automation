@@ -2008,6 +2008,177 @@ class KeywordIntelligence:
 
         return results
 
+    def optimize_description_keywords(
+        self,
+        description: str,
+        target_keywords: List[str],
+        target_density: float = 0.025
+    ) -> Dict[str, Any]:
+        """
+        Optimize description to achieve optimal keyword density (2-3%).
+
+        YouTube's algorithm uses video descriptions to understand content.
+        A keyword density of 2-3% is considered optimal - enough for SEO
+        without appearing spammy or keyword-stuffed.
+
+        This method:
+        1. Analyzes current keyword density
+        2. Adds keywords naturally if below target
+        3. Suggests removals if above target
+        4. Returns optimized description with metrics
+
+        Args:
+            description: Original video description text
+            target_keywords: List of keywords to optimize for
+            target_density: Target keyword density (default 2.5% = 0.025)
+
+        Returns:
+            Dict with optimized_description, metrics, and suggestions
+
+        Example:
+            ki = KeywordIntelligence()
+            result = ki.optimize_description_keywords(
+                "Learn about investing in this video.",
+                ["investing", "money", "wealth"],
+                target_density=0.025
+            )
+            print(result["optimized_description"])
+            print(f"Density: {result['original_density']:.1%} -> {result['optimized_density']:.1%}")
+        """
+        logger.info(f"Optimizing description keywords (target: {target_density:.1%})")
+
+        if not description or not target_keywords:
+            return {
+                "optimized_description": description,
+                "original_density": 0.0,
+                "optimized_density": 0.0,
+                "keywords_added": [],
+                "keywords_found": [],
+                "target_density": target_density,
+                "status": "no_changes_needed"
+            }
+
+        # Clean keywords
+        keywords = [kw.lower().strip() for kw in target_keywords if kw.strip()]
+        if not keywords:
+            return {
+                "optimized_description": description,
+                "original_density": 0.0,
+                "optimized_density": 0.0,
+                "keywords_added": [],
+                "keywords_found": [],
+                "target_density": target_density,
+                "status": "no_keywords_provided"
+            }
+
+        # Calculate original density
+        words = description.lower().split()
+        word_count = len(words)
+
+        if word_count == 0:
+            return {
+                "optimized_description": description,
+                "original_density": 0.0,
+                "optimized_density": 0.0,
+                "keywords_added": [],
+                "keywords_found": [],
+                "target_density": target_density,
+                "status": "empty_description"
+            }
+
+        # Count keyword occurrences
+        keywords_found = []
+        keyword_count = 0
+        for word in words:
+            for kw in keywords:
+                if kw in word:
+                    keyword_count += 1
+                    if kw not in keywords_found:
+                        keywords_found.append(kw)
+                    break
+
+        original_density = keyword_count / word_count
+
+        # Check if optimization is needed
+        if original_density >= target_density * 0.9:  # Within 90% of target
+            status = "already_optimized" if original_density <= target_density * 1.2 else "over_optimized"
+            return {
+                "optimized_description": description,
+                "original_density": original_density,
+                "optimized_density": original_density,
+                "keywords_added": [],
+                "keywords_found": keywords_found,
+                "target_density": target_density,
+                "status": status
+            }
+
+        # Calculate how many keywords to add
+        target_keyword_count = int(word_count * target_density)
+        keywords_to_add_count = target_keyword_count - keyword_count
+
+        if keywords_to_add_count <= 0:
+            return {
+                "optimized_description": description,
+                "original_density": original_density,
+                "optimized_density": original_density,
+                "keywords_added": [],
+                "keywords_found": keywords_found,
+                "target_density": target_density,
+                "status": "density_sufficient"
+            }
+
+        # Natural keyword insertion templates
+        insertion_templates = [
+            "\n\nIn this video about {keyword}, you'll discover valuable insights.",
+            "\n\nLearn more about {keyword} and how it can help you.",
+            "\n\nThis {keyword} guide covers everything you need to know.",
+            "\n\nTopics covered: {keyword}.",
+            "\n\nRelated topics: {keyword}.",
+            "\n\nDiscover the secrets of {keyword}.",
+            "\n\n{keyword} explained in detail.",
+        ]
+
+        # Add keywords naturally
+        optimized = description
+        added_keywords = []
+
+        # Prioritize keywords not already in description
+        keywords_to_add = [kw for kw in keywords if kw not in keywords_found]
+        keywords_to_add.extend([kw for kw in keywords if kw in keywords_found])
+
+        for i, keyword in enumerate(keywords_to_add[:keywords_to_add_count]):
+            template = insertion_templates[i % len(insertion_templates)]
+            # Capitalize keyword appropriately
+            keyword_display = keyword.title() if i % 2 == 0 else keyword
+            insertion = template.format(keyword=keyword_display)
+            optimized += insertion
+            added_keywords.append(keyword)
+
+        # Recalculate density
+        new_words = optimized.lower().split()
+        new_word_count = len(new_words)
+        new_keyword_count = 0
+        for word in new_words:
+            for kw in keywords:
+                if kw in word:
+                    new_keyword_count += 1
+                    break
+
+        new_density = new_keyword_count / new_word_count if new_word_count > 0 else 0
+
+        logger.success(f"Keyword density optimized: {original_density:.1%} -> {new_density:.1%}")
+
+        return {
+            "optimized_description": optimized,
+            "original_density": original_density,
+            "optimized_density": new_density,
+            "keywords_added": added_keywords,
+            "keywords_found": keywords_found,
+            "target_density": target_density,
+            "status": "optimized",
+            "words_added": new_word_count - word_count
+        }
+
 
 # CLI entry point
 def main():

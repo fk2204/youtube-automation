@@ -21,6 +21,36 @@ from src.utils.best_practices import (
     IMPACT_FORMULA,
 )
 
+from src.utils.segment_cache import (
+    SegmentCache,
+    SegmentEntry,
+    SegmentCacheStats,
+    print_segment_cache_stats,
+)
+
+from src.utils.db_optimizer import (
+    DatabaseOptimizer,
+    ConnectionPool,
+    QueryCache,
+    QueryStats,
+    TableInfo,
+    IndexRecommendation,
+    optimize_all_databases,
+    print_optimization_summary,
+)
+
+from src.utils.profiler import (
+    Profiler,
+    ProfileResult,
+    AggregatedStats,
+    TimingContext,
+    timed,
+    profile,
+    profile_func,
+    get_report,
+    clear,
+)
+
 __all__ = [
     # Validation functions
     "validate_title",
@@ -43,4 +73,28 @@ __all__ = [
     "SEO_PATTERNS",
     "RETENTION_BEST_PRACTICES",
     "IMPACT_FORMULA",
+    # Segment cache
+    "SegmentCache",
+    "SegmentEntry",
+    "SegmentCacheStats",
+    "print_segment_cache_stats",
+    # Database optimization
+    "DatabaseOptimizer",
+    "ConnectionPool",
+    "QueryCache",
+    "QueryStats",
+    "TableInfo",
+    "IndexRecommendation",
+    "optimize_all_databases",
+    "print_optimization_summary",
+    # Profiler
+    "Profiler",
+    "ProfileResult",
+    "AggregatedStats",
+    "TimingContext",
+    "timed",
+    "profile",
+    "profile_func",
+    "get_report",
+    "clear",
 ]

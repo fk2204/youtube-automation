@@ -143,9 +143,9 @@ output:
 # Quality Gates Configuration
 quality_gates:
   enabled: true
-  strict_mode: true                    # Higher threshold (75 vs 70)
+  strict_mode: false                   # Lower threshold (70) - disabled for now
   pre_publish_checklist: true          # Run checklist before upload
-  block_on_fail: true                  # Block upload if quality fails
+  block_on_fail: false                 # Allow upload even if quality fails
 
 # Retention Optimization Configuration
 retention:

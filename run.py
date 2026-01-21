@@ -972,6 +972,35 @@ Stock Footage Cache:
   python run.py cache-stats --cleanup --days 7   Clean older than 7 days
   python run.py cache-stats --clear  Clear all cached footage
 
+AI Video Generation (Runway, Pika):
+  python run.py ai-video "<prompt>"   Generate AI video from text prompt
+  python run.py ai-video "<prompt>" --provider runway --quality high
+  python run.py ai-video "<prompt>" --aspect-ratio 9:16  (for Shorts)
+  python run.py ai-broll <script_file>  Generate B-roll for script
+  python run.py ai-broll <script> --style cinematic --niche finance
+  python run.py ai-video-providers    List available AI video providers
+  python run.py ai-video-cost [count] Estimate cost for batch generation
+
+Performance & Optimization:
+  python run.py gpu-status            Show GPU acceleration status
+  python run.py benchmark             Run video encoding performance benchmark
+  python run.py benchmark 60          Run 60-second benchmark
+  python run.py async-download-test   Test async download speeds
+
+Reddit Research Commands:
+  python run.py reddit-trends <niche>     Get trending topics from Reddit
+  python run.py reddit-questions <niche>  Get questions for FAQ videos
+  python run.py reddit-viral <niche>      Find viral content ideas
+  python run.py reddit-research <niche>   Full research report
+
+  Options for Reddit commands:
+    --limit N         Number of results (default varies by command)
+    --min-upvotes N   Minimum upvotes threshold
+    --json            Output as JSON
+    --full            Full research report (for reddit-viral)
+
+  Niches: finance, psychology, storytelling, technology, education, health
+
 Video Formats:
   video    - Regular 1920x1080 horizontal video (5-10 min)
   short    - YouTube Shorts 1080x1920 vertical video (15-60 sec)
@@ -1085,6 +1114,47 @@ Analytics Commands:
   python run.py analytics <video_id> --dropoffs  Show retention dropoff points
   python run.py analytics-compare <video_id>   Compare video to channel average
   python run.py analytics-compare <video_id> --days N  Use N days for comparison
+
+Integrated Module Commands (New - 2026-01-20):
+  python run.py caption <audio_file>           Generate captions using Whisper
+    --model <size>    Model: tiny, base, small, medium, large (default: base)
+    --format <fmt>    Output: srt, vtt, json (default: srt)
+    --language <code> Language code (auto-detect if not set)
+
+  python run.py keywords <topic>               Research keywords (free via Google Trends)
+    --niche <niche>   Content niche for context
+    --longtails       Include long-tail variations
+    --trends          Include trend analysis
+
+  python run.py optimize-title "<title>"       Optimize title with IMPACT formula
+    --niche <niche>   Content niche
+    --variants N      Number of variants to generate (default: 5)
+
+  python run.py feedback <video_id>            Analyze video performance
+    --niche <niche>   Content niche for comparison
+    --recommendations Generate improvement suggestions
+
+  python run.py hooks "<topic>"                Generate viral hooks
+    --niche <niche>   Content niche
+    --style <style>   curiosity, action, contrarian, emotional, value
+    --count N         Number of hooks (default: 5)
+    --enhance <file>  Enhance script file with retention features
+
+  python run.py integration-status             Show status of all integrated modules
+
+AI Video Generation Commands:
+  python run.py ai-video "<prompt>"            Generate AI video (uses smart routing)
+    --provider <name>  Provider: hailuo, pika (default: auto-selects cheapest)
+    --budget           Use budget mode (cheapest provider)
+    --quality <level>  Quality: high, medium, low (default: medium)
+    --output <path>    Output file path
+    --image <url>      Image URL for image-to-video generation
+
+  python run.py ai-video --budget "<prompt>"   Generate using cheapest provider (HailuoAI)
+  python run.py ai-video --provider hailuo "<prompt>"  Use specific provider
+  python run.py ai-video --provider pika "<prompt>"    Use Pika Labs
+  python run.py ai-video-providers             List available AI video providers
+  python run.py ai-video-cost <count>          Estimate cost for batch generation
 
 Examples:
   python run.py video money_blueprints
@@ -2061,6 +2131,1207 @@ Examples:
                 print("  [OK] No alerts - all videos are performing well!")
 
         print(f"\n{'='*60}")
+
+    elif cmd == "reddit-trends":
+        # Get trending topics from Reddit
+        reddit_parser = argparse.ArgumentParser(prog="run.py reddit-trends", add_help=False)
+        reddit_parser.add_argument("niche", nargs="?", default="finance",
+                                   help="Content niche (finance, psychology, storytelling)")
+        reddit_parser.add_argument("--limit", type=int, default=20,
+                                   help="Number of topics to return (default: 20)")
+        reddit_parser.add_argument("--json", action="store_true",
+                                   help="Output as JSON")
+        reddit_args = reddit_parser.parse_args(sys.argv[2:])
+
+        print(f"\n{'='*60}")
+        print(f"REDDIT TRENDING TOPICS: {reddit_args.niche.upper()}")
+        print(f"{'='*60}\n")
+
+        try:
+            from src.research.reddit_researcher import RedditResearcher
+
+            researcher = RedditResearcher()
+
+            if not researcher.reddit:
+                print("[ERROR] Reddit not configured. Please set credentials in .env:")
+                print("  REDDIT_CLIENT_ID=your_client_id")
+                print("  REDDIT_CLIENT_SECRET=your_client_secret")
+                print("\nTo get credentials:")
+                print("  1. Go to https://www.reddit.com/prefs/apps")
+                print("  2. Click 'create another app...'")
+                print("  3. Select 'script' type")
+                print("  4. Copy client_id and client_secret")
+                sys.exit(1)
+
+            topics = researcher.get_trending_topics(reddit_args.niche, limit=reddit_args.limit)
+
+            if reddit_args.json:
+                import json
+                print(json.dumps({"niche": reddit_args.niche, "topics": topics}, indent=2))
+            else:
+                print(f"Found {len(topics)} trending topics:\n")
+                for i, topic in enumerate(topics, 1):
+                    print(f"  {i:2d}. {topic[:80]}{'...' if len(topic) > 80 else ''}")
+
+        except ImportError as e:
+            print(f"[ERROR] Failed to import Reddit researcher: {e}")
+            print("Make sure praw is installed: pip install praw")
+            sys.exit(1)
+        except Exception as e:
+            print(f"[ERROR] Failed to get trending topics: {e}")
+            sys.exit(1)
+
+        print(f"\n{'='*60}")
+
+    elif cmd == "reddit-questions":
+        # Get questions from Reddit for FAQ videos
+        reddit_parser = argparse.ArgumentParser(prog="run.py reddit-questions", add_help=False)
+        reddit_parser.add_argument("niche", nargs="?", default="finance",
+                                   help="Content niche (finance, psychology, storytelling)")
+        reddit_parser.add_argument("--limit", type=int, default=30,
+                                   help="Number of questions to return (default: 30)")
+        reddit_parser.add_argument("--min-upvotes", type=int, default=10,
+                                   help="Minimum upvotes (default: 10)")
+        reddit_parser.add_argument("--json", action="store_true",
+                                   help="Output as JSON")
+        reddit_args = reddit_parser.parse_args(sys.argv[2:])
+
+        print(f"\n{'='*60}")
+        print(f"REDDIT QUESTIONS: {reddit_args.niche.upper()}")
+        print(f"{'='*60}\n")
+
+        try:
+            from src.research.reddit_researcher import RedditResearcher
+
+            researcher = RedditResearcher()
+
+            if not researcher.reddit:
+                print("[ERROR] Reddit not configured. Set credentials in .env")
+                sys.exit(1)
+
+            questions = researcher.get_questions(
+                reddit_args.niche,
+                limit=reddit_args.limit,
+                min_upvotes=reddit_args.min_upvotes
+            )
+
+            if reddit_args.json:
+                import json
+                output = [q.to_dict() for q in questions]
+                print(json.dumps({"niche": reddit_args.niche, "questions": output}, indent=2))
+            else:
+                print(f"Found {len(questions)} questions for FAQ videos:\n")
+                for i, q in enumerate(questions, 1):
+                    print(f"  {i:2d}. {q.topic[:75]}{'...' if len(q.topic) > 75 else ''}")
+                    print(f"      Subreddit: r/{q.subreddit} | Score: {q.popularity_score}")
+                    print()
+
+        except ImportError as e:
+            print(f"[ERROR] Failed to import: {e}")
+            sys.exit(1)
+        except Exception as e:
+            print(f"[ERROR] Failed to get questions: {e}")
+            sys.exit(1)
+
+        print(f"{'='*60}")
+
+    elif cmd == "reddit-viral":
+        # Find viral content ideas from Reddit
+        reddit_parser = argparse.ArgumentParser(prog="run.py reddit-viral", add_help=False)
+        reddit_parser.add_argument("niche", nargs="?", default="finance",
+                                   help="Content niche (finance, psychology, storytelling)")
+        reddit_parser.add_argument("--limit", type=int, default=15,
+                                   help="Number of ideas to return (default: 15)")
+        reddit_parser.add_argument("--min-upvotes", type=int,
+                                   help="Minimum upvotes (uses niche default)")
+        reddit_parser.add_argument("--json", action="store_true",
+                                   help="Output as JSON")
+        reddit_parser.add_argument("--full", action="store_true",
+                                   help="Run full research report")
+        reddit_args = reddit_parser.parse_args(sys.argv[2:])
+
+        print(f"\n{'='*60}")
+        if reddit_args.full:
+            print(f"REDDIT FULL RESEARCH: {reddit_args.niche.upper()}")
+        else:
+            print(f"REDDIT VIRAL IDEAS: {reddit_args.niche.upper()}")
+        print(f"{'='*60}\n")
+
+        try:
+            from src.research.reddit_researcher import RedditResearcher
+
+            researcher = RedditResearcher()
+
+            if not researcher.reddit:
+                print("[ERROR] Reddit not configured. Set credentials in .env")
+                sys.exit(1)
+
+            if reddit_args.full:
+                # Full research report
+                report = researcher.full_research(reddit_args.niche)
+
+                if reddit_args.json:
+                    import json
+                    print(json.dumps(report.to_dict(), indent=2, default=str))
+                else:
+                    print(report.summary())
+            else:
+                # Just viral ideas
+                viral = researcher.find_viral_content(
+                    reddit_args.niche,
+                    min_upvotes=reddit_args.min_upvotes,
+                    limit=reddit_args.limit
+                )
+
+                if reddit_args.json:
+                    import json
+                    output = [v.to_dict() for v in viral]
+                    print(json.dumps({"niche": reddit_args.niche, "viral_ideas": output}, indent=2))
+                else:
+                    print(f"Found {len(viral)} viral content ideas:\n")
+                    for i, v in enumerate(viral, 1):
+                        print(f"  {i:2d}. {v.title_suggestion}")
+                        print(f"      Subreddit: r/{v.subreddit}")
+                        print(f"      Viral Score: {v.viral_score:.0f} | Type: {v.idea_type}")
+                        print(f"      Source: {v.source_url}")
+                        print()
+
+        except ImportError as e:
+            print(f"[ERROR] Failed to import: {e}")
+            sys.exit(1)
+        except Exception as e:
+            print(f"[ERROR] Failed to get viral ideas: {e}")
+            sys.exit(1)
+
+        print(f"{'='*60}")
+
+    elif cmd == "reddit-research":
+        # Full Reddit research (alias for reddit-viral --full)
+        reddit_parser = argparse.ArgumentParser(prog="run.py reddit-research", add_help=False)
+        reddit_parser.add_argument("niche", nargs="?", default="finance",
+                                   help="Content niche (finance, psychology, storytelling)")
+        reddit_parser.add_argument("--json", action="store_true",
+                                   help="Output as JSON")
+        reddit_args = reddit_parser.parse_args(sys.argv[2:])
+
+        print(f"\n{'='*60}")
+        print(f"REDDIT FULL RESEARCH: {reddit_args.niche.upper()}")
+        print(f"{'='*60}\n")
+
+        try:
+            from src.research.reddit_researcher import RedditResearcher
+
+            researcher = RedditResearcher()
+
+            if not researcher.reddit:
+                print("[ERROR] Reddit not configured. Set credentials in .env")
+                sys.exit(1)
+
+            print("Running full research (this may take a minute)...\n")
+            report = researcher.full_research(reddit_args.niche)
+
+            if reddit_args.json:
+                import json
+                print(json.dumps(report.to_dict(), indent=2, default=str))
+            else:
+                print(report.summary())
+
+        except ImportError as e:
+            print(f"[ERROR] Failed to import: {e}")
+            sys.exit(1)
+        except Exception as e:
+            print(f"[ERROR] Research failed: {e}")
+            sys.exit(1)
+
+    # ============================================================
+    # NEW INTEGRATED MODULE COMMANDS (2026-01-20)
+    # ============================================================
+
+    elif cmd == "caption":
+        # Generate captions using Whisper
+        caption_parser = argparse.ArgumentParser(prog="run.py caption", add_help=False)
+        caption_parser.add_argument("audio_file", help="Path to audio/video file")
+        caption_parser.add_argument("--output", "-o", help="Output file path (default: same name.srt)")
+        caption_parser.add_argument("--format", "-f", default="srt",
+                                    choices=["srt", "vtt", "json"],
+                                    help="Output format (default: srt)")
+        caption_parser.add_argument("--model", "-m", default="base",
+                                    choices=["tiny", "base", "small", "medium", "large"],
+                                    help="Whisper model size (default: base)")
+        caption_parser.add_argument("--language", "-l", default=None,
+                                    help="Language code (auto-detect if not specified)")
+        caption_parser.add_argument("--json", action="store_true",
+                                    help="Output timing data as JSON")
+        caption_args = caption_parser.parse_args(sys.argv[2:])
+
+        print(f"\n{'='*60}")
+        print("WHISPER CAPTION GENERATOR")
+        print(f"{'='*60}")
+        print(f"Audio file: {caption_args.audio_file}")
+        print(f"Model: {caption_args.model}")
+        print(f"Format: {caption_args.format}")
+        print()
+
+        import os
+        if not os.path.exists(caption_args.audio_file):
+            print(f"[ERROR] Audio file not found: {caption_args.audio_file}")
+            sys.exit(1)
+
+        try:
+            from src.captions.whisper_generator import WhisperCaptionGenerator
+            import asyncio
+
+            generator = WhisperCaptionGenerator(model_size=caption_args.model)
+
+            # Determine output file
+            if caption_args.output:
+                output_file = caption_args.output
+            else:
+                base_name = os.path.splitext(caption_args.audio_file)[0]
+                output_file = f"{base_name}.{caption_args.format}"
+
+            print(f"Generating captions...")
+
+            result = asyncio.run(generator.generate_captions(
+                audio_file=caption_args.audio_file,
+                output_file=output_file,
+                format=caption_args.format,
+                language=caption_args.language
+            ))
+
+            print(f"\n[OK] Captions saved to: {result}")
+
+            if caption_args.json:
+                # Also output word-level timing
+                word_timing = asyncio.run(generator.generate_word_timestamps(
+                    audio_file=caption_args.audio_file,
+                    language=caption_args.language
+                ))
+                import json
+                print("\nWord-level timing:")
+                print(json.dumps(word_timing[:10], indent=2))  # First 10 words
+                print(f"... ({len(word_timing)} words total)")
+
+        except ImportError as e:
+            print(f"[ERROR] Whisper not available: {e}")
+            print("Install with: pip install faster-whisper")
+            sys.exit(1)
+        except Exception as e:
+            print(f"[ERROR] Caption generation failed: {e}")
+            sys.exit(1)
+
+        print(f"\n{'='*60}")
+
+    elif cmd == "keywords":
+        # Keyword research using Google Trends
+        kw_parser = argparse.ArgumentParser(prog="run.py keywords", add_help=False)
+        kw_parser.add_argument("topic", help="Topic to research keywords for")
+        kw_parser.add_argument("--niche", "-n", default="default",
+                               help="Content niche (finance, psychology, storytelling)")
+        kw_parser.add_argument("--count", "-c", type=int, default=20,
+                               help="Number of keywords to return (default: 20)")
+        kw_parser.add_argument("--longtails", action="store_true",
+                               help="Include long-tail keyword variations")
+        kw_parser.add_argument("--trends", action="store_true",
+                               help="Include trend analysis")
+        kw_parser.add_argument("--json", action="store_true",
+                               help="Output as JSON")
+        kw_args = kw_parser.parse_args(sys.argv[2:])
+
+        print(f"\n{'='*60}")
+        print("KEYWORD RESEARCH (Free - Google Trends)")
+        print(f"{'='*60}")
+        print(f"Topic: {kw_args.topic}")
+        print(f"Niche: {kw_args.niche}")
+        print()
+
+        try:
+            from src.seo.keyword_intelligence import KeywordIntelligence
+
+            ki = KeywordIntelligence()
+
+            # Full analysis
+            result = ki.full_analysis(kw_args.topic, niche=kw_args.niche)
+
+            if kw_args.json:
+                import json
+                print(json.dumps(result.to_dict(), indent=2, default=str))
+            else:
+                print(f"Opportunity Score: {result.opportunity_score:.1f}/100")
+                print(f"Competition: {result.competition_score:.1f}/100")
+                print(f"Search Intent: {result.search_intent}")
+                print(f"Trend Direction: {result.trend_direction}")
+
+                if result.related_keywords:
+                    print(f"\nRelated Keywords ({min(len(result.related_keywords), kw_args.count)}):")
+                    for i, kw in enumerate(result.related_keywords[:kw_args.count], 1):
+                        print(f"  {i:2d}. {kw}")
+
+                if kw_args.longtails and hasattr(ki, 'generate_longtails'):
+                    longtails = ki.generate_longtails(kw_args.topic, count=10)
+                    print(f"\nLong-tail Variations:")
+                    for lt in longtails[:10]:
+                        print(f"  - {lt}")
+
+                if kw_args.trends:
+                    print(f"\nTrend Analysis:")
+                    print(f"  Rising: {result.is_rising}")
+                    print(f"  Seasonal: {result.is_seasonal if hasattr(result, 'is_seasonal') else 'N/A'}")
+
+        except ImportError as e:
+            print(f"[ERROR] Keyword intelligence not available: {e}")
+            print("Make sure pytrends is installed: pip install pytrends")
+            sys.exit(1)
+        except Exception as e:
+            print(f"[ERROR] Keyword research failed: {e}")
+            sys.exit(1)
+
+        print(f"\n{'='*60}")
+
+    elif cmd == "optimize-title":
+        # Optimize title using IMPACT formula
+        title_parser = argparse.ArgumentParser(prog="run.py optimize-title", add_help=False)
+        title_parser.add_argument("title", help="Title to optimize")
+        title_parser.add_argument("--niche", "-n", default="default",
+                                  help="Content niche (finance, psychology, storytelling)")
+        title_parser.add_argument("--keywords", "-k", default="",
+                                  help="Comma-separated target keywords")
+        title_parser.add_argument("--variants", "-v", type=int, default=5,
+                                  help="Number of title variants to generate")
+        title_parser.add_argument("--json", action="store_true",
+                                  help="Output as JSON")
+        title_args = title_parser.parse_args(sys.argv[2:])
+
+        print(f"\n{'='*60}")
+        print("TITLE OPTIMIZER (IMPACT Formula)")
+        print(f"{'='*60}")
+        print(f"Original: {title_args.title}")
+        print(f"Niche: {title_args.niche}")
+        print()
+
+        try:
+            from src.seo.metadata_optimizer import MetadataOptimizer
+
+            optimizer = MetadataOptimizer()
+            keywords = [k.strip() for k in title_args.keywords.split(",") if k.strip()]
+
+            # Generate optimized variants
+            variants = optimizer.generate_title_variants(
+                topic=title_args.title,
+                keywords=keywords if keywords else [title_args.title.split()[0]],
+                count=title_args.variants
+            )
+
+            if title_args.json:
+                import json
+                print(json.dumps({"original": title_args.title, "variants": variants}, indent=2))
+            else:
+                print(f"Generated {len(variants)} optimized variants:\n")
+                for i, variant in enumerate(variants, 1):
+                    # Score each variant
+                    score = optimizer.score_title(variant)
+                    print(f"  {i}. {variant}")
+                    print(f"     Score: {score:.1f}/100")
+                    print()
+
+                # Also analyze original title
+                original_score = optimizer.score_title(title_args.title)
+                print(f"Original title score: {original_score:.1f}/100")
+
+                # Show IMPACT criteria
+                print(f"\nIMPACT Formula Checks:")
+                impact = optimizer.analyze_title_impact(title_args.title)
+                for criterion, passed in impact.items():
+                    status = "[OK]" if passed else "[MISS]"
+                    print(f"  {status} {criterion}")
+
+        except ImportError as e:
+            print(f"[ERROR] Metadata optimizer not available: {e}")
+            sys.exit(1)
+        except Exception as e:
+            print(f"[ERROR] Title optimization failed: {e}")
+            sys.exit(1)
+
+        print(f"\n{'='*60}")
+
+    elif cmd == "feedback":
+        # Analyze video performance feedback
+        fb_parser = argparse.ArgumentParser(prog="run.py feedback", add_help=False)
+        fb_parser.add_argument("video_id", help="YouTube video ID to analyze")
+        fb_parser.add_argument("--niche", "-n", default="default",
+                               help="Content niche for comparison")
+        fb_parser.add_argument("--recommendations", "-r", action="store_true",
+                               help="Generate improvement recommendations")
+        fb_parser.add_argument("--json", action="store_true",
+                               help="Output as JSON")
+        fb_args = fb_parser.parse_args(sys.argv[2:])
+
+        print(f"\n{'='*60}")
+        print("ANALYTICS FEEDBACK LOOP")
+        print(f"{'='*60}")
+        print(f"Video ID: {fb_args.video_id}")
+        print(f"Niche: {fb_args.niche}")
+        print()
+
+        try:
+            from src.analytics.feedback_loop import AnalyticsFeedbackLoop
+            import asyncio
+
+            feedback = AnalyticsFeedbackLoop()
+
+            print("Analyzing video performance...")
+
+            result = asyncio.run(feedback.analyze_video(fb_args.video_id, fb_args.niche))
+
+            if fb_args.json:
+                import json
+                print(json.dumps(result.to_dict(), indent=2, default=str))
+            else:
+                print(f"\nPerformance Score: {result.performance_score:.1f}/100")
+                print(f"CTR: {result.ctr:.2f}%")
+                print(f"Avg View Duration: {result.avg_view_duration:.1f}%")
+                print(f"Engagement Rate: {result.engagement_rate:.2f}%")
+
+                if result.drop_off_points:
+                    print(f"\nDrop-off Points:")
+                    for point in result.drop_off_points[:5]:
+                        print(f"  - {point['timestamp']}s: {point['drop_percentage']:.1f}% drop")
+
+                if fb_args.recommendations and result.recommendations:
+                    print(f"\nRecommendations:")
+                    for i, rec in enumerate(result.recommendations, 1):
+                        print(f"  {i}. {rec}")
+
+        except ImportError as e:
+            print(f"[ERROR] Feedback loop not available: {e}")
+            sys.exit(1)
+        except Exception as e:
+            print(f"[ERROR] Feedback analysis failed: {e}")
+            sys.exit(1)
+
+        print(f"\n{'='*60}")
+
+    elif cmd == "hooks":
+        # Generate viral hooks
+        hook_parser = argparse.ArgumentParser(prog="run.py hooks", add_help=False)
+        hook_parser.add_argument("topic", help="Video topic")
+        hook_parser.add_argument("--niche", "-n", default="all",
+                                 help="Content niche (finance, psychology, storytelling)")
+        hook_parser.add_argument("--style", "-s", default="curiosity",
+                                 choices=["curiosity", "action", "contrarian", "emotional", "value"],
+                                 help="Hook style (default: curiosity)")
+        hook_parser.add_argument("--count", "-c", type=int, default=5,
+                                 help="Number of hooks to generate (default: 5)")
+        hook_parser.add_argument("--enhance", "-e", help="Script file to enhance with retention features")
+        hook_parser.add_argument("--json", action="store_true",
+                                 help="Output as JSON")
+        hook_args = hook_parser.parse_args(sys.argv[2:])
+
+        print(f"\n{'='*60}")
+        print("VIRAL HOOK GENERATOR")
+        print(f"{'='*60}")
+        print(f"Topic: {hook_args.topic}")
+        print(f"Niche: {hook_args.niche}")
+        print(f"Style: {hook_args.style}")
+        print()
+
+        try:
+            from src.content.viral_hooks import ViralHookGenerator
+
+            generator = ViralHookGenerator(niche=hook_args.niche)
+
+            # Generate hooks
+            hooks = generator.get_all_hooks(hook_args.topic, count=hook_args.count)
+
+            if hook_args.json:
+                import json
+                hook_data = [{"hook": h[0], "style": h[1], "retention": h[2]} for h in hooks]
+                print(json.dumps({"topic": hook_args.topic, "hooks": hook_data}, indent=2))
+            else:
+                print(f"Top {len(hooks)} Hook Options:\n")
+                for i, (hook, style, retention) in enumerate(hooks, 1):
+                    print(f"  {i}. [{style.upper()}] {hook}")
+                    print(f"     Avg Retention: {retention:.1f}%")
+                    print()
+
+            # Enhance script if provided
+            if hook_args.enhance:
+                import os
+                if os.path.exists(hook_args.enhance):
+                    with open(hook_args.enhance, 'r', encoding='utf-8') as f:
+                        script = f.read()
+
+                    print(f"\nEnhancing script: {hook_args.enhance}")
+                    enhanced = generator.enhance_script_retention(script, video_duration=600)
+
+                    output_file = hook_args.enhance.replace('.txt', '_enhanced.txt')
+                    with open(output_file, 'w', encoding='utf-8') as f:
+                        f.write(enhanced)
+
+                    print(f"[OK] Enhanced script saved: {output_file}")
+                else:
+                    print(f"[ERROR] Script file not found: {hook_args.enhance}")
+
+        except ImportError as e:
+            print(f"[ERROR] Viral hooks not available: {e}")
+            sys.exit(1)
+        except Exception as e:
+            print(f"[ERROR] Hook generation failed: {e}")
+            sys.exit(1)
+
+        print(f"\n{'='*60}")
+
+    elif cmd == "integration-status":
+        # Show status of all integrated modules
+        print(f"\n{'='*60}")
+        print("INTEGRATION STATUS")
+        print(f"{'='*60}\n")
+
+        modules = {
+            "Whisper Captioning": ("src.captions.whisper_generator", "WhisperCaptionGenerator"),
+            "AI Disclosure": ("src.compliance.ai_disclosure", "AIDisclosureTracker"),
+            "Analytics Feedback": ("src.analytics.feedback_loop", "AnalyticsFeedbackLoop"),
+            "Viral Hooks": ("src.content.viral_hooks", "ViralHookGenerator"),
+            "Metadata Optimizer": ("src.seo.metadata_optimizer", "MetadataOptimizer"),
+            "Keyword Intelligence": ("src.seo.keyword_intelligence", "KeywordIntelligence"),
+            "Chatterbox TTS": ("src.content.tts_chatterbox", "ChatterboxTTS"),
+        }
+
+        for name, (module_path, class_name) in modules.items():
+            try:
+                module = __import__(module_path, fromlist=[class_name])
+                getattr(module, class_name)
+                print(f"  [OK] {name}")
+            except ImportError as e:
+                print(f"  [--] {name} (not installed)")
+            except AttributeError as e:
+                print(f"  [!!] {name} (import error: {e})")
+            except Exception as e:
+                print(f"  [??] {name} ({e})")
+
+        # Check config file
+        import os
+        config_path = "config/integrations.yaml"
+        if os.path.exists(config_path):
+            print(f"\n  [OK] Integration config: {config_path}")
+        else:
+            print(f"\n  [--] Integration config: {config_path} (not found)")
+
+        print(f"\n{'='*60}")
+
+    elif cmd == "ai-video":
+        # AI Video Generation command (supports Runway, Pika, HailuoAI)
+        import asyncio
+
+        ai_video_parser = argparse.ArgumentParser(prog="run.py ai-video", add_help=False)
+        ai_video_parser.add_argument("prompt", nargs="?", help="Video prompt")
+        ai_video_parser.add_argument("--provider", "-p", default=None,
+                                     help="Provider: runway, pika, hailuo (default: auto)")
+        ai_video_parser.add_argument("--budget", "-b", action="store_true",
+                                     help="Use cheapest provider")
+        ai_video_parser.add_argument("--quality", "-q", default="medium",
+                                     choices=["high", "medium", "low"],
+                                     help="Quality level (high=runway_alpha)")
+        ai_video_parser.add_argument("--output", "-o", default=None,
+                                     help="Output file path")
+        ai_video_parser.add_argument("--image", default=None,
+                                     help="Image path/URL for image-to-video")
+        ai_video_parser.add_argument("--duration", "-d", type=int, default=5,
+                                     help="Video duration in seconds (5 or 10)")
+        ai_video_parser.add_argument("--aspect-ratio", default="16:9",
+                                     choices=["16:9", "9:16", "21:9"],
+                                     help="Aspect ratio (default: 16:9)")
+        ai_video_parser.add_argument("--json", action="store_true",
+                                     help="Output as JSON")
+        ai_video_args = ai_video_parser.parse_args(sys.argv[2:])
+
+        if not ai_video_args.prompt:
+            print("Error: Prompt required")
+            print("Usage: python run.py ai-video \"Your video prompt here\"")
+            print("\nOptions:")
+            print("  --provider runway|pika  Use specific provider (default: auto-select)")
+            print("  --budget                Use cheapest available provider")
+            print("  --quality high|medium|low  Quality level (high uses runway alpha)")
+            print("  --duration 5|10         Video duration in seconds")
+            print("  --aspect-ratio 16:9|9:16|21:9  Aspect ratio")
+            print("  --output path           Output file path")
+            print("  --image path            Image path for image-to-video")
+            print("\nExamples:")
+            print('  python run.py ai-video "Cinematic sunset over ocean"')
+            print('  python run.py ai-video "City timelapse" --provider runway --quality high')
+            print('  python run.py ai-video "Portrait video" --aspect-ratio 9:16')
+            sys.exit(1)
+
+        async def _run_ai_video():
+            from src.content.ai_video_providers import (
+                get_ai_video_provider,
+                get_smart_router
+            )
+
+            try:
+                duration = ai_video_args.duration
+                aspect_ratio = ai_video_args.aspect_ratio
+                quality_map = {"high": True, "medium": False, "low": False}
+                prefer_quality = quality_map.get(ai_video_args.quality, False)
+
+                # Select provider
+                if ai_video_args.provider:
+                    provider = get_ai_video_provider(ai_video_args.provider)
+                    if not provider:
+                        print(f"[ERROR] Provider '{ai_video_args.provider}' not available")
+                        print("Available providers: runway, pika")
+                        sys.exit(1)
+                    print(f"[INFO] Using provider: {ai_video_args.provider}")
+                elif ai_video_args.budget:
+                    router = get_smart_router()
+                    provider = router.get_cheapest_provider()
+                    if provider:
+                        print(f"[INFO] Using cheapest provider: {provider.get_provider_name()}")
+                    else:
+                        print("[ERROR] No providers available")
+                        sys.exit(1)
+                else:
+                    router = get_smart_router()
+                    provider = router.select_provider(
+                        duration=duration,
+                        prefer_quality=prefer_quality
+                    )
+                    if provider:
+                        print(f"[INFO] Smart-selected provider: {provider.get_provider_name()}")
+                    else:
+                        print("[ERROR] No providers available. Check API keys.")
+                        sys.exit(1)
+
+                cost_estimate = provider.get_cost_per_video(duration)
+                print(f"[INFO] Duration: {duration}s, Aspect ratio: {aspect_ratio}")
+                print(f"[INFO] Estimated cost: ${cost_estimate:.2f}")
+                print(f"[INFO] Generating video... (this may take 1-3 minutes)")
+
+                # Generate video
+                if ai_video_args.image:
+                    result = await provider.generate_from_image(
+                        image_path=ai_video_args.image,
+                        motion_prompt=ai_video_args.prompt,
+                        output_file=ai_video_args.output,
+                        duration=duration
+                    )
+                else:
+                    result = await provider.generate_video(
+                        prompt=ai_video_args.prompt,
+                        output_file=ai_video_args.output,
+                        duration=duration,
+                        aspect_ratio=aspect_ratio
+                    )
+
+                # Output result
+                if ai_video_args.json:
+                    import json
+                    print(json.dumps(result.to_dict(), indent=2))
+                else:
+                    if result.success:
+                        print(f"\n[OK] Video generated successfully!")
+                        print(f"     Provider: {result.provider}")
+                        print(f"     Local path: {result.local_path}")
+                        if result.video_url:
+                            print(f"     Video URL: {result.video_url}")
+                        print(f"     Duration: {result.duration}s")
+                        if result.cost_estimate:
+                            print(f"     Cost: ${result.cost_estimate:.2f}")
+                        if result.generation_time:
+                            print(f"     Generation time: {result.generation_time:.1f}s")
+                    else:
+                        print(f"\n[FAIL] Video generation failed")
+                        print(f"       Error: {result.error}")
+                        sys.exit(1)
+
+            except ImportError as e:
+                print(f"\n[ERROR] Missing dependency: {e}")
+                print("Install with: pip install runwayml httpx")
+                sys.exit(1)
+            except Exception as e:
+                print(f"\n[ERROR] {e}")
+                import traceback
+                traceback.print_exc()
+                sys.exit(1)
+
+        asyncio.run(_run_ai_video())
+
+    elif cmd == "ai-broll":
+        # Generate B-roll footage from script file
+        import asyncio
+
+        broll_parser = argparse.ArgumentParser(prog="run.py ai-broll", add_help=False)
+        broll_parser.add_argument("script_file", nargs="?", help="Path to script file")
+        broll_parser.add_argument("--output-dir", "-o", default="output/ai_broll",
+                                  help="Output directory for generated clips")
+        broll_parser.add_argument("--style", "-s", default="cinematic",
+                                  choices=["cinematic", "documentary", "corporate", "abstract"],
+                                  help="Visual style for B-roll")
+        broll_parser.add_argument("--niche", "-n", default="default",
+                                  choices=["finance", "psychology", "storytelling", "technology", "default"],
+                                  help="Content niche for visual context")
+        broll_parser.add_argument("--duration", "-d", type=int, default=5,
+                                  help="Duration per clip in seconds")
+        broll_parser.add_argument("--max-clips", type=int, default=5,
+                                  help="Maximum number of clips to generate")
+        broll_parser.add_argument("--provider", "-p", default=None,
+                                  help="Provider: runway, pika (default: auto)")
+        broll_parser.add_argument("--dry-run", action="store_true",
+                                  help="Show what would be generated without actually generating")
+        broll_parser.add_argument("--json", action="store_true",
+                                  help="Output as JSON")
+        broll_args = broll_parser.parse_args(sys.argv[2:])
+
+        if not broll_args.script_file:
+            print("Error: Script file required")
+            print("Usage: python run.py ai-broll <script_file>")
+            print("\nOptions:")
+            print("  --output-dir dir        Output directory (default: output/ai_broll)")
+            print("  --style cinematic|documentary|corporate|abstract")
+            print("  --niche finance|psychology|storytelling|technology")
+            print("  --duration 5            Duration per clip in seconds")
+            print("  --max-clips 5           Maximum clips to generate")
+            print("  --provider runway|pika  Specific provider to use")
+            print("  --dry-run               Preview without generating")
+            print("\nExamples:")
+            print("  python run.py ai-broll output/script.txt --style cinematic")
+            print("  python run.py ai-broll output/script.txt --niche finance --max-clips 3")
+            sys.exit(1)
+
+        import os
+        if not os.path.exists(broll_args.script_file):
+            print(f"[ERROR] Script file not found: {broll_args.script_file}")
+            sys.exit(1)
+
+        async def _run_ai_broll():
+            from src.content.ai_video_providers import get_smart_router, get_ai_video_provider
+            import re
+
+            # Read script file
+            with open(broll_args.script_file, 'r', encoding='utf-8') as f:
+                script_text = f.read()
+
+            # Extract segments (sentences or paragraphs)
+            # Split by sentences or paragraph breaks
+            segments = re.split(r'(?<=[.!?])\s+|\n\n+', script_text)
+            segments = [s.strip() for s in segments if s.strip() and len(s.strip()) > 20]
+
+            # Limit to max_clips
+            segments = segments[:broll_args.max_clips]
+
+            print(f"\n{'='*60}")
+            print("AI B-ROLL GENERATOR")
+            print(f"{'='*60}")
+            print(f"Script: {broll_args.script_file}")
+            print(f"Style: {broll_args.style}")
+            print(f"Niche: {broll_args.niche}")
+            print(f"Clips to generate: {len(segments)}")
+            print(f"Duration per clip: {broll_args.duration}s")
+            print(f"Output directory: {broll_args.output_dir}")
+            print()
+
+            # Show segments
+            print("Segments to visualize:")
+            for i, seg in enumerate(segments, 1):
+                preview = seg[:80] + "..." if len(seg) > 80 else seg
+                print(f"  {i}. {preview}")
+            print()
+
+            if broll_args.dry_run:
+                print("[DRY RUN] Would generate clips for the above segments")
+                print(f"[DRY RUN] Estimated cost: ${len(segments) * 0.25:.2f} (rough estimate)")
+                return
+
+            # Get provider
+            if broll_args.provider:
+                provider = get_ai_video_provider(broll_args.provider)
+                if not provider:
+                    print(f"[ERROR] Provider '{broll_args.provider}' not available")
+                    sys.exit(1)
+            else:
+                router = get_smart_router()
+                provider = router.select_provider(duration=broll_args.duration)
+                if not provider:
+                    print("[ERROR] No AI video providers available. Check API keys.")
+                    sys.exit(1)
+
+            print(f"[INFO] Using provider: {provider.get_provider_name()}")
+
+            # Create output directory
+            os.makedirs(broll_args.output_dir, exist_ok=True)
+
+            # Generate clips
+            results = []
+            total_cost = 0.0
+
+            for i, segment in enumerate(segments, 1):
+                print(f"\n[{i}/{len(segments)}] Generating B-roll...")
+                print(f"    Segment: {segment[:60]}...")
+
+                output_file = os.path.join(broll_args.output_dir, f"broll_{i:03d}.mp4")
+
+                # Build enhanced prompt
+                style_prompts = {
+                    "cinematic": "cinematic shot, dramatic lighting, film grain",
+                    "documentary": "documentary style, natural lighting, realistic",
+                    "corporate": "clean, professional, modern, well-lit",
+                    "abstract": "abstract visuals, artistic, symbolic",
+                }
+                niche_context = {
+                    "finance": "business, money, investment",
+                    "psychology": "human emotion, mind, thinking",
+                    "storytelling": "dramatic, narrative, atmospheric",
+                    "technology": "futuristic, digital, tech",
+                    "default": "",
+                }
+
+                enhanced_prompt = (
+                    f"B-roll footage: {segment}. "
+                    f"{style_prompts.get(broll_args.style, '')}. "
+                    f"{niche_context.get(broll_args.niche, '')}. "
+                    f"16:9 widescreen, high quality."
+                )
+
+                result = await provider.generate_video(
+                    prompt=enhanced_prompt,
+                    output_file=output_file,
+                    duration=broll_args.duration,
+                    aspect_ratio="16:9"
+                )
+
+                if result.success:
+                    print(f"    [OK] Saved: {result.local_path}")
+                    if result.cost_estimate:
+                        total_cost += result.cost_estimate
+                else:
+                    print(f"    [FAIL] {result.error}")
+
+                results.append(result.to_dict() if hasattr(result, 'to_dict') else {"success": result.success})
+
+            # Summary
+            successful = sum(1 for r in results if r.get("success"))
+            print(f"\n{'='*60}")
+            print(f"B-ROLL GENERATION COMPLETE")
+            print(f"{'='*60}")
+            print(f"Successful: {successful}/{len(segments)}")
+            print(f"Total cost: ${total_cost:.2f}")
+            print(f"Output dir: {broll_args.output_dir}")
+
+            if broll_args.json:
+                import json
+                print("\n" + json.dumps({
+                    "script_file": broll_args.script_file,
+                    "clips_generated": successful,
+                    "total_cost": total_cost,
+                    "results": results
+                }, indent=2))
+
+        asyncio.run(_run_ai_broll())
+
+    elif cmd == "ai-video-providers":
+        # List AI video providers
+        from src.content.ai_video_providers import list_providers
+
+        print(f"\n{'='*60}")
+        print("AI VIDEO PROVIDERS")
+        print(f"{'='*60}\n")
+
+        providers = list_providers()
+        print(f"{'Provider':<15} {'Cost/Video':>12} {'Quality':>10} {'Status':>10}")
+        print("-" * 50)
+
+        for p in providers:
+            cost = f"${p['cost_per_video']:.2f}" if p['cost_per_video'] else "N/A"
+            quality = f"{p['quality_score']:.0%}" if p['quality_score'] else "N/A"
+            status = "[OK]" if p['available'] else "[--]"
+            print(f"{p['name']:<15} {cost:>12} {quality:>10} {status:>10}")
+
+        print("-" * 50)
+        print("\nUsage:")
+        print("  python run.py ai-video --provider hailuo \"prompt\"")
+        print("  python run.py ai-video --budget \"prompt\"  # Auto-select cheapest")
+        print(f"\n{'='*60}")
+
+    elif cmd == "ai-video-cost":
+        # Estimate AI video batch cost
+        from src.content.ai_video_providers import get_smart_router
+
+        count = int(sys.argv[2]) if len(sys.argv) > 2 else 10
+        provider_name = sys.argv[3] if len(sys.argv) > 3 else None
+
+        router = get_smart_router()
+        estimate = router.estimate_batch_cost(count, provider_name)
+
+        print(f"\n{'='*60}")
+        print("AI VIDEO COST ESTIMATE")
+        print(f"{'='*60}\n")
+
+        print(f"Clip count: {estimate['clip_count']}")
+
+        if 'estimates' in estimate:
+            print(f"\n{'Provider':<15} {'Per Clip':>12} {'Total':>12} {'Quality':>10}")
+            print("-" * 52)
+            for e in estimate['estimates']:
+                print(f"{e['provider']:<15} ${e['cost_per_clip']:.2f}         ${e['total_cost']:.2f}        {e['quality']:.0%}")
+
+            if estimate['savings_vs_pika'] > 0:
+                print(f"\nPotential savings with HailuoAI: ${estimate['savings_vs_pika']:.2f}")
+        else:
+            print(f"Provider: {estimate['provider']}")
+            print(f"Cost per clip: ${estimate['cost_per_clip']:.2f}")
+            print(f"Total cost: ${estimate['total_cost']:.2f}")
+
+        print(f"\n{'='*60}")
+
+    elif cmd == "gpu-status":
+        # Show GPU acceleration status
+        from src.utils.gpu_utils import GPUAccelerator
+
+        print(f"\n{'='*60}")
+        print("GPU ACCELERATION STATUS")
+        print(f"{'='*60}\n")
+
+        try:
+            accelerator = GPUAccelerator()
+            status = accelerator.get_status()
+
+            print(f"GPU Available:     {'YES' if status['available'] else 'NO'}")
+            print(f"Type:              {status['type'].upper()}")
+            print(f"Name:              {status['name']}")
+            print(f"Encoder:           {status['encoder']}")
+
+            if status['available']:
+                print(f"Decoder:           {status['decoder']}")
+                print(f"Scale Filter:      {status['scale_filter']}")
+                print(f"HEVC Support:      {'YES' if status['supports_hevc'] else 'NO'}")
+                print(f"Max Resolution:    {status['max_resolution']}")
+
+            print(f"Expected Speedup:  {status['speedup']}")
+
+            # Show sample encoding command
+            if status['available']:
+                print(f"\nSample FFmpeg encoding arguments:")
+                args = accelerator.get_ffmpeg_args(preset="fast", bitrate="8M")
+                print(f"  {' '.join(args)}")
+
+                print(f"\nHardware decoding arguments:")
+                input_args = accelerator.get_input_args()
+                if input_args:
+                    print(f"  {' '.join(input_args)}")
+                else:
+                    print(f"  (Not required)")
+
+        except Exception as e:
+            print(f"Error detecting GPU: {e}")
+            sys.exit(1)
+
+        print(f"\n{'='*60}")
+
+    elif cmd == "benchmark":
+        # Run performance benchmark
+        import time
+        import tempfile
+        from pathlib import Path
+
+        print(f"\n{'='*60}")
+        print("PERFORMANCE BENCHMARK")
+        print(f"{'='*60}\n")
+
+        # Parse options
+        duration = 30  # seconds
+        iterations = 3
+        if len(sys.argv) > 2:
+            try:
+                duration = int(sys.argv[2])
+            except ValueError:
+                pass
+
+        print(f"Test parameters:")
+        print(f"  Video duration: {duration}s")
+        print(f"  Iterations: {iterations}")
+        print(f"  Resolution: 1920x1080")
+        print()
+
+        from src.content.video_pro import ProVideoGenerator
+
+        # Create test audio
+        temp_dir = Path(tempfile.gettempdir()) / "benchmark"
+        temp_dir.mkdir(exist_ok=True)
+        audio_file = temp_dir / "test_audio.mp3"
+
+        # Generate silent audio if it doesn't exist
+        if not audio_file.exists():
+            print("Generating test audio...")
+            import subprocess
+            cmd = [
+                "ffmpeg", "-y", "-f", "lavfi", "-i", f"anullsrc=r=44100:cl=stereo",
+                "-t", str(duration), "-c:a", "mp3", str(audio_file)
+            ]
+            subprocess.run(cmd, capture_output=True)
+
+        # Benchmark scenarios
+        scenarios = [
+            {"name": "CPU Encoding", "use_gpu": False},
+            {"name": "GPU Encoding", "use_gpu": True},
+        ]
+
+        results = {}
+
+        for scenario in scenarios:
+            scenario_name = scenario["name"]
+            print(f"\n{scenario_name}:")
+            print("-" * 40)
+
+            times = []
+
+            for i in range(iterations):
+                output_file = temp_dir / f"bench_{scenario_name.replace(' ', '_')}_{i}.mp4"
+
+                # Create simple test script object
+                class TestScript:
+                    def __init__(self):
+                        self.title = "Benchmark Test"
+                        self.description = "Performance test"
+                        self.sections = []
+
+                generator = ProVideoGenerator(use_gpu=scenario["use_gpu"])
+
+                start = time.time()
+
+                try:
+                    result = generator.create_video(
+                        audio_file=str(audio_file),
+                        script=TestScript(),
+                        output_file=str(output_file),
+                        use_stock=False
+                    )
+
+                    elapsed = time.time() - start
+                    times.append(elapsed)
+
+                    print(f"  Run {i+1}/{iterations}: {elapsed:.1f}s")
+
+                    # Cleanup
+                    if output_file.exists():
+                        output_file.unlink()
+
+                except Exception as e:
+                    print(f"  Run {i+1}/{iterations}: FAILED - {e}")
+                    continue
+
+            if times:
+                avg_time = sum(times) / len(times)
+                min_time = min(times)
+                max_time = max(times)
+
+                results[scenario_name] = {
+                    "avg": avg_time,
+                    "min": min_time,
+                    "max": max_time
+                }
+
+                print(f"\n  Average: {avg_time:.1f}s")
+                print(f"  Min:     {min_time:.1f}s")
+                print(f"  Max:     {max_time:.1f}s")
+
+        # Compare results
+        if "CPU Encoding" in results and "GPU Encoding" in results:
+            cpu_time = results["CPU Encoding"]["avg"]
+            gpu_time = results["GPU Encoding"]["avg"]
+            speedup = cpu_time / gpu_time if gpu_time > 0 else 0
+
+            print(f"\n{'='*60}")
+            print(f"RESULTS SUMMARY")
+            print(f"{'='*60}\n")
+            print(f"CPU Encoding:  {cpu_time:.1f}s average")
+            print(f"GPU Encoding:  {gpu_time:.1f}s average")
+            print(f"Speedup:       {speedup:.2f}x faster with GPU")
+            print(f"Time Saved:    {cpu_time - gpu_time:.1f}s per video")
+
+        # Cleanup
+        if audio_file.exists():
+            audio_file.unlink()
+
+        print(f"\n{'='*60}")
+
+    elif cmd == "async-download-test":
+        # Test async downloads
+        import asyncio
+
+        print(f"\n{'='*60}")
+        print("ASYNC DOWNLOAD TEST")
+        print(f"{'='*60}\n")
+
+        async def _run_test():
+            from src.content.stock_footage import StockFootageProvider
+            import time
+
+            provider = StockFootageProvider()
+
+            if not provider.is_available():
+                print("Error: No stock footage providers available")
+                print("Configure PEXELS_API_KEY or PIXABAY_API_KEY in .env")
+                sys.exit(1)
+
+            # Search for test videos
+            print("Searching for test videos...")
+            videos = provider.search_videos("nature", count=10)
+
+            if not videos:
+                print("No videos found")
+                sys.exit(1)
+
+            print(f"Found {len(videos)} videos\n")
+
+            # Test 1: Sequential downloads
+            print("Test 1: Sequential Downloads")
+            print("-" * 40)
+            start = time.time()
+
+            for i, video in enumerate(videos[:5], 1):
+                output_path = f"output/test/seq_{i}.mp4"
+                result = provider.download_video(video, output_path)
+                if result:
+                    print(f"  [{i}/5] Downloaded")
+
+            seq_time = time.time() - start
+            print(f"Sequential time: {seq_time:.1f}s\n")
+
+            # Test 2: Async downloads
+            print("Test 2: Async Concurrent Downloads")
+            print("-" * 40)
+            start = time.time()
+
+            results = await provider.download_videos_async(
+                videos[:5],
+                output_dir="output/test",
+                max_concurrent=5
+            )
+
+            async_time = time.time() - start
+            success = sum(1 for r in results if r is not None)
+            print(f"Async time: {async_time:.1f}s")
+            print(f"Success rate: {success}/5\n")
+
+            # Compare
+            speedup = seq_time / async_time if async_time > 0 else 0
+            print(f"{'='*60}")
+            print(f"RESULTS")
+            print(f"{'='*60}")
+            print(f"Sequential:  {seq_time:.1f}s")
+            print(f"Async:       {async_time:.1f}s")
+            print(f"Speedup:     {speedup:.2f}x faster")
+            print(f"Time saved:  {seq_time - async_time:.1f}s")
+            print(f"{'='*60}")
+
+        try:
+            asyncio.run(_run_test())
+        except KeyboardInterrupt:
+            print("\nTest cancelled")
+        except Exception as e:
+            print(f"Test failed: {e}")
+            import traceback
+            traceback.print_exc()
 
     else:
         print(f"Unknown command: {cmd}")

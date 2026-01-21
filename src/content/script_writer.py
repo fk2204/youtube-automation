@@ -50,6 +50,41 @@ except ImportError:
     BEST_PRACTICES_AVAILABLE = False
     logger.warning("best_practices module not available - validation features disabled")
 
+# Import token optimizer for cost-efficient token limits
+try:
+    from src.utils.token_optimizer import TASK_MAX_TOKENS, get_token_optimizer
+    TOKEN_OPTIMIZER_AVAILABLE = True
+except ImportError:
+    TOKEN_OPTIMIZER_AVAILABLE = False
+    # Fallback token limits if token_optimizer is not available
+    TASK_MAX_TOKENS = {
+        "title_generation": 50,
+        "tag_generation": 100,
+        "description_generation": 300,
+        "hook_generation": 150,
+        "script_outline": 500,
+        "full_script": 4000,
+        "thumbnail_text": 30,
+        "seo_keywords": 150,
+    }
+    logger.warning("token_optimizer module not available - using default token limits")
+
+# Import Viral Hooks Generator for retention optimization
+try:
+    from src.content.viral_hooks import ViralHookGenerator
+    VIRAL_HOOKS_AVAILABLE = True
+except ImportError:
+    VIRAL_HOOKS_AVAILABLE = False
+    logger.debug("viral_hooks module not available - hook enhancement disabled")
+
+# Import Metadata Optimizer for title/description optimization
+try:
+    from src.seo.metadata_optimizer import MetadataOptimizer
+    METADATA_OPTIMIZER_AVAILABLE = True
+except ImportError:
+    METADATA_OPTIMIZER_AVAILABLE = False
+    logger.debug("metadata_optimizer module not available - title optimization disabled")
+
 
 # ============================================================
 # Title Optimization Constants (for YouTube CTR improvement)
@@ -767,268 +802,62 @@ class ScriptWriter:
     - OpenAI (GPT-4) - Most popular
     """
 
-    SCRIPT_PROMPT_TEMPLATE = """You are an expert YouTube scriptwriter creating VIRAL faceless videos optimized for maximum retention.
+    SCRIPT_PROMPT_TEMPLATE = """Create viral {duration}-min YouTube script for: {topic} | Style: {style} | Audience: {audience}
 
-Write a complete {duration}-minute YouTube script for:
+## RETENTION OPTIMIZATION:
+1. **HOOK (0-5s)**: Pattern interrupt - "Shocking Truth" / "Story Lead" / "Question Stack" / "Stats Shock" / "Bold Statement"
+2. **MICRO-PAYOFFS**: Every 30-60s - Quick insights, surprising facts, actionable tips [MICRO-PAYOFF]
+3. **OPEN LOOPS**: Min 3 per video - "I'll reveal the key at the end..." [OPEN-LOOP] → [LOOP-CLOSED]
+4. **CHAPTERS**: Clear structure, descriptive titles, first at 00:00
+5. **CTAs**: 30% soft, 50% engagement, 95% final (NEVER in first 30s)
 
-**Topic:** {topic}
-**Style:** {style}
-**Target Audience:** {audience}
+## STRUCTURE:
+HOOK (0-5s) → CONTEXT (5-15s) → PROBLEM (15-45s) → PROMISE (45-60s) → CONTENT ({duration_content_mins}min: 5-7 points) → TWIST (30s) → PAYOFF (30s) → CTA (15s)
 
-## YOUTUBE BEST PRACTICES - RETENTION OPTIMIZATION:
+## ENGAGEMENT:
+- Micro-cliffhangers every 60-90s
+- Use "you" 3× per minute
+- Rhetorical questions every 30-45s
+- Specific numbers always: "73%" not "most", "$2,847" not "thousands"
 
-### 1. STRONG HOOK (First 5 Seconds) - CRITICAL FOR RETENTION:
-Choose ONE proven hook formula and execute it in the FIRST 5 SECONDS:
-
-**Pattern Interrupt Hooks:**
-- **"The Shocking Truth"** - Counterintuitive fact that challenges beliefs
-  "Everything you've been told about [topic] is completely wrong..."
-- **"Story Lead"** - Compelling micro-story that creates immediate tension
-  "In 2019, a man lost everything... but what happened next changed the industry forever."
-- **"Question Stack"** - 3 rapid curiosity questions in first 5 seconds
-  "What if I told you...? Would you believe...? And what would you do if...?"
-- **"Stats Shock"** - Lead with a surprising, specific statistic
-  "97.3% of people who try this method fail - here's why you won't."
-- **"Bold Statement"** - Make a provocative claim that demands attention
-  "This single technique is worth more than a college degree..."
-
-### 2. MICRO-PAYOFFS (Every 30-60 Seconds):
-Deliver small value moments throughout to maintain retention:
-- Quick insight: "Here's a secret most people miss..."
-- Surprising fact: "What you might not know is..."
-- Actionable tip: "The first thing you can do RIGHT NOW is..."
-- Story beat: "And that's when everything changed..."
-Mark these in the script as [MICRO-PAYOFF] for tracking.
-
-### 3. OPEN LOOPS (Minimum 3 Per Video):
-Create curiosity gaps that keep viewers watching:
-- "I'll reveal the most important tip at the end - trust me, it's worth waiting for..."
-- "But there's something even more shocking coming up in point three..."
-- "The real secret? I'll tell you after we cover the basics..."
-- "What happened next will surprise you - but first..."
-Mark these as [OPEN-LOOP] and [LOOP-CLOSED] when resolved.
-
-### 4. CHAPTERS/CLEAR STRUCTURE:
-Create distinct sections for YouTube chapters:
-- Use clear transitions between topics
-- Each chapter should have its own mini-hook
-- Chapter titles should be descriptive and keyword-rich
-- First chapter timestamp MUST be 00:00
-
-### 5. CALL-TO-ACTION PLACEMENT:
-Strategic CTA positioning for maximum effect:
-- **SOFT CTA at 30%**: "If you're finding this valuable, hit subscribe..."
-- **ENGAGEMENT CTA at 50%**: "Comment below with your experience..."
-- **FINAL CTA at 95%**: "Like and subscribe for more content like this..."
-NEVER put CTA in first 30 seconds (kills retention).
-
-## VIRAL VIDEO STRUCTURE (OPTIMIZED):
-
-1. **HOOK (0-5 seconds):** Pattern interrupt - grab attention IMMEDIATELY
-2. **CONTEXT (5-15 seconds):** Set up why this matters, plant FIRST open loop
-3. **PROBLEM (15-45 seconds):** Identify pain point, create urgency
-4. **PROMISE (45-60 seconds):** Tease the payoff - "By the end of this video, you'll know exactly..."
-5. **MAIN CONTENT ({duration_content_mins} minutes):** 5-7 key points with MICRO-PAYOFF every 30-60 seconds
-6. **TWIST/INSIGHT (30 seconds):** Deliver unexpected value, close open loops
-7. **PAYOFF (30 seconds):** Deliver the promised key insight
-8. **CTA (15 seconds):** Subscribe, comment with specific question, like
-
-## ENGAGEMENT TECHNIQUES (MANDATORY):
-
-### Micro-Cliffhangers (every 60-90 seconds):
-- "But here's where it gets interesting..."
-- "What happened next shocked everyone..."
-- "And this is where most people make the fatal mistake..."
-- "Wait - there's a catch..."
-
-### Direct Address - Use "you" at least 3 times per minute:
-- "You might be thinking..." / "When you try this..." / "Here's what you need to understand..."
-- Address the viewer directly to create personal connection
-- "This is where YOUR strategy changes..."
-
-### Rhetorical Questions (every 30-45 seconds):
-- "But what does this really mean for you?"
-- "Have you ever wondered why...?"
-- "Sound familiar?"
-- "So why don't more people do this?"
-
-### Specific Numbers (NEVER use vague words):
-- Say "73% of people" not "most people"
-- Say "$2,847 per month" not "thousands of dollars"
-- Say "in exactly 17 days" not "in a few weeks"
-- Say "4.7 times more effective" not "much more effective"
-
-## NICHE-SPECIFIC GUIDELINES:
 {niche_guide}
 
-## Output JSON Format:
-```json
+## JSON OUTPUT:
 {{
-    "title": "VIRAL title with numbers/power words (under 60 chars)",
-    "description": "SEO description with timestamps (200 words)",
-    "tags": ["10-15 relevant tags"],
-    "thumbnail_idea": "Eye-catching thumbnail concept",
-    "hook_text": "Exact first 5 seconds of narration - the pattern interrupt hook",
-    "chapter_markers": [
-        {{"timestamp_seconds": 0, "title": "The Hook"}},
-        {{"timestamp_seconds": 60, "title": "Chapter Title"}}
-    ],
-    "retention_points": [
-        {{"timestamp_seconds": 30, "type": "micro_payoff", "description": "Quick insight about X"}},
-        {{"timestamp_seconds": 45, "type": "open_loop", "description": "Tease about upcoming reveal"}},
-        {{"timestamp_seconds": 180, "type": "cliffhanger", "description": "Transition tension builder"}}
-    ],
+    "title": "Viral title <60 chars, numbers/power words",
+    "description": "SEO with timestamps, 200 words",
+    "tags": ["10-15 tags"],
+    "thumbnail_idea": "Eye-catching concept",
+    "hook_text": "First 5s narration",
+    "chapter_markers": [{{"timestamp_seconds": 0, "title": "Hook"}}],
+    "retention_points": [{{"timestamp_seconds": 30, "type": "micro_payoff", "description": "..."}}],
     "sections": [
         {{
             "timestamp": "00:00-00:05",
             "section_type": "hook",
-            "title": "The Hook",
-            "narration": "Exact hook text (pattern interrupt, 5 seconds max)",
-            "screen_action": "Visual description for B-roll",
-            "keywords": ["3-5 keywords for stock footage"],
+            "title": "Hook",
+            "narration": "Pattern interrupt, 15-20 words max",
+            "screen_action": "Visual for B-roll",
+            "keywords": ["3-5 keywords"],
             "duration_seconds": 5
-        }},
-        {{
-            "timestamp": "00:05-00:15",
-            "section_type": "context",
-            "title": "Why This Matters",
-            "narration": "Context with first open loop planted",
-            "screen_action": "Visual description",
-            "keywords": ["keywords"],
-            "duration_seconds": 10
         }}
     ]
 }}
-```
 
-## CRITICAL REQUIREMENTS (Best Practices):
+**TARGET: {word_count} words** (~150 words/min). Generate 10-15 sections. Hook MUST be 5s. Include 3+ OPEN LOOPS, micro-payoffs every 30-60s, cliffhangers every 60-90s. CTAs at {cta_30_percent}s, {cta_50_percent}s, {cta_95_percent}s."""
 
-### WORD COUNT (MANDATORY):
-- **Target: {word_count} words total** (8-15 min optimal range)
-- This equals approximately {duration} minutes at 150 words/minute
-- Longer scripts (1200-2500 words) perform better for retention
+    # Alternative viral prompt (compressed)
+    VIRAL_SCRIPT_PROMPT = """Create {duration}-min viral script: {topic}
 
-### STRUCTURE REQUIREMENTS:
-- Generate 10-15 sections for {duration} minute video
-- FIRST SECTION must be exactly 5 seconds - the HOOK (15-20 words max)
-- Each section needs KEYWORDS for stock footage matching
-- Make it feel like a documentary, not a lecture
+HOOKS: "Shocking Truth" / "Story Lead" ($47 discovery) / "Question Stack" (3 rapid) / "Stats Shock" (2.3% succeed)
 
-### HOOK REQUIREMENT (First 5 Seconds):
-- The opening hook MUST grab attention in EXACTLY 5 seconds
-- Use a pattern interrupt from the formulas above
-- This is the #1 factor for retention - get it right
-
-### CTA PLACEMENT (STRATEGIC):
-- **SOFT CTA at 30%** ({cta_30_percent}s): "If you're finding this valuable, hit subscribe..."
-- **ENGAGEMENT CTA at 50%** ({cta_50_percent}s): "Comment below with your experience..."
-- **FINAL CTA at 95%** ({cta_95_percent}s): "Like and subscribe for more content like this..."
-- NEVER put CTA in first 30 seconds (kills retention)
-
-### ENGAGEMENT ELEMENTS:
-- Use at least 3 OPEN LOOPS throughout the script (mark with [OPEN-LOOP])
-- Include a MICRO-PAYOFF every 30-60 seconds (mark key moments)
-- Add a micro-cliffhanger every 60-90 seconds
-- Add a rhetorical question every 30-45 seconds
-- Include emotional hooks and power words
-
-### METADATA:
-- Include chapter_markers array for YouTube chapters feature
-- Include retention_points array with types: "hook", "micro_payoff", "open_loop", "cliffhanger", "cta"
-
-Write the COMPLETE viral script now ({word_count} words target):"""
-
-    # Longer detailed prompt for better videos
-    VIRAL_SCRIPT_PROMPT = """You are a viral content strategist creating faceless YouTube videos that get millions of views.
-
-Create a {duration}-MINUTE script about: {topic}
-
-## PROVEN HOOK FORMULAS (Use one for your opening):
-
-1. **"The Shocking Truth"** - Start with a counterintuitive fact
-   "Everything you've been told about [topic] is completely wrong. And by the end of this video, you'll see exactly why."
-
-2. **"Story Lead"** - Open with a compelling micro-story
-   "In 2019, a man with nothing but $47 in his bank account discovered something that would change everything..."
-
-3. **"Question Stack"** - 3 rapid curiosity questions
-   "What if I told you there's a method that 97% of experts hide? Would you believe it takes just 12 minutes a day? And what if it could transform your entire approach to [topic]?"
-
-4. **"Stats Shock"** - Lead with a surprising statistic
-   "Only 2.3% of people who try [topic] ever succeed. But here's the crazy part - the ones who do all share one thing in common."
-
-## NICHE-SPECIFIC GUIDELINES:
 {niche_guide}
 
-## ENGAGEMENT TECHNIQUES (MANDATORY):
+ENGAGEMENT: 2+ open loops, cliffhangers every 60-90s, "you" frequently, rhetorical Q every 30-45s, specific numbers only
 
-### Open Loops - Use at least 2 throughout the script:
-- "I'll reveal the most critical piece at the end - and trust me, it's worth waiting for..."
-- "But there's something even more shocking I need to show you first..."
-- "The third point changes everything - but you need context from the first two..."
+STRUCTURE (HOOK→TENSION→RESOLUTION): Hook 15s → Context 30s → Points 1-5 (45-60s each) → Twist 30s → Conclusion 30s → CTA 15s
 
-### Micro-Cliffhangers (insert every 60-90 seconds):
-- "But here's where it gets really interesting..."
-- "What happened next shocked even the experts..."
-- "And this is the exact moment when everything changed..."
-- "Most people stop here. But what comes next is what separates the winners..."
-
-### Direct Address - Use "you" frequently:
-- "You're probably thinking..." / "When you apply this..." / "Here's what you need to understand..."
-- "This affects you directly because..." / "Your results depend on..."
-
-### Rhetorical Questions (every 30-45 seconds):
-- "But why does this actually matter?"
-- "Have you ever stopped to think about...?"
-- "Sound familiar? That's exactly what I thought too."
-- "So what makes this different from everything else you've tried?"
-
-### Specific Numbers (NEVER be vague):
-- "73.2% of people" NOT "most people"
-- "$4,829 per month" NOT "thousands of dollars"
-- "in exactly 23 days" NOT "in a few weeks"
-- "3.7x more effective" NOT "much more effective"
-- "studied 847 cases" NOT "studied many cases"
-
-## STORY STRUCTURE:
-Every point should follow: HOOK → TENSION → RESOLUTION
-- Hook: Grab attention with a surprising fact or question
-- Tension: Build curiosity, create stakes, what's at risk
-- Resolution: Deliver the insight with specific, actionable detail
-
-## SECTIONS REQUIRED:
-1. HOOK (15s) - Use one of the proven hook formulas above
-2. CONTEXT (30s) - Set up the problem, add an open loop
-3. POINT 1 (45-60s) - First major insight with story + cliffhanger
-4. POINT 2 (45-60s) - Second insight with example + rhetorical question
-5. POINT 3 (45-60s) - Third insight with proof + cliffhanger
-6. POINT 4 (45-60s) - Fourth insight (optional) + open loop callback
-7. POINT 5 (45-60s) - Fifth insight (optional)
-8. TWIST (30s) - Unexpected perspective, deliver the promised insight
-9. CONCLUSION (30s) - Tie it all together, create urgency
-10. CTA (15s) - Subscribe, comment with specific question, like
-
-## OUTPUT FORMAT:
-Return ONLY valid JSON:
-{{
-    "title": "VIRAL title - specific numbers, power words, curiosity gap",
-    "description": "YouTube description with timestamps and keywords",
-    "tags": ["list", "of", "15", "SEO", "tags"],
-    "thumbnail_idea": "High-contrast, faces/emotions, bold text overlay with specific number",
-    "sections": [
-        {{
-            "timestamp": "00:00-00:15",
-            "section_type": "hook",
-            "title": "The Hidden Truth",
-            "narration": "Full spoken text for this section...",
-            "screen_action": "Dramatic footage of...",
-            "keywords": ["keyword1", "keyword2", "keyword3"],
-            "duration_seconds": 15
-        }}
-    ]
-}}
-
-Generate the full {duration}-minute script now:"""
+JSON: {{"title": "...", "description": "...", "tags": [...], "thumbnail_idea": "...", "sections": [{{"timestamp": "...", "section_type": "...", "title": "...", "narration": "...", "screen_action": "...", "keywords": [...], "duration_seconds": ...}}]}}"""
 
     def __init__(
         self,
@@ -1040,7 +869,9 @@ Generate the full {duration}-minute script now:"""
         Initialize the script writer.
 
         Args:
-            provider: AI provider (ollama, groq, gemini, claude, openai). Defaults to AI_PROVIDER env var or "ollama".
+            provider: AI provider (ollama, groq, gemini, claude, openai, auto).
+                      Defaults to AI_PROVIDER env var or "ollama".
+                      Use "auto" for smart routing: Groq (free) -> Ollama (local) -> Claude (paid)
             api_key: API key (not needed for ollama)
             model: Model override (uses provider default if not specified)
 
@@ -1053,249 +884,52 @@ Generate the full {duration}-minute script now:"""
 
             # PAID - Claude (best quality)
             writer = ScriptWriter(provider="claude", api_key="your-key")
+
+            # AUTO - Smart routing (tries free providers first)
+            writer = ScriptWriter(provider="auto")
         """
         # Use environment variable if provider not specified
         if provider is None:
             provider = os.getenv("AI_PROVIDER", "ollama")
         self.provider_name = provider
-        self.ai = get_provider(provider=provider, api_key=api_key, model=model)
-        logger.info(f"ScriptWriter initialized with provider: {provider}")
+
+        if provider == "auto":
+            # Smart routing: use free providers first
+            try:
+                self.ai = get_provider("groq")
+                self.provider_name = "groq"
+                logger.info("Using Groq (free tier)")
+            except Exception:
+                try:
+                    self.ai = get_provider("ollama")
+                    self.provider_name = "ollama"
+                    logger.info("Using Ollama (local)")
+                except Exception:
+                    self.ai = get_provider("claude", api_key=api_key)
+                    self.provider_name = "claude"
+                    logger.warning("Using Claude (paid)")
+        else:
+            self.ai = get_provider(provider=provider, api_key=api_key, model=model)
+            logger.info(f"ScriptWriter initialized with provider: {provider}")
 
     # Niche-specific content guidelines
     # Updated with Competitor Analysis (January 2026)
     # Sources: The Swedish Investor, Practical Wisdom, Psych2Go, Brainy Dose, JCS, Truly Criminal
     NICHE_GUIDES = {
-        "finance": """
-FINANCE NICHE (money_blueprints) - AUTHORITATIVE, DATA-DRIVEN APPROACH
-CPM Range: $10-22 (one of highest paying niches)
-Top Competitors: The Swedish Investor (1M+ subs), Practical Wisdom (10M views on best videos)
+        "finance": """FINANCE (CPM $10-22) - AUTHORITATIVE, DATA-DRIVEN
+Hook: "Data Bomb" ($847B lost), "Money Math" ($500/mo → $2.4M), "Insider Secret" (Wall Street), "Loss Aversion" (losing $347/mo)
+Must include: Exact numbers ($4,273 not thousands), ROI metrics, compound growth examples, actionable steps ("Open account, transfer $200..."), loss aversion
+Tone: Expert sharing insider knowledge, urgent""",
 
-### WINNING CONTENT TYPES (Report 5):
-1. **Stock Analysis with Charts/Timelines** - Visual evidence builds trust
-2. **Passive Income Explainers** - High search volume, evergreen content
-3. **Business Documentaries** - "Documentary-business hybrids" perform exceptionally
-4. **Budgeting Tutorials** - Actionable, saves viewers money
-5. **Side Hustle Guides** - High engagement, shareable
+        "psychology": """PSYCHOLOGY (CPM $3-6) - CURIOSITY-DRIVEN, "WHAT IF"
+Hook: "What If" (mind-bending), "Dark Pattern" (brain hacked), "Forbidden Knowledge" (FBI techniques), "Mind Hack" (influence ability), "Study Shock" (Stanford 92%)
+Must include: Specific studies (2019 Stanford, Milgram, Cialdini), cognitive biases (anchoring, confirmation), dark psychology intrigue, real examples (casinos, advertisers)
+Tone: Mysterious insider revealing forbidden knowledge, dark/intriguing""",
 
-### VIRAL TOPIC TEMPLATES:
-- "How [Company] Makes Money" (e.g., "How Netflix Makes Money")
-- "Why [Stock] Will 10x" (e.g., "Why NVIDIA Will 10x in 2026")
-- "5 Passive Income Ideas That Actually Work"
-- "The Truth About [Financial Trend]" (e.g., "The Truth About AI Stocks")
-- "[X] Passive Income Streams I Use to Make $[Amount]/Month"
-- "I Analyzed 100 [Stocks/Investments] - Here's What I Found"
-
-### FINANCE HOOK FORMULAS (First 5 Seconds):
-Choose the MOST authoritative hook style:
-
-1. **"Data Bomb"** - Lead with shocking, specific financial data:
-   "In 2024, 73.2% of investors lost money doing this one thing..."
-   "$847 billion was lost last year because of this single mistake..."
-
-2. **"Money Math"** - Show surprising calculations:
-   "If you invested $500/month starting at age 25, you'd have $2.4 million by 60..."
-   "The difference between 7% and 9% returns? $1.2 million over 30 years..."
-
-3. **"Insider Secret"** - Financial industry revelation:
-   "Wall Street doesn't want you to know this, but..."
-   "The strategy hedge funds use that banks will never tell you..."
-
-4. **"Loss Aversion"** - Highlight what they're losing:
-   "Right now, you're losing $347 every month without realizing it..."
-   "This hidden fee is costing the average investor $23,000 over their lifetime..."
-
-### Specific Numbers (ALWAYS include):
-- Exact dollar amounts: "$4,273/month" not "thousands per month"
-- Precise percentages: "23.7% ROI" not "high returns"
-- Time frames: "in 47 days" not "in a few weeks"
-- Comparison ratios: "3.2x faster growth" not "much faster"
-
-### ROI and Growth Metrics:
-- Always mention potential ROI with realistic ranges
-- Include compound growth examples: "If you invested $500/month for 7 years..."
-- Reference inflation-adjusted returns when relevant
-- Compare to traditional savings: "vs. the 0.5% your bank gives you"
-
-### Actionable Steps (MANDATORY):
-- End each major point with "Here's what you can do TODAY..."
-- Provide specific platforms, tools, or accounts to open
-- Include exact steps: "Step 1: Open a brokerage account. Step 2: Set up automatic $200 transfers..."
-- Give specific allocation percentages: "Put 60% in index funds, 30% in bonds, 10% in high-risk"
-
-### Money Mistakes to Reference:
-- "The average person loses $847/year to this one mistake..."
-- "92% of people do this wrong - and it costs them $12,000 over a decade"
-- Use loss aversion: "You're currently losing $X by not doing Y"
-
-### GROWTH TACTICS (Report 5):
-- Use visual evidence (charts, citations, timelines)
-- Reference credible sources for trust
-- Create "documentary-business hybrids"
-- Target: 100k subs achievable in 8 months with consistency
-
-### MONETIZATION BEYOND ADS:
-- Affiliate tools (brokerage links, apps)
-- Patreon/membership for premium analysis
-- Course/ebook upsells
-
-### Tone: Authoritative expert who's sharing insider knowledge, slightly urgent""",
-
-        "psychology": """
-PSYCHOLOGY NICHE (mind_unlocked) - CURIOSITY-DRIVEN, "WHAT IF" APPROACH
-Why It Works: One of the easiest and most profitable faceless niches
-Top Competitors: Psych2Go (12.7M subs, 18M views on best videos), Brainy Dose (10M+ views), The Infographics Show (15M subs)
-
-### WINNING CONTENT TYPES (Report 5):
-1. **Brain Facts** - "Why you remember embarrassing moments" (high curiosity)
-2. **Cognitive Biases** - "How colors affect your decisions" (practical value)
-3. **Marketing Psychology** - "Psychology tricks used in marketing" (mass appeal)
-4. **Dark Psychology** - Manipulation awareness content (high engagement)
-5. **Behavior Science** - "Why humans do X" format (evergreen)
-
-### VIRAL TOPIC TEMPLATES:
-- "5 Signs of [Personality Type]" (e.g., "5 Signs of a Narcissist")
-- "Why Your Brain [Does X]" (e.g., "Why Your Brain Hates Change")
-- "Dark Psychology Tricks [Group] Uses" (e.g., "Dark Psychology Tricks Salespeople Use")
-- "The Science Behind [Behavior]" (e.g., "The Science Behind Procrastination")
-- "[X] Psychological Tricks That Work on Everyone"
-- "Why [Percentage]% of People Fall for This Manipulation"
-- "The [Cognitive Bias] That's Ruining Your Life"
-
-### PSYCHOLOGY HOOK FORMULAS (First 5 Seconds):
-Choose the MOST curiosity-driven hook style:
-
-1. **"What If" Question** - Open with mind-bending possibility:
-   "What if everything you believe about yourself is a lie your brain tells you?"
-   "What if there was a technique that could read anyone's mind in 3 seconds?"
-
-2. **"Dark Pattern Reveal"** - Expose hidden manipulation:
-   "Your brain is being hacked right now, and you don't even know it..."
-   "They've been using this against you since you were 5 years old..."
-
-3. **"Forbidden Knowledge"** - Tease secret psychological insight:
-   "This is the technique the FBI uses to detect liars..."
-   "What I'm about to show you is used by CIA interrogators..."
-
-4. **"Mind Hack"** - Promise psychological superpower:
-   "In the next 30 seconds, I'll give you the ability to influence anyone..."
-   "By the end of this video, you'll know exactly what people are thinking..."
-
-5. **"Study Shock"** - Lead with counterintuitive research:
-   "A Stanford study proved that 92% of people are wrong about this..."
-   "Scientists discovered something terrifying about the human brain..."
-
-### Study References (ALWAYS include):
-- Name specific studies: "In a 2019 Stanford study with 847 participants..."
-- Reference famous experiments: "Just like Milgram's obedience experiments showed..."
-- Include researcher names: "Dr. Robert Cialdini's research proves..."
-- Cite statistics: "78% of participants in the study exhibited..."
-
-### "Dark Psychology" Intrigue Elements:
-- Use phrases like: "What I'm about to reveal is used by elite negotiators..."
-- Reference manipulation awareness: "Once you see this pattern, you can't unsee it"
-- Forbidden knowledge angle: "This technique is so powerful it's banned in some contexts..."
-- Self-defense framing: "Knowing this protects you from being manipulated"
-
-### Psychological Terms to Weave In:
-- Cognitive biases: anchoring, confirmation bias, availability heuristic
-- Subconscious triggers: priming, framing effects, social proof
-- Influence techniques: reciprocity, scarcity, authority, commitment
-- Brain science: amygdala hijack, dopamine loops, pattern recognition
-
-### Real-World Examples:
-- "This is exactly how casinos keep you playing..."
-- "Advertisers have used this against you for decades..."
-- "Every successful salesperson knows this trick..."
-- "Politicians exploit this bias during every election..."
-
-### GROWTH TACTICS (Report 5):
-- Keep scripts snappy (800-1500 words)
-- Pair with background footage or animated text
-- Research credible sources (journals, studies)
-- Use pattern interrupts every 2-3 seconds
-
-### Tone: Mysterious insider revealing secrets, slightly dark and intriguing, make viewers feel like they're learning forbidden knowledge""",
-
-        "storytelling": """
-STORYTELLING NICHE (untold_stories) - DRAMATIC TENSION, CLIFFHANGERS
-Why It Works: Business stories attract curious viewers, high watch time
-Top Competitors: JCS Criminal Psychology (5M+ subs), Truly Criminal (30+ min episodes), Mr. Nightmare (6M subs), Lazy Masquerade (1.7M subs)
-
-### WINNING CONTENT TYPES (Report 5):
-1. **Company Rise/Fall Documentaries** - "How [Company] Went From $0 to $Billions"
-2. **Historical Events with Modern Lessons** - "What [Event] Teaches Us Today"
-3. **Unsolved Mysteries** - High curiosity, excellent retention
-4. **"How [Person] Built [Empire]"** - Founder stories, inspirational
-5. **True Crime** (careful with monetization) - High engagement but CPM risk
-
-### VIRAL TOPIC TEMPLATES:
-- "The Untold Story of [Company/Person]" (e.g., "The Untold Story of Enron")
-- "How [Company] Went From $0 to $Billions" (e.g., "How Amazon Went From Garage to Trillion")
-- "The Rise and Fall of [Brand]" (e.g., "The Rise and Fall of Blockbuster")
-- "What Happened to [Forgotten Company]" (e.g., "What Happened to MySpace")
-- "The [Person] Who [Incredible Achievement]" (e.g., "The Man Who Fooled Wall Street")
-- "Why [Company] Is Secretly [Adjective]" (e.g., "Why Google Is Secretly Terrifying")
-- "The Dark Side of [Successful Company/Person]"
-
-### STORYTELLING HOOK FORMULAS (First 5 Seconds):
-Choose the MOST dramatic hook style:
-
-1. **"In Media Res"** - Start in the middle of action:
-   "The door slammed. He had exactly 30 seconds to make a choice that would change everything..."
-   "She looked down at her hands. They were covered in blood. And she had no memory of the last 3 hours..."
-
-2. **"Dramatic Tension"** - Create immediate stakes:
-   "In 2019, a man made a decision that would cost him everything he loved..."
-   "What happened in that room would haunt them for the rest of their lives..."
-
-3. **"Mystery Question"** - Open with an unanswered question:
-   "Nobody knows why he did it. But what happened next shocked the entire world..."
-   "To this day, no one can explain what really happened that night..."
-
-4. **"Countdown"** - Create time pressure:
-   "He had exactly 4 minutes. Four minutes to save everything..."
-   "The clock showed 11:47 PM. By midnight, three people would be dead..."
-
-5. **"Cliffhanger Tease"** - Promise dramatic revelation:
-   "What I'm about to tell you is the true story that inspired [famous movie]..."
-   "The ending of this story will change how you see everything..."
-
-### Suspense Building Techniques:
-- Plant questions early: "But there was something he didn't know..."
-- Use time pressure: "She had exactly 47 minutes to make a decision that would change everything..."
-- False resolutions: "He thought it was over. He was wrong."
-- Escalation: "And then things got worse..."
-
-### Sensory Details (MANDATORY in every scene):
-- Visual: "The dim fluorescent light flickered above the empty hallway..."
-- Sound: "The only sound was the rhythmic drip of water echoing..."
-- Physical: "His hands trembled as he reached for the envelope..."
-- Emotional: "A cold knot formed in her stomach..."
-
-### Mini-Cliffhangers (every 45-60 seconds):
-- "What happened next would haunt him forever..."
-- "She had no idea what was waiting for her..."
-- "But the real story was just beginning..."
-- "And that's when everything changed..."
-
-### Character Connection:
-- Give specific details: "Maria, a 34-year-old nurse from Ohio with two kids..."
-- Show vulnerability: "He had failed at this exact thing three times before..."
-- Internal dialogue: "She thought to herself: 'This is it. There's no going back.'"
-- Relatable stakes: "Everything he'd worked for was about to disappear..."
-
-### Twist Techniques:
-- Perspective shift: "But what nobody knew was that the real villain was..."
-- Time reveal: "What seemed like coincidence was actually planned 10 years in advance..."
-- Hidden information: "There was one detail she left out of her confession..."
-
-### GROWTH TACTICS (Report 5):
-- Turn companies into mini-documentaries
-- Use storytelling techniques (hooks, tension, resolution)
-- Background footage + voiceover + animations
-- Research history, find the narrative arc
-
-### Tone: Documentary-style narrator, dramatic and immersive, treat the viewer as someone watching a thriller unfold""",
+        "storytelling": """STORYTELLING (CPM $4-15) - DRAMATIC TENSION, CLIFFHANGERS
+Hook: "In Media Res" (action mid-scene), "Dramatic Tension" (cost everything), "Mystery Question" (nobody knows why), "Countdown" (4 minutes), "Cliffhanger Tease" (ending changes everything)
+Must include: Sensory details (visual, sound, physical, emotional), mini-cliffhangers every 45-60s, character specifics (Maria, 34yo nurse, 2 kids), time pressure, twist techniques
+Tone: Documentary narrator, dramatic/immersive, thriller unfolding""",
 
         "default": """
 DEFAULT NICHE - ENGAGEMENT REQUIREMENTS:
@@ -1481,7 +1115,9 @@ GENERAL SHORTS - ENGAGEMENT TACTICS:
         )
 
         try:
-            content = self.ai.generate(prompt, max_tokens=2000)
+            # Use token limit for hook generation since shorts are hook-focused
+            max_tokens = TASK_MAX_TOKENS.get("hook_generation", 150) * 10  # ~1500 for shorts
+            content = self.ai.generate(prompt, max_tokens=max_tokens)
             script_data = self._parse_json_response(content)
             video_script = self._create_short_script(script_data, duration_seconds)
 
@@ -1618,7 +1254,9 @@ Example format:
 Write the script now:"""
 
         try:
-            content = self.ai.generate(prompt, max_tokens=500)
+            # Use script_outline token limit for simple short scripts
+            max_tokens = TASK_MAX_TOKENS.get("script_outline", 500)
+            content = self.ai.generate(prompt, max_tokens=max_tokens)
 
             # Parse the simple format
             lines = [l.strip() for l in content.split('\n') if l.strip()]
@@ -1749,8 +1387,11 @@ Write the script now:"""
         )
 
         try:
-            # Use the AI provider to generate content
-            content = self.ai.generate(prompt, max_tokens=6000)
+            # Use the full_script token limit from TASK_MAX_TOKENS for cost optimization
+            max_tokens = TASK_MAX_TOKENS.get("full_script", 4000)
+            # Add buffer for longer scripts (up to 6000 for complex scripts)
+            max_tokens = min(max_tokens + 2000, 6000)
+            content = self.ai.generate(prompt, max_tokens=max_tokens)
 
             # Parse JSON from response
             script_data = self._parse_json_response(content)
@@ -1820,7 +1461,9 @@ CRITICAL ENGAGEMENT RULES:
 Write the narration text now. No JSON or formatting needed. Write naturally as if speaking directly to the viewer."""
 
         try:
-            content = self.ai.generate(prompt, max_tokens=3000)
+            # Use full_script token limit for simple script generation
+            max_tokens = TASK_MAX_TOKENS.get("full_script", 4000)
+            content = self.ai.generate(prompt, max_tokens=max_tokens)
 
             # Create sections from paragraphs
             paragraphs = [p.strip() for p in content.split('\n\n') if p.strip() and len(p.strip()) > 50]
@@ -2127,7 +1770,9 @@ Requirements:
 Return as a JSON array of strings:
 ["Title 1", "Title 2", ...]"""
 
-        content = self.ai.generate(prompt, max_tokens=500)
+        # Use title_generation token limit multiplied by count
+        max_tokens = TASK_MAX_TOKENS.get("title_generation", 50) * count * 2
+        content = self.ai.generate(prompt, max_tokens=max_tokens)
         try:
             # Parse the array
             if "[" in content:
@@ -2173,7 +1818,11 @@ Feedback to incorporate:
 Please provide an improved version of the script in the same JSON format, addressing the feedback while keeping the overall structure.
 """
 
-        content = self.ai.generate(prompt, max_tokens=4096)
+        # Use script_revision token limit for script improvements
+        max_tokens = TASK_MAX_TOKENS.get("script_revision", 1000)
+        # Add buffer since we're returning a full script
+        max_tokens = min(max_tokens * 3, 4000)
+        content = self.ai.generate(prompt, max_tokens=max_tokens)
         improved_data = self._parse_json_response(content)
 
         # Preserve original metadata, update sections
@@ -2754,6 +2403,261 @@ Please provide an improved version of the script in the same JSON format, addres
 
         return chapters
 
+    def generate_chapters_from_script(
+        self,
+        script: VideoScript,
+        duration_seconds: Optional[int] = None
+    ) -> str:
+        """
+        Auto-generate YouTube chapters from script sections.
+
+        YouTube chapters require:
+        - First timestamp at 0:00
+        - At least 3 chapters
+        - Each chapter at least 10 seconds
+
+        This method generates properly formatted chapter timestamps that can
+        be directly added to video descriptions for YouTube's chapters feature.
+
+        Args:
+            script: VideoScript object with sections
+            duration_seconds: Optional override for total duration (uses script.total_duration if not provided)
+
+        Returns:
+            Formatted chapters string ready for video description
+
+        Example:
+            writer = ScriptWriter()
+            script = writer.generate_script("Topic", duration_minutes=10)
+            chapters = writer.generate_chapters_from_script(script)
+            # Returns:
+            # "CHAPTERS:
+            # 0:00 Introduction
+            # 1:30 Main Point 1
+            # 5:00 Conclusion"
+        """
+        chapters = ["0:00 Introduction"]
+        sections = script.sections
+
+        if not sections:
+            logger.warning("No sections found in script for chapter generation")
+            return "\n\nCHAPTERS:\n0:00 Introduction"
+
+        # Use provided duration or script's total duration
+        total_duration = duration_seconds or script.total_duration
+        if total_duration <= 0:
+            total_duration = sum(s.duration_seconds for s in sections)
+
+        # Calculate duration per section
+        section_count = len(sections)
+        section_duration = total_duration / max(1, section_count)
+
+        for i, section in enumerate(sections):
+            # Calculate timestamp for this section
+            timestamp_seconds = int((i + 1) * section_duration)
+
+            # Skip if too close to start (< 10 seconds) - YouTube requirement
+            if timestamp_seconds < 10:
+                continue
+
+            # Skip if we're at the very end
+            if timestamp_seconds >= total_duration - 5:
+                continue
+
+            # Format timestamp (M:SS or MM:SS)
+            minutes = timestamp_seconds // 60
+            secs = timestamp_seconds % 60
+            timestamp = f"{minutes}:{secs:02d}"
+
+            # Get heading from section title or section_type
+            heading = section.title or section.section_type.capitalize()
+            # Truncate to 60 chars for readability
+            heading = str(heading)[:60]
+
+            chapters.append(f"{timestamp} {heading}")
+
+        # Ensure we have at least 3 chapters (YouTube requirement)
+        if len(chapters) < 3:
+            # Add mid-point chapter
+            mid_seconds = total_duration // 2
+            mid_timestamp = f"{mid_seconds // 60}:{mid_seconds % 60:02d}"
+            chapters.insert(1, f"{mid_timestamp} Main Content")
+
+            # Add near-end chapter if still needed
+            if len(chapters) < 3:
+                end_seconds = int(total_duration * 0.8)
+                end_timestamp = f"{end_seconds // 60}:{end_seconds % 60:02d}"
+                chapters.append(f"{end_timestamp} Conclusion")
+
+        logger.info(f"Generated {len(chapters)} chapters for video description")
+        return "\n\nCHAPTERS:\n" + "\n".join(chapters)
+
+    def enhance_script_with_hooks(
+        self,
+        script: VideoScript,
+        niche: str = "default",
+        auto_enhance: bool = True
+    ) -> VideoScript:
+        """
+        Enhance a script with viral hooks and retention features.
+
+        Uses ViralHookGenerator to:
+        - Generate high-retention hooks for the opening
+        - Inject open loops throughout the script
+        - Add pattern interrupts every 30-60 seconds
+        - Insert micro-payoffs for engagement
+
+        Args:
+            script: VideoScript object to enhance
+            niche: Content niche (finance, psychology, storytelling)
+            auto_enhance: Whether to automatically enhance narration
+
+        Returns:
+            Enhanced VideoScript with better retention features
+        """
+        if not VIRAL_HOOKS_AVAILABLE:
+            logger.debug("Viral hooks module not available - skipping enhancement")
+            return script
+
+        logger.info(f"[ScriptWriter] Enhancing script with viral hooks (niche: {niche})")
+
+        hook_generator = ViralHookGenerator(niche=niche)
+
+        # 1. Generate a viral hook for the opening
+        topic = script.title or "this topic"
+        hooks = hook_generator.get_all_hooks(topic, count=3)
+        if hooks:
+            best_hook, style, retention = hooks[0]
+            logger.info(f"[ScriptWriter] Generated {style} hook with {retention:.1f}% expected retention")
+
+            # Update hook_text if not already set
+            if not script.hook_text or len(script.hook_text) < 20:
+                script.hook_text = best_hook
+
+        # 2. Enhance narration with retention features (open loops, pattern interrupts)
+        if auto_enhance and script.sections:
+            full_narration = "\n\n".join([s.narration for s in script.sections if s.narration])
+
+            enhanced_narration = hook_generator.enhance_script_retention(
+                script=full_narration,
+                video_duration=script.total_duration or 600,
+                min_open_loops=3
+            )
+
+            # Split enhanced narration back to sections (approximately)
+            enhanced_paragraphs = enhanced_narration.split("\n\n")
+            para_idx = 0
+            for section in script.sections:
+                if section.narration and para_idx < len(enhanced_paragraphs):
+                    # Get proportional paragraphs for this section
+                    word_count = len(section.narration.split())
+                    new_paragraphs = []
+                    current_words = 0
+                    while para_idx < len(enhanced_paragraphs) and current_words < word_count:
+                        para = enhanced_paragraphs[para_idx]
+                        new_paragraphs.append(para)
+                        current_words += len(para.split())
+                        para_idx += 1
+                    if new_paragraphs:
+                        section.narration = "\n\n".join(new_paragraphs)
+
+        # 3. Get pattern interrupts for the video
+        interrupts = hook_generator.get_pattern_interrupts(
+            video_duration=script.total_duration or 600,
+            interrupt_interval=45
+        )
+
+        # Add retention points from interrupts
+        if not script.estimated_retention_points:
+            script.estimated_retention_points = []
+
+        for interrupt in interrupts:
+            script.estimated_retention_points.append(RetentionPoint(
+                timestamp_seconds=int(interrupt.timestamp),
+                retention_type=interrupt.type,
+                description=interrupt.content,
+                expected_impact="medium"
+            ))
+
+        logger.success(f"[ScriptWriter] Script enhanced with {len(interrupts)} pattern interrupts")
+        return script
+
+    def optimize_script_metadata(
+        self,
+        script: VideoScript,
+        niche: str = "default",
+        keywords: List[str] = None
+    ) -> VideoScript:
+        """
+        Optimize script metadata using MetadataOptimizer.
+
+        Uses IMPACT formula to optimize:
+        - Title (front-loaded keywords, power words)
+        - Description (SEO-optimized with chapters)
+        - Tags (trending + niche keywords)
+
+        Args:
+            script: VideoScript object to optimize
+            niche: Content niche
+            keywords: Target keywords for optimization
+
+        Returns:
+            VideoScript with optimized metadata
+        """
+        if not METADATA_OPTIMIZER_AVAILABLE:
+            logger.debug("Metadata optimizer not available - skipping optimization")
+            return script
+
+        logger.info(f"[ScriptWriter] Optimizing metadata (niche: {niche})")
+
+        optimizer = MetadataOptimizer()
+
+        # Extract keywords from script if not provided
+        if not keywords:
+            keywords = list(set(script.tags[:5])) if script.tags else [script.title.split()[0]]
+
+        # Optimize title
+        title_variants = optimizer.generate_title_variants(
+            topic=script.title,
+            keywords=keywords,
+            count=3
+        )
+        if title_variants:
+            # Pick the highest scoring variant
+            best_title = max(title_variants, key=lambda t: optimizer.score_title(t))
+            if optimizer.score_title(best_title) > optimizer.score_title(script.title):
+                old_title = script.title
+                script.title = best_title
+                logger.info(f"[ScriptWriter] Title optimized: '{old_title}' -> '{best_title}'")
+
+        # Generate optimized metadata
+        narration_text = "\n".join([s.narration for s in script.sections if s.narration])
+        metadata = optimizer.create_complete_metadata(
+            topic=script.title,
+            keywords=keywords,
+            script=narration_text,
+            video_duration=script.total_duration or 600
+        )
+
+        # Update script with optimized metadata
+        if metadata.tags:
+            script.tags = metadata.tags
+            logger.info(f"[ScriptWriter] Tags optimized: {len(metadata.tags)} tags")
+
+        # Update chapters if better ones were generated
+        if metadata.chapters and len(metadata.chapters) > len(script.chapter_markers):
+            script.chapter_markers = [
+                ChapterMarker(
+                    timestamp_seconds=int(ch.get("start", 0)),
+                    title=ch.get("title", "Chapter")
+                )
+                for ch in metadata.chapters
+            ]
+            logger.info(f"[ScriptWriter] Chapters updated: {len(script.chapter_markers)} chapters")
+
+        logger.success(f"[ScriptWriter] Metadata optimization complete (title_score: {metadata.title_score:.1f})")
+        return script
+
     def _validate_and_enhance_script(
         self,
         script: VideoScript,
@@ -2773,6 +2677,14 @@ Please provide an improved version of the script in the same JSON format, addres
         Returns:
             The original script (validation is logged, not modified)
         """
+        # First, enhance with viral hooks if available
+        if VIRAL_HOOKS_AVAILABLE:
+            script = self.enhance_script_with_hooks(script, niche, auto_enhance=False)
+
+        # Then, optimize metadata if available
+        if METADATA_OPTIMIZER_AVAILABLE:
+            script = self.optimize_script_metadata(script, niche)
+
         if not BEST_PRACTICES_AVAILABLE:
             logger.debug("Best practices validation skipped (module not available)")
             return script

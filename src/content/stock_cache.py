@@ -40,7 +40,7 @@ import hashlib
 import threading
 from pathlib import Path
 from datetime import datetime, timedelta
-from typing import Optional, Dict, List, Tuple
+from typing import Optional, Dict, List, Tuple, Any
 from dataclasses import dataclass, asdict
 from loguru import logger
 
@@ -500,6 +500,237 @@ class StockCache:
             "estimated_bandwidth_saved_mb": stats.total_hits * avg_clip_size_mb
         }
 
+    def _calculate_file_hash(self, file_path: Path, chunk_size: int = 8192) -> str:
+        """
+        Calculate MD5 hash of a file.
+
+        Args:
+            file_path: Path to file
+            chunk_size: Size of chunks to read (default: 8KB)
+
+        Returns:
+            MD5 hash as hex string
+        """
+        md5_hash = hashlib.md5()
+
+        try:
+            with open(file_path, 'rb') as f:
+                for chunk in iter(lambda: f.read(chunk_size), b''):
+                    md5_hash.update(chunk)
+            return md5_hash.hexdigest()
+        except (IOError, OSError) as e:
+            logger.error(f"Error hashing file {file_path}: {e}")
+            return ""
+
+    def deduplicate_cache(
+        self,
+        dry_run: bool = False,
+        verbose: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Remove duplicate files in cache using MD5 hash.
+
+        Identifies files with identical content (same MD5 hash) and removes
+        duplicates, keeping only one copy. Updates metadata to point to the
+        remaining file.
+
+        Args:
+            dry_run: If True, only preview what would be removed
+            verbose: If True, log details about duplicates found
+
+        Returns:
+            Dictionary with deduplication statistics:
+                - files_scanned: Total files checked
+                - duplicates_found: Number of duplicate files
+                - files_removed: Number of files actually removed
+                - bytes_freed: Total bytes freed
+                - duplicate_groups: List of duplicate file groups
+        """
+        from typing import Tuple
+
+        stats = {
+            "files_scanned": 0,
+            "duplicates_found": 0,
+            "files_removed": 0,
+            "bytes_freed": 0,
+            "duplicate_groups": [],
+            "errors": []
+        }
+
+        # Dictionary to track seen hashes: hash -> (file_path, cache_key, file_size)
+        seen_hashes: Dict[str, Tuple[Path, str, int]] = {}
+        duplicates: List[Tuple[Path, str, int, str]] = []  # (path, key, size, original_hash)
+
+        with self._lock:
+            logger.info("Starting cache deduplication scan...")
+
+            # Scan all cached files
+            for cache_key, entry in list(self.metadata.items()):
+                cache_file = self.cache_dir / f"{cache_key}.mp4"
+
+                if not cache_file.exists():
+                    continue
+
+                stats["files_scanned"] += 1
+                file_size = cache_file.stat().st_size
+
+                # Calculate file hash
+                file_hash = self._calculate_file_hash(cache_file)
+
+                if not file_hash:
+                    stats["errors"].append(f"Could not hash: {cache_file}")
+                    continue
+
+                if file_hash in seen_hashes:
+                    # This is a duplicate!
+                    stats["duplicates_found"] += 1
+                    duplicates.append((cache_file, cache_key, file_size, file_hash))
+
+                    if verbose:
+                        original_path, _, _ = seen_hashes[file_hash]
+                        logger.info(
+                            f"Duplicate found: {cache_file.name} "
+                            f"(same as {original_path.name})"
+                        )
+                else:
+                    # First time seeing this hash
+                    seen_hashes[file_hash] = (cache_file, cache_key, file_size)
+
+            # Also scan for orphaned files not in metadata
+            for cache_file in self.cache_dir.glob("*.mp4"):
+                cache_key = cache_file.stem
+
+                if cache_key in self.metadata:
+                    continue  # Already processed
+
+                stats["files_scanned"] += 1
+                file_size = cache_file.stat().st_size
+                file_hash = self._calculate_file_hash(cache_file)
+
+                if not file_hash:
+                    continue
+
+                if file_hash in seen_hashes:
+                    stats["duplicates_found"] += 1
+                    duplicates.append((cache_file, cache_key, file_size, file_hash))
+
+                    if verbose:
+                        original_path, _, _ = seen_hashes[file_hash]
+                        logger.info(
+                            f"Orphaned duplicate found: {cache_file.name} "
+                            f"(same as {original_path.name})"
+                        )
+                else:
+                    seen_hashes[file_hash] = (cache_file, cache_key, file_size)
+
+            # Group duplicates by hash for reporting
+            hash_groups: Dict[str, List[str]] = {}
+            for _, _, _, file_hash in duplicates:
+                if file_hash not in hash_groups:
+                    original_path, _, _ = seen_hashes[file_hash]
+                    hash_groups[file_hash] = [str(original_path)]
+            for cache_file, _, _, file_hash in duplicates:
+                hash_groups[file_hash].append(str(cache_file))
+
+            stats["duplicate_groups"] = [
+                {"hash": h, "files": files}
+                for h, files in hash_groups.items()
+            ]
+
+            if not duplicates:
+                logger.info("No duplicates found in cache")
+                return stats
+
+            logger.info(f"Found {stats['duplicates_found']} duplicate files")
+
+            # Remove duplicates
+            for cache_file, cache_key, file_size, file_hash in duplicates:
+                if dry_run:
+                    logger.info(f"Would remove duplicate: {cache_file.name}")
+                    stats["files_removed"] += 1
+                    stats["bytes_freed"] += file_size
+                    continue
+
+                try:
+                    # Remove the file
+                    cache_file.unlink()
+                    stats["files_removed"] += 1
+                    stats["bytes_freed"] += file_size
+
+                    # Update metadata: remove the duplicate entry
+                    if cache_key in self.metadata:
+                        del self.metadata[cache_key]
+
+                    logger.debug(f"Removed duplicate: {cache_file.name}")
+
+                except OSError as e:
+                    stats["errors"].append(f"Failed to remove {cache_file}: {e}")
+                    logger.error(f"Failed to remove duplicate {cache_file}: {e}")
+
+            # Save updated metadata
+            if not dry_run and stats["files_removed"] > 0:
+                self._save_metadata()
+
+        bytes_freed_mb = stats["bytes_freed"] / 1024 / 1024
+        logger.info(
+            f"Deduplication complete: removed {stats['files_removed']} duplicates, "
+            f"freed {bytes_freed_mb:.1f} MB"
+        )
+
+        return stats
+
+    def find_duplicates(self) -> List[Dict[str, Any]]:
+        """
+        Find duplicate files in cache without removing them.
+
+        Returns:
+            List of duplicate groups, each containing:
+                - hash: MD5 hash of the files
+                - files: List of file paths with same content
+                - total_size: Combined size of duplicate files
+                - potential_savings: Space that could be freed
+        """
+        from typing import Tuple
+
+        seen_hashes: Dict[str, List[Tuple[Path, int]]] = {}
+
+        with self._lock:
+            # Scan all files
+            for cache_file in self.cache_dir.glob("*.mp4"):
+                file_size = cache_file.stat().st_size
+                file_hash = self._calculate_file_hash(cache_file)
+
+                if not file_hash:
+                    continue
+
+                if file_hash not in seen_hashes:
+                    seen_hashes[file_hash] = []
+                seen_hashes[file_hash].append((cache_file, file_size))
+
+        # Find groups with duplicates
+        duplicate_groups = []
+
+        for file_hash, files in seen_hashes.items():
+            if len(files) > 1:
+                total_size = sum(size for _, size in files)
+                # Keep one file, rest are savings
+                potential_savings = total_size - files[0][1]
+
+                duplicate_groups.append({
+                    "hash": file_hash,
+                    "files": [str(path) for path, _ in files],
+                    "file_count": len(files),
+                    "total_size_bytes": total_size,
+                    "total_size_mb": total_size / 1024 / 1024,
+                    "potential_savings_bytes": potential_savings,
+                    "potential_savings_mb": potential_savings / 1024 / 1024
+                })
+
+        # Sort by potential savings descending
+        duplicate_groups.sort(key=lambda x: x["potential_savings_bytes"], reverse=True)
+
+        return duplicate_groups
+
 
 def print_cache_stats():
     """Print cache statistics to console."""
@@ -522,6 +753,274 @@ def cleanup_cache(max_age_days: int = CACHE_DURATION_DAYS):
     print(f"Cleanup complete: removed {files_removed} files, freed {bytes_freed / 1024 / 1024:.1f} MB")
 
 
+class SmartPrefetcher:
+    """
+    Smart stock footage prefetcher for scheduled content.
+
+    Pre-downloads stock footage for scheduled videos to reduce
+    production time when the scheduled video creation begins.
+
+    Features:
+    - Extracts keywords from scheduled topics
+    - Downloads clips in background
+    - Respects cache to avoid re-downloading
+    - Prioritizes clips based on topic relevance
+    """
+
+    # Niche-specific keyword extractors
+    NICHE_KEYWORDS = {
+        "finance": [
+            "money", "investment", "stock", "market", "wealth", "budget",
+            "savings", "income", "profit", "business", "trading", "crypto"
+        ],
+        "psychology": [
+            "brain", "mind", "emotion", "therapy", "anxiety", "depression",
+            "relationship", "mental health", "behavior", "thinking"
+        ],
+        "storytelling": [
+            "mystery", "crime", "investigation", "documentary", "history",
+            "story", "case", "evidence", "scene", "footage"
+        ],
+        "technology": [
+            "computer", "software", "coding", "programming", "ai",
+            "data", "digital", "tech", "innovation", "future"
+        ],
+        "motivation": [
+            "success", "goal", "achievement", "motivation", "inspiration",
+            "workout", "fitness", "discipline", "mindset", "growth"
+        ]
+    }
+
+    def __init__(
+        self,
+        cache: Optional[StockCache] = None,
+        max_prefetch_keywords: int = 20,
+        clips_per_keyword: int = 3
+    ):
+        """
+        Initialize the smart prefetcher.
+
+        Args:
+            cache: StockCache instance (creates new one if None)
+            max_prefetch_keywords: Maximum keywords to prefetch
+            clips_per_keyword: Clips to prefetch per keyword
+        """
+        self.cache = cache or StockCache()
+        self.max_prefetch_keywords = max_prefetch_keywords
+        self.clips_per_keyword = clips_per_keyword
+        self._active_prefetch_tasks: Dict[str, bool] = {}
+        logger.info("SmartPrefetcher initialized")
+
+    def _extract_keywords(
+        self,
+        scheduled_topics: List[Dict[str, str]],
+        niche: Optional[str] = None
+    ) -> List[str]:
+        """
+        Extract relevant keywords from scheduled topics.
+
+        Args:
+            scheduled_topics: List of dicts with 'topic' and optional 'niche' keys
+            niche: Default niche if not specified in topic
+
+        Returns:
+            List of unique keywords for prefetching
+        """
+        keywords = set()
+
+        for item in scheduled_topics:
+            topic = item.get("topic", "")
+            topic_niche = item.get("niche", niche)
+
+            # Extract words from topic
+            words = topic.lower().replace("-", " ").replace("_", " ").split()
+            for word in words:
+                # Filter out common words
+                if len(word) > 3 and word not in ["with", "from", "this", "that", "your", "have", "will"]:
+                    keywords.add(word)
+
+            # Add niche-specific keywords
+            if topic_niche and topic_niche in self.NICHE_KEYWORDS:
+                niche_kws = self.NICHE_KEYWORDS[topic_niche]
+                # Add keywords that appear in the topic
+                for kw in niche_kws:
+                    if kw in topic.lower():
+                        keywords.add(kw)
+
+        # Return as list, limited by max_prefetch_keywords
+        return list(keywords)[:self.max_prefetch_keywords]
+
+    def _has_cached_clips(self, keyword: str, min_clips: int = 1) -> bool:
+        """
+        Check if we have cached clips for a keyword.
+
+        Args:
+            keyword: Keyword to check
+            min_clips: Minimum clips required to consider cached
+
+        Returns:
+            True if enough clips are cached
+        """
+        cached = self.cache.get_cached_clips_for_query(keyword)
+        return len(cached) >= min_clips
+
+    async def _prefetch_keyword(
+        self,
+        keyword: str,
+        downloader: Optional[Any] = None
+    ) -> int:
+        """
+        Prefetch clips for a single keyword.
+
+        Args:
+            keyword: Keyword to prefetch
+            downloader: Optional downloader instance
+
+        Returns:
+            Number of clips prefetched
+        """
+        if keyword in self._active_prefetch_tasks:
+            logger.debug(f"Prefetch already in progress for: {keyword}")
+            return 0
+
+        self._active_prefetch_tasks[keyword] = True
+
+        try:
+            # Import here to avoid circular imports
+            from .stock_footage import StockFootageProvider
+
+            if downloader is None:
+                downloader = StockFootageProvider()
+
+            # Search for clips
+            logger.info(f"Prefetching clips for: {keyword}")
+            videos = downloader.search_videos(keyword, count=self.clips_per_keyword)
+
+            prefetched = 0
+            for video in videos:
+                clip_id = f"{video.source}_{video.id}"
+
+                # Check if already cached
+                if self.cache.get_cached_clip(keyword, clip_id):
+                    continue
+
+                # Download to temp location
+                temp_path = self.cache.cache_dir / f"temp_{clip_id}.mp4"
+                result = downloader.download_video(video, str(temp_path))
+
+                if result and temp_path.exists():
+                    # Save to cache
+                    self.cache.save_to_cache(
+                        query=keyword,
+                        clip_id=clip_id,
+                        video_path=str(temp_path),
+                        source=video.source,
+                        duration=video.duration
+                    )
+                    prefetched += 1
+
+                    # Remove temp file
+                    try:
+                        temp_path.unlink()
+                    except:
+                        pass
+
+            logger.info(f"Prefetched {prefetched} clips for: {keyword}")
+            return prefetched
+
+        except Exception as e:
+            logger.error(f"Prefetch failed for {keyword}: {e}")
+            return 0
+
+        finally:
+            self._active_prefetch_tasks.pop(keyword, None)
+
+    def prefetch_for_schedule(
+        self,
+        scheduled_topics: List[Dict[str, str]],
+        niche: Optional[str] = None,
+        background: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Pre-download stock footage for scheduled videos.
+
+        This method extracts keywords from the scheduled topics
+        and downloads relevant stock footage to the cache.
+
+        Args:
+            scheduled_topics: List of dicts with 'topic' and optional 'niche' keys
+                Example: [{"topic": "passive income strategies", "niche": "finance"}]
+            niche: Default niche if not specified in topics
+            background: If True, runs prefetch as background task
+
+        Returns:
+            Dict with prefetch status and stats
+        """
+        import asyncio
+
+        keywords = self._extract_keywords(scheduled_topics, niche)
+        logger.info(f"Extracted {len(keywords)} keywords for prefetch: {keywords[:10]}...")
+
+        # Filter out already cached keywords
+        keywords_to_fetch = []
+        for keyword in keywords:
+            if not self._has_cached_clips(keyword):
+                keywords_to_fetch.append(keyword)
+            else:
+                logger.debug(f"Already cached: {keyword}")
+
+        logger.info(f"Need to prefetch {len(keywords_to_fetch)} keywords")
+
+        if not keywords_to_fetch:
+            return {
+                "status": "skipped",
+                "message": "All keywords already cached",
+                "total_keywords": len(keywords),
+                "keywords_cached": len(keywords),
+                "keywords_to_fetch": 0
+            }
+
+        if background:
+            # Run prefetch in background
+            for keyword in keywords_to_fetch[:self.max_prefetch_keywords]:
+                asyncio.create_task(self._prefetch_keyword(keyword))
+
+            return {
+                "status": "started",
+                "message": f"Background prefetch started for {len(keywords_to_fetch)} keywords",
+                "total_keywords": len(keywords),
+                "keywords_cached": len(keywords) - len(keywords_to_fetch),
+                "keywords_to_fetch": len(keywords_to_fetch)
+            }
+        else:
+            # Run synchronously
+            async def run_all():
+                total = 0
+                for keyword in keywords_to_fetch[:self.max_prefetch_keywords]:
+                    result = await self._prefetch_keyword(keyword)
+                    total += result
+                return total
+
+            loop = asyncio.get_event_loop()
+            total_prefetched = loop.run_until_complete(run_all())
+
+            return {
+                "status": "completed",
+                "message": f"Prefetched {total_prefetched} clips",
+                "total_keywords": len(keywords),
+                "keywords_cached": len(keywords) - len(keywords_to_fetch) + len([k for k in keywords_to_fetch if self._has_cached_clips(k)]),
+                "clips_prefetched": total_prefetched
+            }
+
+    def get_prefetch_status(self) -> Dict[str, Any]:
+        """Get current prefetch status."""
+        return {
+            "active_tasks": len(self._active_prefetch_tasks),
+            "active_keywords": list(self._active_prefetch_tasks.keys()),
+            "cache_stats": self.cache.get_stats().__dict__ if hasattr(self.cache.get_stats(), '__dict__') else {}
+        }
+
+
 # Quick test
 if __name__ == "__main__":
     import sys
@@ -537,8 +1036,17 @@ if __name__ == "__main__":
             cache = StockCache()
             files, bytes_freed = cache.clear_cache()
             print(f"Cache cleared: {files} files, {bytes_freed / 1024 / 1024:.1f} MB")
+        elif cmd == "prefetch":
+            # Test prefetch with sample topics
+            prefetcher = SmartPrefetcher()
+            topics = [
+                {"topic": "passive income strategies", "niche": "finance"},
+                {"topic": "narcissist manipulation tactics", "niche": "psychology"}
+            ]
+            result = prefetcher.prefetch_for_schedule(topics, background=False)
+            print(f"Prefetch result: {result}")
         else:
             print(f"Unknown command: {cmd}")
-            print("Usage: python stock_cache.py [stats|cleanup|clear]")
+            print("Usage: python stock_cache.py [stats|cleanup|clear|prefetch]")
     else:
         print_cache_stats()

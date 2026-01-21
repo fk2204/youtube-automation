@@ -1,0 +1,419 @@
+# YouTube Automation Tool - Configuration Example
+# Copy this file to config.yaml and customize for your setup
+
+# =============================================================================
+# GENERAL SETTINGS
+# =============================================================================
+app:
+  name: "YouTube Automation Tool"
+  version: "2.0.0"
+  debug: false
+  log_level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+
+# =============================================================================
+# BUDGET & TOKEN MANAGEMENT
+# =============================================================================
+budget:
+  daily_limit: 10.0           # Maximum daily spend in dollars
+  warning_threshold: 0.8      # Warn at 80% of budget (0.0-1.0)
+  enforce: true               # Block requests when budget exceeded
+
+# Token optimization settings (NEW - 50% cost reduction)
+token_optimization:
+  enabled: true
+  semantic_cache_threshold: 0.85    # Similarity threshold for cache hits
+  batch_requests: true              # Combine multiple small requests
+  smart_routing: true               # Use free providers when possible
+  cache_ttl_hours: 24               # Cache expiration time
+
+# =============================================================================
+# RESEARCH SETTINGS
+# =============================================================================
+research:
+  ideas_per_run: 5
+  min_score: 60               # Minimum idea score threshold (0-100)
+
+  categories:
+    - "programming"
+    - "technology"
+    - "tutorials"
+    - "finance"
+    - "psychology"
+
+  # Reddit research subreddits
+  subreddits:
+    - "learnprogramming"
+    - "webdev"
+    - "Python"
+    - "javascript"
+    - "personalfinance"
+    - "explainlikeimfive"
+
+# Keyword intelligence settings (NEW)
+keyword_research:
+  enabled: true
+  use_pytrends: true           # Use Google Trends data
+  longtail_count: 50           # Number of long-tail keywords to generate
+  min_opportunity_score: 60    # Minimum keyword opportunity score
+  trend_prediction_days: 14    # Days ahead for trend prediction
+
+# =============================================================================
+# CONTENT GENERATION
+# =============================================================================
+content:
+  # Script settings
+  script:
+    min_length: 1200           # Words (~8 min @ 150 wpm)
+    max_length: 2500           # Words (~15 min @ 150 wpm)
+    target_length: 1500        # Words (~10 min optimal)
+    style: "educational"       # educational, casual, professional
+
+  # Voice settings (Edge-TTS - FREE)
+  voice:
+    default: "en-US-GuyNeural"
+    alternatives:
+      - "en-US-JennyNeural"    # Female US
+      - "en-GB-SoniaNeural"    # Female UK
+      - "en-AU-WilliamNeural"  # Male Australian
+    rate: "+0%"                # Speed (-50% to +100%)
+    pitch: "+0Hz"              # Pitch adjustment
+
+  # Professional audio processing (NEW)
+  audio:
+    enhance_voice: true        # Enable professional enhancement
+    noise_reduction: true      # FFT-based noise removal
+    normalize_lufs: -14        # YouTube's recommended level
+    sample_rate: 48000         # YouTube's preferred rate
+    bitrate: "256k"
+
+  # Video settings
+  video:
+    resolution: [1920, 1080]   # 1080p
+    fps: 30
+    format: "mp4"
+    codec: "libx264"
+    bitrate: "8M"              # 8 Mbps for quality
+    preset: "slow"             # slow = better quality
+
+  # Subtitle/Caption settings (NEW - 15-25% retention boost)
+  subtitles:
+    enabled: true
+    style: "regular"           # regular, shorts, minimal, cinematic
+    shorts_style: "shorts"     # Large centered text for Shorts
+    use_transcription: true    # Use Whisper if available
+    whisper_model: "base"      # tiny, base, small, medium, large
+    font_size: 48              # Default font size
+    font_color: "#FFFFFF"
+    outline_color: "#000000"
+    outline_width: 2
+
+  # Thumbnail settings
+  thumbnail:
+    size: [1280, 720]
+    format: "png"
+    ai_generation: true        # Use AI for face generation
+
+# =============================================================================
+# VIRAL CONTENT ENGINE (NEW)
+# =============================================================================
+viral_content:
+  enabled: true
+
+  # Hook generation
+  hooks:
+    count: 5                   # Number of hook variations to generate
+    min_retention_boost: 0.15  # Minimum 15% retention boost
+
+  # Emotional arc building
+  emotional_arc:
+    peaks_per_10_minutes: 3    # Number of emotional peaks
+    peak_types:
+      - "shock"
+      - "revelation"
+      - "satisfaction"
+
+  # Curiosity gaps (open loops)
+  curiosity_gaps:
+    min_per_video: 3           # Minimum open loops
+    resolve_before_end: true   # Ensure all loops close
+
+  # Micro-payoffs
+  micro_payoffs:
+    interval_seconds: 60       # Deliver value every 60 seconds
+    types:
+      - "insight"
+      - "tip"
+      - "revelation"
+      - "example"
+
+# =============================================================================
+# PRO VIDEO ENGINE (NEW)
+# =============================================================================
+pro_video:
+  enabled: true
+
+  # Cinematic transitions (20+ types)
+  transitions:
+    default: "crossfade"
+    duration: 0.5              # seconds
+    variety: true              # Avoid repeating same transition
+
+  # Text animations
+  text_animation:
+    style: "slide_zoom"
+    duration: 2.0
+
+  # Color grading presets
+  color_grading:
+    enabled: true
+    default_preset: "cinematic_teal_orange"
+    presets:
+      - "cinematic_teal_orange"
+      - "moody_dark"
+      - "bright_clean"
+      - "vintage_film"
+
+  # Beat sync
+  beat_sync:
+    enabled: true
+    sensitivity: 0.7           # 0.0-1.0, higher = more cuts
+
+# =============================================================================
+# SEO INTELLIGENCE (NEW)
+# =============================================================================
+seo:
+  enabled: true
+
+  # Keyword optimization
+  keywords:
+    primary_count: 3           # Primary keywords in title
+    secondary_count: 10        # Secondary keywords in description
+    tag_count: 15              # Tags per video
+
+  # Metadata optimization
+  metadata:
+    title_max_length: 60       # Characters
+    description_min_length: 200
+    hashtag_count: 3
+
+  # A/B testing
+  ab_testing:
+    enabled: true
+    variants_per_video: 3      # Title/thumbnail variants
+    test_duration_hours: 48
+
+# =============================================================================
+# YOUTUBE SETTINGS
+# =============================================================================
+youtube:
+  defaults:
+    privacy: "public"          # private, unlisted, public
+    category: "27"             # 27 = Education
+    language: "en"
+    made_for_kids: false
+
+  # Upload schedule (optimized for engagement)
+  schedule:
+    timezone: "UTC"
+    upload_times:
+      - "19:00"                # 3 PM EST - Peak engagement
+      - "20:00"                # 4 PM EST
+      - "21:00"                # 5 PM EST
+
+# =============================================================================
+# SMART SCHEDULER (NEW)
+# =============================================================================
+scheduler:
+  enabled: true
+
+  # Pipeline schedule (24-hour UTC)
+  pipeline:
+    research: "06:00"
+    script_generation: "08:00"
+    video_creation: "10:00"
+    upload: "14:00"
+
+  # Smart scheduling features
+  smart_features:
+    optimal_time_analysis: true
+    competitor_avoidance: true
+    holiday_awareness: true
+    audience_timezone: true
+
+  # Content calendar
+  content_calendar:
+    enabled: true
+    plan_weeks_ahead: 4
+    videos_per_week: 3
+    balance_content_types: true
+
+# =============================================================================
+# QUALITY GATES
+# =============================================================================
+quality_gates:
+  enabled: true
+  strict_mode: false           # true = block upload on fail
+  pre_publish_checklist: true
+  block_on_fail: false
+
+  # Thresholds
+  thresholds:
+    title_score: 70            # Minimum title score
+    hook_score: 70             # Minimum hook score
+    overall_quality: 75        # Minimum overall score
+
+# =============================================================================
+# RETENTION OPTIMIZATION (NEW)
+# =============================================================================
+retention:
+  enabled: true
+  auto_open_loops: true
+  open_loop_count: 3
+  micro_payoff_interval: 60    # seconds
+  pattern_interrupts: true
+
+  # Pacing
+  pacing:
+    min_visual_changes_per_minute: 15
+    max_segment_duration: 45   # seconds before change
+    adaptive: true
+
+# =============================================================================
+# VISUAL ENHANCEMENT (NEW)
+# =============================================================================
+visual:
+  ken_burns_variety: 18        # Number of Ken Burns presets
+  effect_repeat_prevention: 3  # Min segments before effect repeats
+  adaptive_pacing: true
+
+  # Hook visuals
+  hooks:
+    always_animated: true      # Never static hook frames
+    animation_duration: 3.0    # seconds
+
+# =============================================================================
+# ADVANCED AUDIO (NEW)
+# =============================================================================
+audio_advanced:
+  multiband_eq: true           # 6-band EQ
+  sidechain_ducking: true      # Auto-duck music for voice
+  ducking_threshold: -35       # dB threshold
+  ducking_ratio: 0.3           # 30% duck
+  broadcast_compression: true  # Two-stage compression
+  compression_threshold: -24   # dB
+  compression_ratio: 4         # 4:1 ratio
+
+# =============================================================================
+# AI AUTHENTICITY (NEW)
+# =============================================================================
+ai_authenticity:
+  voice_variation: true        # Micro rate/pitch variations
+  rate_variation_range: 8      # +/- 8%
+  pitch_variation_range: 5     # +/- 5Hz
+  natural_pacing: true
+  breath_markers: true
+
+# =============================================================================
+# ORCHESTRATION (NEW)
+# =============================================================================
+orchestration:
+  enabled: true
+
+  # Parallel execution
+  parallel:
+    max_agents: 6              # Max concurrent agents
+    max_videos: 3              # Max concurrent video renders
+
+  # Load balancing
+  load_balancing:
+    enabled: true
+    strategy: "round_robin"    # round_robin, least_loaded, priority
+
+  # Error recovery
+  recovery:
+    enabled: true
+    max_retries: 3
+    retry_delay_seconds: 30
+
+# =============================================================================
+# AGENT COMMUNICATION (NEW)
+# =============================================================================
+agent_communication:
+  enabled: true
+
+  # Pub/sub messaging
+  messaging:
+    type: "in_memory"          # in_memory, redis
+    queue_size: 1000
+
+  # Event topics
+  topics:
+    - "video_created"
+    - "upload_complete"
+    - "error_occurred"
+    - "quality_check_passed"
+
+# =============================================================================
+# SUCCESS TRACKING (NEW)
+# =============================================================================
+success_tracking:
+  enabled: true
+
+  # Daily snapshots
+  snapshots:
+    enabled: true
+    retention_days: 90
+
+  # Goals
+  goals:
+    token_reduction_target: 50     # 50% reduction
+    subscriber_target: 1000        # Per month
+    video_quality_target: 80       # Average score
+
+  # Alerts
+  alerts:
+    low_ctr_threshold: 2.0         # Alert if CTR < 2%
+    low_retention_threshold: 30    # Alert if retention < 30%
+
+# =============================================================================
+# DATABASE
+# =============================================================================
+database:
+  type: "sqlite"
+  path: "data/youtube_automation.db"
+
+  # Performance
+  indexes: true                # Enable query indexes
+  vacuum_interval_days: 7      # Auto-vacuum schedule
+
+# =============================================================================
+# OUTPUT DIRECTORIES
+# =============================================================================
+output:
+  videos: "output/videos"
+  thumbnails: "output/thumbnails"
+  audio: "output/audio"
+  scripts: "output/scripts"
+  subtitles: "output/subtitles"
+
+# =============================================================================
+# CACHE SETTINGS
+# =============================================================================
+cache:
+  enabled: true
+
+  # Stock footage cache
+  stock_footage:
+    enabled: true
+    max_size_gb: 10
+    cleanup_after_days: 30
+
+  # Prompt/response cache
+  prompts:
+    enabled: true
+    ttl_hours: 24
+
+  # Segment cache (video segments)
+  segments:
+    enabled: true
+    max_size_gb: 5
