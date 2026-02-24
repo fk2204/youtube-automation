@@ -149,3 +149,75 @@ class Generation(Base):
 
     def __repr__(self) -> str:
         return f"<Generation(id={self.id}, step='{self.step}', status='{self.status}')>"
+
+
+# ============================================================
+# Cross-Platform Distribution Models
+# ============================================================
+
+
+class PlatformPost(Base):
+    """
+    Tracks content distributed to external platforms.
+
+    Each row represents one piece of content posted to one platform
+    (e.g., a TikTok upload, a Pinterest pin, a Medium article).
+    """
+    __tablename__ = "platform_posts"
+    __table_args__ = (
+        Index('ix_platform_posts_content', 'content_id'),
+        Index('ix_platform_posts_platform', 'platform'),
+        Index('ix_platform_posts_channel', 'channel'),
+        Index('ix_platform_posts_posted', 'posted_at'),
+    )
+
+    id: int = Column(Integer, primary_key=True, autoincrement=True)
+    content_id: str = Column(String(100), nullable=False)
+    platform: str = Column(String(50), nullable=False)
+    post_id: Optional[str] = Column(String(200), nullable=True)
+    url: Optional[str] = Column(String(500), nullable=True)
+    title: Optional[str] = Column(String(500), nullable=True)
+    niche: Optional[str] = Column(String(100), nullable=True)
+    channel: Optional[str] = Column(String(100), nullable=True)
+    content_type: Optional[str] = Column(String(50), nullable=True)
+    posted_at: Optional[datetime] = Column(DateTime, nullable=True)
+    created_at: datetime = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    metrics = relationship("PlatformMetric", back_populates="post", cascade="all, delete-orphan")
+
+    def __repr__(self) -> str:
+        return f"<PlatformPost(id={self.id}, platform='{self.platform}', content_id='{self.content_id}')>"
+
+
+class PlatformMetric(Base):
+    """
+    Performance metrics for a platform post, scraped periodically.
+
+    Multiple rows per post as metrics are collected over time.
+    """
+    __tablename__ = "platform_metrics"
+    __table_args__ = (
+        Index('ix_platform_metrics_post', 'post_id'),
+        Index('ix_platform_metrics_scraped', 'scraped_at'),
+    )
+
+    id: int = Column(Integer, primary_key=True, autoincrement=True)
+    post_id: int = Column(Integer, ForeignKey("platform_posts.id"), nullable=False, index=True)
+    views: int = Column(Integer, default=0)
+    likes: int = Column(Integer, default=0)
+    comments: int = Column(Integer, default=0)
+    shares: int = Column(Integer, default=0)
+    saves: int = Column(Integer, default=0)
+    impressions: int = Column(Integer, default=0)
+    click_through_rate: float = Column(Float, default=0.0)
+    avg_watch_time: float = Column(Float, default=0.0)
+    retention_pct: float = Column(Float, default=0.0)
+    engagement_rate: float = Column(Float, default=0.0)
+    scraped_at: datetime = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    post = relationship("PlatformPost", back_populates="metrics")
+
+    def __repr__(self) -> str:
+        return f"<PlatformMetric(id={self.id}, post_id={self.post_id}, views={self.views})>"

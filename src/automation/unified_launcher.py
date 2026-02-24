@@ -26,6 +26,8 @@ class LaunchConfig:
     use_cache: bool = True
     dry_run: bool = False
     quality_threshold: int = 75
+    platforms: Optional[List[str]] = None  # Target platforms for distribution
+    distribute: bool = False  # Whether to distribute after creation
 
 
 @dataclass
@@ -39,6 +41,7 @@ class LaunchResult:
     tokens_used: int = 0
     cost: float = 0.0
     details: Dict[str, Any] = field(default_factory=dict)
+    distributions: int = 0  # Number of successful cross-platform distributions
 
 
 class UnifiedLauncher:
@@ -105,6 +108,19 @@ class UnifiedLauncher:
                 else:
                     result.videos_created = 1
                 result.details = workflow_state.results
+
+                # Distribute to other platforms if configured
+                if self.config.distribute:
+                    dist_count = await self._distribute_to_platforms(
+                        video_path=workflow_state.results.get("video_file", ""),
+                        content_type="video_short" if video_type == "short" else "video_long",
+                        title=workflow_state.results.get("title", ""),
+                        niche=self._get_channel_niche(channel),
+                        channel=channel,
+                        platforms=self.config.platforms,
+                    )
+                    result.distributions = dist_count
+                    result.details["distributions"] = dist_count
             else:
                 result.errors = workflow_state.errors
 
@@ -271,6 +287,38 @@ class UnifiedLauncher:
 
         return result
 
+    async def _distribute_to_platforms(
+        self,
+        video_path: str,
+        content_type: str,
+        title: str,
+        niche: str,
+        channel: str,
+        platforms: Optional[List[str]] = None,
+    ) -> int:
+        """Distribute content to other platforms after creation.
+
+        Returns number of successful distributions.
+        """
+        if not video_path:
+            return 0
+
+        try:
+            from src.distribution.distributor import ContentDistributor
+            distributor = ContentDistributor()
+            result = await distributor.distribute(
+                content_path=video_path,
+                content_type=content_type,
+                title=title,
+                niche=niche,
+                channel=channel,
+                platforms=platforms,
+            )
+            return result.get("successful", 0)
+        except Exception as e:
+            logger.warning(f"Distribution failed: {e}")
+            return 0
+
     def _get_channel_niche(self, channel: str) -> str:
         """Get niche for a channel."""
         niches = {
@@ -328,6 +376,51 @@ def parallel_batch(channels: List[str], count: int = 1) -> LaunchResult:
     """Create videos in parallel."""
     launcher = UnifiedLauncher()
     return asyncio.run(launcher.launch_parallel_batch(channels, count))
+
+
+def empire_daily() -> Dict[str, Any]:
+    """Run full daily content empire automation (multi-platform)."""
+    from src.automation.daily_empire import run_daily_empire
+    return asyncio.run(run_daily_empire())
+
+
+def empire_video(channel: str, topic: Optional[str] = None, platforms: Optional[List[str]] = None) -> LaunchResult:
+    """Create a video and distribute to all platforms."""
+    config = LaunchConfig(distribute=True, platforms=platforms)
+    launcher = UnifiedLauncher(config=config)
+    return asyncio.run(launcher.launch_full_pipeline(channel, "video"))
+
+
+def empire_blog(topic: str, niche: str = "general", channel: str = "") -> Dict[str, Any]:
+    """Create a blog article and distribute."""
+    async def _run():
+        try:
+            from src.content.blog_engine import BlogEngine
+            engine = BlogEngine()
+            article = await engine.create_article(topic=topic, niche=niche, channel=channel)
+            return {"success": article is not None, "article": article}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    return asyncio.run(_run())
+
+
+def platform_status() -> Dict[str, Any]:
+    """Check status of all configured platforms."""
+    from src.social.platform_adapter import PlatformRegistry
+    registry = PlatformRegistry()
+    return {
+        name: platform.is_configured()
+        for name, platform in registry.get_all().items()
+    }
+
+
+def cross_analytics(period: str = "last_7_days") -> Dict[str, Any]:
+    """Get cross-platform analytics report."""
+    async def _run():
+        from src.analytics.cross_platform_tracker import get_cross_platform_tracker
+        tracker = get_cross_platform_tracker()
+        return await tracker.get_report(period=period)
+    return asyncio.run(_run())
 
 
 if __name__ == "__main__":

@@ -1001,6 +1001,18 @@ Reddit Research Commands:
 
   Niches: finance, psychology, storytelling, technology, education, health
 
+Content Empire (Multi-Platform Distribution):
+  python run.py empire-daily              Full daily automation (all channels + platforms)
+  python run.py empire-daily --channels money_blueprints --types video_long,blog
+  python run.py empire-video <channel>    Create video + distribute everywhere
+  python run.py empire-video <channel> --platforms youtube,tiktok
+  python run.py empire-blog "<topic>"     Create blog + distribute
+  python run.py distribute <video_path>   Distribute existing content to platforms
+  python run.py platform-status           Check all platform connections
+  python run.py cross-analytics           Cross-platform performance report
+  python run.py api-server                Start Content Empire REST API (port 8000)
+  python run.py api-server --port 9000    Start on custom port
+
 Video Formats:
   video    - Regular 1920x1080 horizontal video (5-10 min)
   short    - YouTube Shorts 1080x1920 vertical video (15-60 sec)
@@ -3332,6 +3344,139 @@ Examples:
             print(f"Test failed: {e}")
             import traceback
             traceback.print_exc()
+
+    # ============================================================
+    # CONTENT EMPIRE COMMANDS (Multi-Platform Distribution)
+    # ============================================================
+
+    elif cmd == "empire-daily":
+        # Full daily content empire automation
+        print("\n[INFO] Starting daily content empire automation...")
+        print("       Research -> Create -> Distribute -> Optimize")
+        import asyncio as _asyncio
+        from src.automation.daily_empire import run_daily_empire
+
+        empire_parser = argparse.ArgumentParser(prog="run.py empire-daily", add_help=False)
+        empire_parser.add_argument("--channels", help="Comma-separated channel IDs")
+        empire_parser.add_argument("--types", help="Content types: video_long,video_short,blog,image")
+        empire_parser.add_argument("--no-distribute", action="store_true", help="Skip distribution")
+        empire_args = empire_parser.parse_args(sys.argv[2:])
+
+        channels = [c.strip() for c in empire_args.channels.split(",")] if empire_args.channels else None
+        content_types = [t.strip() for t in empire_args.types.split(",")] if empire_args.types else None
+
+        result = _asyncio.run(run_daily_empire(
+            channels=channels,
+            content_types=content_types,
+            distribute=not empire_args.no_distribute,
+        ))
+        print(f"\n[OK] Empire daily complete:")
+        print(f"  Videos: {result.get('videos_created', 0)}")
+        print(f"  Shorts: {result.get('shorts_created', 0)}")
+        print(f"  Blogs: {result.get('blogs_created', 0)}")
+        print(f"  Images: {result.get('images_created', 0)}")
+        print(f"  Distributions: {result.get('distributions', 0)}")
+        if result.get("errors"):
+            print(f"  Errors: {len(result['errors'])}")
+
+    elif cmd == "empire-video":
+        # Create video and distribute everywhere
+        ev_parser = argparse.ArgumentParser(prog="run.py empire-video", add_help=False)
+        ev_parser.add_argument("channel", nargs="?", default="money_blueprints")
+        ev_parser.add_argument("--topic", help="Video topic")
+        ev_parser.add_argument("--platforms", help="Comma-separated platforms")
+        ev_args = ev_parser.parse_args(sys.argv[2:])
+
+        platforms = [p.strip() for p in ev_args.platforms.split(",")] if ev_args.platforms else None
+        from src.automation.unified_launcher import empire_video
+        result = empire_video(ev_args.channel, ev_args.topic, platforms)
+        status = "[OK]" if result.success else "[FAIL]"
+        print(f"\n{status} Video: {result.videos_created} created, {result.distributions} distributions")
+        if result.errors:
+            for e in result.errors:
+                print(f"  Error: {e}")
+
+    elif cmd == "empire-blog":
+        # Create blog article and distribute
+        eb_parser = argparse.ArgumentParser(prog="run.py empire-blog", add_help=False)
+        eb_parser.add_argument("topic", help="Blog topic")
+        eb_parser.add_argument("--niche", default="general")
+        eb_parser.add_argument("--channel", default="")
+        eb_args = eb_parser.parse_args(sys.argv[2:])
+
+        from src.automation.unified_launcher import empire_blog
+        result = empire_blog(eb_args.topic, eb_args.niche, eb_args.channel)
+        status = "[OK]" if result.get("success") else "[FAIL]"
+        print(f"\n{status} Blog creation: {result}")
+
+    elif cmd == "distribute":
+        # Distribute existing content to platforms
+        dist_parser = argparse.ArgumentParser(prog="run.py distribute", add_help=False)
+        dist_parser.add_argument("content_path", help="Path to video/image file")
+        dist_parser.add_argument("--type", default="video_long", help="Content type")
+        dist_parser.add_argument("--title", default="", help="Content title")
+        dist_parser.add_argument("--niche", default="general")
+        dist_parser.add_argument("--channel", default="")
+        dist_parser.add_argument("--platforms", help="Comma-separated platforms")
+        dist_args = dist_parser.parse_args(sys.argv[2:])
+
+        import asyncio as _asyncio
+        from src.distribution.distributor import ContentDistributor
+
+        async def _distribute():
+            distributor = ContentDistributor()
+            platforms = [p.strip() for p in dist_args.platforms.split(",")] if dist_args.platforms else None
+            return await distributor.distribute(
+                content_path=dist_args.content_path,
+                content_type=dist_args.type,
+                title=dist_args.title,
+                niche=dist_args.niche,
+                channel=dist_args.channel,
+                platforms=platforms,
+            )
+        result = _asyncio.run(_distribute())
+        print(f"\n[OK] Distribution: {result.get('successful', 0)} successful, {result.get('failed', 0)} failed")
+
+    elif cmd == "platform-status":
+        # Check all platform connections
+        from src.automation.unified_launcher import platform_status
+        statuses = platform_status()
+        print("\n" + "=" * 50)
+        print("  PLATFORM STATUS")
+        print("=" * 50)
+        for name, configured in statuses.items():
+            icon = "[OK]" if configured else "[--]"
+            print(f"  {icon} {name}")
+        print("=" * 50)
+
+    elif cmd == "cross-analytics":
+        # Cross-platform performance report
+        ca_parser = argparse.ArgumentParser(prog="run.py cross-analytics", add_help=False)
+        ca_parser.add_argument("--period", default="last_7_days",
+                               choices=["last_7_days", "last_30_days", "last_90_days", "all_time"])
+        ca_args = ca_parser.parse_args(sys.argv[2:])
+
+        from src.automation.unified_launcher import cross_analytics
+        import json
+        report = cross_analytics(ca_args.period)
+        print(json.dumps(report, indent=2, default=str))
+
+    elif cmd == "api-server":
+        # Start the Content Empire API server
+        api_parser = argparse.ArgumentParser(prog="run.py api-server", add_help=False)
+        api_parser.add_argument("--host", default="0.0.0.0")
+        api_parser.add_argument("--port", type=int, default=8000)
+        api_parser.add_argument("--reload", action="store_true")
+        api_args = api_parser.parse_args(sys.argv[2:])
+
+        import uvicorn
+        print(f"\n[INFO] Starting Content Empire API on {api_args.host}:{api_args.port}")
+        uvicorn.run(
+            "src.api.app:app",
+            host=api_args.host,
+            port=api_args.port,
+            reload=api_args.reload,
+        )
 
     else:
         print(f"Unknown command: {cmd}")

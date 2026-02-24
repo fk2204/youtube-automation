@@ -1,0 +1,140 @@
+# Multi-Platform Distribution Configuration
+# Each platform defines upload method, priority, and settings.
+
+platforms:
+  youtube:
+    enabled: true
+    type: api                        # Official YouTube Data API
+    priority: 10                     # Upload first (algorithm benefits)
+    auth_type: oauth2
+    notes: "Uses config/client_secret.json for OAuth2"
+
+  tiktok:
+    enabled: true
+    type: browser                    # Playwright browser automation
+    priority: 20
+    delay_after_youtube: 30          # Minutes after YouTube upload
+    session_dir: "config/browser_sessions/tiktok"
+    headless: true
+    anti_detection:
+      min_delay: 3                   # Seconds between actions
+      max_delay: 15
+      random_viewport: true
+    notes: "Run TikTokPlatform(headless=False).setup_session() for initial login"
+
+  instagram_reels:
+    enabled: false                   # Phase 2
+    type: browser
+    priority: 30
+    delay_after_youtube: 60
+    session_dir: "config/browser_sessions/instagram"
+
+  pinterest:
+    enabled: false                   # Phase 2
+    type: browser
+    priority: 40
+    session_dir: "config/browser_sessions/pinterest"
+    boards:
+      finance: "Money & Investing Tips"
+      psychology: "Self Improvement"
+      storytelling: "Amazing Stories"
+
+  twitter:
+    enabled: true                    # Uses existing social_poster.py
+    type: api
+    priority: 50
+    auth_type: bearer_token
+    env_keys:
+      - TWITTER_BEARER_TOKEN
+
+  reddit:
+    enabled: true                    # Uses existing social_poster.py (PRAW)
+    type: api
+    priority: 55
+    auth_type: oauth2
+    env_keys:
+      - REDDIT_CLIENT_ID
+      - REDDIT_CLIENT_SECRET
+
+  linkedin:
+    enabled: true                    # Uses existing social_poster.py
+    type: api
+    priority: 60
+    auth_type: access_token
+    env_keys:
+      - LINKEDIN_ACCESS_TOKEN
+
+  facebook:
+    enabled: true                    # Uses existing social_poster.py
+    type: api
+    priority: 65
+    auth_type: page_token
+    env_keys:
+      - FACEBOOK_PAGE_ACCESS_TOKEN
+
+  discord:
+    enabled: true                    # Uses existing social_poster.py
+    type: webhook
+    priority: 70
+    env_keys:
+      - DISCORD_WEBHOOK_URL
+
+  medium:
+    enabled: false                   # Phase 2
+    type: api
+    priority: 80
+    env_keys:
+      - MEDIUM_TOKEN
+
+  quora:
+    enabled: false                   # Phase 2 (browser automation)
+    type: browser
+    priority: 85
+    session_dir: "config/browser_sessions/quora"
+
+  threads:
+    enabled: false                   # Phase 2
+    type: api
+    priority: 90
+    env_keys:
+      - THREADS_ACCESS_TOKEN
+
+# Distribution settings
+distribution:
+  stagger_delay_seconds: 30          # Delay between platform uploads
+  retry_count: 2                     # Retries per platform on failure
+  retry_delay_seconds: 10
+  enable_social_boost: true          # First-hour social media posts
+  enable_format_adaptation: true     # Auto-resize video per platform
+  screenshot_on_error: true          # Save screenshots for debugging
+
+# Content type routing defaults
+# Defines which platforms receive which content types
+routing:
+  video_long:
+    - youtube
+    - tiktok              # Clips extracted automatically
+    - instagram_reels     # Clips extracted automatically
+    - pinterest           # As video pin
+
+  video_short:
+    - youtube_shorts
+    - tiktok
+    - instagram_reels
+
+  blog:
+    - medium
+    - linkedin
+    - quora
+
+  image:
+    - pinterest
+    - instagram_post
+    - twitter
+
+  text_post:
+    - twitter
+    - reddit
+    - linkedin
+    - facebook
+    - discord
