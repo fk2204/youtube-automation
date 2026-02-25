@@ -1186,28 +1186,86 @@ Examples:
         video_parser.add_argument("channel", nargs="?", default="money_blueprints")
         video_parser.add_argument("-n", "--no-upload", action="store_true",
                                   help="Skip upload after video creation")
+        video_parser.add_argument("--json-output", action="store_true",
+                                  help="Emit JSON messages to stdout for process bridge")
+        video_parser.add_argument("--topic", type=str, default=None,
+                                  help="Optional topic override")
         video_args = video_parser.parse_args(sys.argv[2:])
 
         channel = video_args.channel
         no_upload = video_args.no_upload
+        json_output = video_args.json_output
+        topic = video_args.topic
 
-        if no_upload:
-            # Create video only, skip upload
-            from src.automation.runner import task_full_pipeline
-            result = task_full_pipeline(channel)
-            if result["success"]:
-                video_path = result['results'].get('video_file', 'N/A')
-                print(f"\n[OK] Video created at: {video_path}. Skipping upload (--no-upload)")
+        # Import json_emitter if JSON output requested
+        if json_output:
+            from src.utils.json_emitter import emit
+            emit("progress", percent=0, stage="initialization", message="Starting video creation...")
+
+        try:
+            if no_upload:
+                # Create video only, skip upload
+                from src.automation.runner import task_full_pipeline
+                if json_output:
+                    emit("progress", percent=10, stage="research", message="Researching topics...")
+                result = task_full_pipeline(channel, topic=topic)
+                if result["success"]:
+                    video_path = result['results'].get('video_file', 'N/A')
+                    if json_output:
+                        emit("progress", percent=95, stage="finalization", message="Video creation complete")
+                        # Extract metadata
+                        script = result['results'].get('title', 'Unknown')
+                        output_data = {
+                            "output_file": video_path,
+                            "title": result['results'].get('title', ''),
+                            "duration_seconds": 600,  # Estimated
+                            "size_mb": 100,  # Estimated
+                            "tokens_total": 0,
+                            "cost_total_usd": 0
+                        }
+                        emit("result", data=output_data)
+                    else:
+                        print(f"\n[OK] Video created at: {video_path}. Skipping upload (--no-upload)")
+                else:
+                    if json_output:
+                        emit("error", message=result.get('error', 'Unknown error'), code="SCRIPT_FAILURE", agent="PipelineRunner", recoverable=False)
+                    else:
+                        print(f"\n[FAIL] Failed: {result.get('error')}")
             else:
-                print(f"\n[FAIL] Failed: {result.get('error')}")
-        else:
-            # Default behavior: create and upload
-            from src.automation.runner import task_full_with_upload
-            result = task_full_with_upload(channel)
-            if result["success"]:
-                print(f"\n[OK] Video uploaded: {result['results'].get('video_url', 'N/A')}")
+                # Default behavior: create and upload
+                from src.automation.runner import task_full_with_upload
+                if json_output:
+                    emit("progress", percent=10, stage="research", message="Researching topics...")
+                result = task_full_with_upload(channel, topic=topic)
+                if result["success"]:
+                    video_url = result['results'].get('video_url', 'N/A')
+                    video_path = result['results'].get('video_file', 'N/A')
+                    if json_output:
+                        emit("progress", percent=95, stage="upload", message="Video uploaded successfully")
+                        output_data = {
+                            "output_file": video_path,
+                            "title": result['results'].get('title', ''),
+                            "duration_seconds": 600,  # Estimated
+                            "size_mb": 100,  # Estimated
+                            "tokens_total": 0,
+                            "cost_total_usd": 0
+                        }
+                        emit("result", data=output_data)
+                    else:
+                        print(f"\n[OK] Video uploaded: {video_url}")
+                else:
+                    if json_output:
+                        emit("error", message=result.get('error', 'Unknown error'), code="UPLOAD_FAILURE", agent="PipelineRunner", recoverable=False)
+                    else:
+                        print(f"\n[FAIL] Failed: {result.get('error')}")
+        except Exception as e:
+            if json_output:
+                import traceback
+                emit("error", message=str(e), code="EXCEPTION", agent="PipelineRunner", recoverable=False)
             else:
-                print(f"\n[FAIL] Failed: {result.get('error')}")
+                import traceback
+                traceback.print_exc()
+                print(f"\n[FAIL] Exception: {e}")
 
     elif cmd == "short":
         # Parse arguments for short command
