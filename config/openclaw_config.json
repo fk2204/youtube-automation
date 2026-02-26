@@ -1,0 +1,91 @@
+{
+  "description": "Openclaw Bot Plugin Configuration",
+  "rate_limits": {
+    "/video": 300,
+    "/batch": 3600,
+    "/short": 60,
+    "/multiplatform": 60,
+    "/schedule": 60,
+    "/analytics": 10,
+    "/cost": 10,
+    "/status": 5,
+    "/help": 1
+  },
+  "max_queue_size": 100,
+  "job_timeout": 3600,
+  "permissions": {
+    "admin": [
+      "*"
+    ],
+    "moderator": [
+      "/video",
+      "/short",
+      "/batch",
+      "/schedule",
+      "/analytics",
+      "/cost",
+      "/status",
+      "/help"
+    ],
+    "user": [
+      "/video",
+      "/short",
+      "/multiplatform",
+      "/analytics",
+      "/cost",
+      "/status",
+      "/help"
+    ],
+    "public": [
+      "/help",
+      "/status"
+    ]
+  },
+  "video_defaults": {
+    "duration_minutes": 10,
+    "privacy": "unlisted",
+    "upload": true
+  },
+  "batch_defaults": {
+    "spacing_days": 1,
+    "max_batch_size": 50
+  },
+  "platforms": {
+    "youtube": {
+      "enabled": true,
+      "upload_enabled": true
+    },
+    "tiktok": {
+      "enabled": true,
+      "auto_upload": false,
+      "aspect_ratio": "9:16",
+      "max_duration": 60
+    },
+    "instagram": {
+      "enabled": true,
+      "auto_upload": false,
+      "aspect_ratio": "9:16",
+      "max_duration": 90
+    },
+    "pinterest": {
+      "enabled": true,
+      "auto_upload": false,
+      "aspect_ratio": "1:1"
+    },
+    "quora": {
+      "enabled": true,
+      "auto_upload": false
+    }
+  },
+  "ai_provider": {
+    "primary": "groq",
+    "fallback": "ollama",
+    "timeout": 300
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "logs/openclaw_plugin.log",
+    "rotation": "1 day",
+    "retention": "7 days"
+  }
+}
