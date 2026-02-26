@@ -1,10 +1,10 @@
-"""Discord bot handler for Openclaw plugin.
+"""Discord bot handler for ViralFlow plugin.
 
 Example Discord bot integration. Requires discord.py:
     pip install discord.py
 
 Usage:
-    python -m src.openclaw.discord_handler YOUR_TOKEN
+    python -m src.viralflow.discord_handler YOUR_TOKEN
 """
 
 import asyncio
@@ -14,22 +14,22 @@ import discord
 from discord.ext import commands
 from loguru import logger
 
-from .plugin import OpenclawPlugin
+from .plugin import ViralFlowPlugin
 from .models import PluginResponse
 
 
-class OpencrawDiscordBot:
+class ViralFlowDiscordBot:
     """Discord bot for YouTube automation."""
 
-    def __init__(self, token: str, plugin: Optional[OpenclawPlugin] = None):
+    def __init__(self, token: str, plugin: Optional[ViralFlowPlugin] = None):
         """Initialize Discord bot.
 
         Args:
             token: Discord bot token
-            plugin: OpenclawPlugin instance
+            plugin: ViralFlowPlugin instance
         """
         self.token = token
-        self.plugin = plugin or OpenclawPlugin()
+        self.plugin = plugin or ViralFlowPlugin()
         self.bot = commands.Bot(command_prefix="/", intents=discord.Intents.default())
 
         self._setup_handlers()
@@ -309,7 +309,7 @@ async def main():
         logger.error("Discord token required. Set DISCORD_TOKEN env var or pass as argument.")
         return
 
-    bot = OpencrawDiscordBot(token=token)
+    bot = ViralFlowDiscordBot(token=token)
     bot.run()
 
 

@@ -1,8 +1,8 @@
-# Openclaw Bot Integration Guide
+# ViralFlow Bot Integration Guide
 
 ## Overview
 
-The YouTube Automation system now includes a complete plugin system for **Openclaw/Clawd bot** integration, enabling Discord and Telegram users to create, manage, and distribute videos across multiple platforms.
+The YouTube Automation system now includes a complete plugin system for **ViralFlow** integration, enabling Discord and Telegram users to create, manage, and distribute videos across multiple platforms.
 
 ## What Was Found
 
@@ -45,15 +45,15 @@ The codebase already had extensive multi-platform capabilities:
 
 ## What Was Added
 
-### New Plugin System: `/src/openclaw/`
+### New Plugin System: `/src/viralflow/`
 
 Complete bot integration layer with 7 new modules:
 
 #### 1. **plugin.py** - Main Plugin Interface
 ```python
-from src.openclaw import OpenclawPlugin
+from src.viralflow import ViralFlowPlugin
 
-plugin = OpenclawPlugin()
+plugin = ViralFlowPlugin()
 response = await plugin.handle_command(
     command="/video",
     args={"topic": "Passive Income Tips"},
@@ -105,7 +105,7 @@ Standardized dataclasses for:
 #### 4. **api_bridge.py** - HTTP/WebSocket Bridge
 ```python
 from fastapi import FastAPI
-from src.openclaw import APIBridge
+from src.viralflow import APIBridge
 
 bridge = APIBridge()
 app = bridge.setup_fastapi()
@@ -131,7 +131,7 @@ Ready-to-use Discord bot with:
 
 ```bash
 export DISCORD_TOKEN="your_token"
-python -m src.openclaw.discord_handler
+python -m src.viralflow.discord_handler
 ```
 
 #### 6. **telegram_handler.py** - Telegram Bot Integration
@@ -144,7 +144,7 @@ Ready-to-use Telegram bot with:
 
 ```bash
 export TELEGRAM_TOKEN="your_token"
-python -m src.openclaw.telegram_handler
+python -m src.viralflow.telegram_handler
 ```
 
 #### 7. **README.md** - Complete Documentation
@@ -156,7 +156,7 @@ python -m src.openclaw.telegram_handler
 - Error handling patterns
 
 ### New Configuration File
-**`config/openclaw_config.json`** - Plugin configuration with:
+**`config/viralflow_config.json`** - Plugin configuration with:
 - Rate limits per command
 - Permission mappings
 - Platform enablement flags
@@ -169,7 +169,7 @@ python -m src.openclaw.telegram_handler
 ```
 ┌─────────────────────────────────────────────────────────┐
 │              Discord/Telegram Bot                       │
-│          (Openclaw/Clawd Bot User)                     │
+│          (ViralFlow Bot User)                     │
 └────────────────────┬────────────────────────────────────┘
                      │
                      ↓
@@ -190,7 +190,7 @@ python -m src.openclaw.telegram_handler
         └────────────┬───────────┘
                      ↓
         ┌────────────────────────┐
-        │  OpenclawPlugin        │
+        │  ViralFlowPlugin        │
         │  (Command Router)      │
         └────────────┬───────────┘
                      ↓
@@ -344,7 +344,7 @@ curl -X POST "http://localhost:8000/command" \
 ## Files Added
 
 ```
-src/openclaw/
+src/viralflow/
 ├── __init__.py              (60 lines)
 ├── plugin.py                (450+ lines)
 ├── models.py                (280+ lines)
@@ -355,10 +355,10 @@ src/openclaw/
 └── README.md                (Complete guide)
 
 config/
-└── openclaw_config.json     (Plugin configuration)
+└── viralflow_config.json     (Plugin configuration)
 
 docs/
-└── OPENCLAW_INTEGRATION.md  (This file)
+└── VIRALFLOW_INTEGRATION.md  (This file)
 ```
 
 **Total New Code:** ~2,500+ lines of production code
@@ -373,13 +373,13 @@ pip install discord.py python-telegram-bot fastapi uvicorn
 ### 2. Run Discord Bot
 ```bash
 export DISCORD_TOKEN="your_bot_token"
-python -m src.openclaw.discord_handler
+python -m src.viralflow.discord_handler
 ```
 
 ### 3. Run Telegram Bot
 ```bash
 export TELEGRAM_TOKEN="your_bot_token"
-python -m src.openclaw.telegram_handler
+python -m src.viralflow.telegram_handler
 ```
 
 ### 4. Run API Server
@@ -396,7 +396,7 @@ uvicorn api.server:app --reload
 
 ## Configuration
 
-Edit `config/openclaw_config.json` to:
+Edit `config/viralflow_config.json` to:
 - Adjust rate limits
 - Change permission mappings
 - Enable/disable platforms
@@ -431,9 +431,9 @@ Edit `config/openclaw_config.json` to:
 
 ## Support & Questions
 
-- Review `/src/openclaw/README.md` for API docs
+- Review `/src/viralflow/README.md` for API docs
 - Check example handlers for integration patterns
-- See `config/openclaw_config.json` for configuration options
+- See `config/viralflow_config.json` for configuration options
 - Review job logs for troubleshooting
 
 ---

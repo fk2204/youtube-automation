@@ -6,22 +6,22 @@ from typing import Dict, Any, Optional, Callable, List
 from pathlib import Path
 from loguru import logger
 
-from .plugin import OpenclawPlugin
+from .plugin import ViralFlowPlugin
 from .models import PluginResponse, Job, JobStatus
 
 
 class APIBridge:
-    """Bridge between Openclaw bot and plugin system."""
+    """Bridge between ViralFlow bot and plugin system."""
 
-    def __init__(self, plugin: Optional[OpenclawPlugin] = None, host: str = "0.0.0.0", port: int = 8000):
+    def __init__(self, plugin: Optional[ViralFlowPlugin] = None, host: str = "0.0.0.0", port: int = 8000):
         """Initialize API bridge.
 
         Args:
-            plugin: OpenclawPlugin instance (creates new if None)
+            plugin: ViralFlowPlugin instance (creates new if None)
             host: Host to bind to
             port: Port to listen on
         """
-        self.plugin = plugin or OpenclawPlugin()
+        self.plugin = plugin or ViralFlowPlugin()
         self.host = host
         self.port = port
         self.callbacks: Dict[str, List[Callable]] = {
@@ -154,7 +154,7 @@ class APIBridge:
         """Setup FastAPI app for API server.
 
         Usage:
-            from src.openclaw.api_bridge import APIBridge
+            from src.viralflow.api_bridge import APIBridge
             from fastapi import FastAPI
 
             bridge = APIBridge()
@@ -227,7 +227,7 @@ class APIBridge:
         """Setup Discord bot integration.
 
         Usage:
-            from src.openclaw.api_bridge import APIBridge
+            from src.viralflow.api_bridge import APIBridge
             import discord
             from discord.ext import commands
 
@@ -243,7 +243,7 @@ class APIBridge:
         """Setup Telegram bot integration.
 
         Usage:
-            from src.openclaw.api_bridge import APIBridge
+            from src.viralflow.api_bridge import APIBridge
             from telegram.ext import Application
 
             bridge = APIBridge()

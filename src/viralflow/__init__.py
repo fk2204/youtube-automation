@@ -1,23 +1,23 @@
 """
-Openclaw Bot Plugin System
+ViralFlow Plugin System
 
-Integrates YouTube Automation with Openclaw/Clawd bot for Discord and Telegram.
+Integrates YouTube Automation with ViralFlow bot for Discord and Telegram.
 Provides command routing, job management, and real-time status updates.
 
 Usage:
-    from src.openclaw import OpenclawPlugin
+    from src.viralflow import ViralFlowPlugin
 
-    plugin = OpenclawPlugin()
+    plugin = ViralFlowPlugin()
     result = await plugin.handle_command("/video", {"topic": "Passive Income"})
 """
 
-from .plugin import OpenclawPlugin
+from .plugin import ViralFlowPlugin
 from .models import CommandRequest, JobStatus, PluginResponse
 from .command_registry import CommandRegistry
 from .api_bridge import APIBridge
 
 __all__ = [
-    "OpenclawPlugin",
+    "ViralFlowPlugin",
     "CommandRequest",
     "JobStatus",
     "PluginResponse",

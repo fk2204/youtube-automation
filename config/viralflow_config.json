@@ -1,5 +1,5 @@
 {
-  "description": "Openclaw Bot Plugin Configuration",
+  "description": "ViralFlow Plugin Configuration",
   "rate_limits": {
     "/video": 300,
     "/batch": 3600,
@@ -84,7 +84,7 @@
   },
   "logging": {
     "level": "INFO",
-    "file": "logs/openclaw_plugin.log",
+    "file": "logs/viralflow_plugin.log",
     "rotation": "1 day",
     "retention": "7 days"
   }

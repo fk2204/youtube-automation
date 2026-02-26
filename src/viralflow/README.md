@@ -1,10 +1,10 @@
-# Openclaw Plugin System
+# ViralFlow Plugin System
 
-Integration module for [Openclaw/Clawd bot](https://clawd.bot) to access YouTube Automation capabilities from Discord and Telegram.
+Integration module for [ViralFlow](https://clawd.bot) to access YouTube Automation capabilities from Discord and Telegram.
 
 ## Overview
 
-The Openclaw plugin allows you to:
+The ViralFlow plugin allows you to:
 - Create videos with `/video <topic>`
 - Generate YouTube Shorts with `/short <topic>`
 - Batch create videos with `/batch <count>`
@@ -23,7 +23,7 @@ Discord/Telegram Bot
          ↓
    APIBridge (api_bridge.py)
          ↓
-  OpenclawPlugin (plugin.py)
+  ViralFlowPlugin (plugin.py)
          ↓
 CommandRegistry (command_registry.py)
          ↓
@@ -41,10 +41,10 @@ YouTube Automation System
 ### 1. Basic Plugin Usage
 
 ```python
-from src.openclaw import OpenclawPlugin
+from src.viralflow import ViralFlowPlugin
 
 # Initialize plugin
-plugin = OpenclawPlugin()
+plugin = ViralFlowPlugin()
 
 # Handle a command
 response = await plugin.handle_command(
@@ -68,7 +68,7 @@ print(response.to_dict())
 
 ```python
 from fastapi import FastAPI
-from src.openclaw import APIBridge
+from src.viralflow import APIBridge
 
 # Create bridge and FastAPI app
 bridge = APIBridge()
@@ -96,10 +96,10 @@ curl -X POST "http://localhost:8000/command" \
 ```python
 import discord
 from discord.ext import commands
-from src.openclaw import OpenclawPlugin
+from src.viralflow import ViralFlowPlugin
 
 bot = commands.Bot(command_prefix="/")
-plugin = OpenclawPlugin()
+plugin = ViralFlowPlugin()
 
 @bot.command(name="video")
 async def create_video(ctx, *, topic):
@@ -130,9 +130,9 @@ bot.run("YOUR_TOKEN")
 ```python
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
-from src.openclaw import OpenclawPlugin
+from src.viralflow import ViralFlowPlugin
 
-plugin = OpenclawPlugin()
+plugin = ViralFlowPlugin()
 
 async def video_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /video command in Telegram"""
@@ -263,7 +263,7 @@ job.status = JobStatus.CANCELLED
 
 ## Configuration
 
-Create `config/openclaw_config.json`:
+Create `config/viralflow_config.json`:
 ```json
 {
   "rate_limits": {
@@ -283,7 +283,7 @@ Create `config/openclaw_config.json`:
 
 Load config:
 ```python
-plugin = OpenclawPlugin(config_path="config/openclaw_config.json")
+plugin = ViralFlowPlugin(config_path="config/viralflow_config.json")
 ```
 
 ## Rate Limiting
