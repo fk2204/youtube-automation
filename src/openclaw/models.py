@@ -1,4 +1,4 @@
-"""Data models for ViralFlow plugin commands and responses."""
+"""Data models for Openclaw plugin commands and responses."""
 
 from dataclasses import dataclass, field, asdict
 from enum import Enum

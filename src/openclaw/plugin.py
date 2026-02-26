@@ -1,4 +1,4 @@
-"""Main ViralFlow plugin interface."""
+"""Main Openclaw plugin interface."""
 
 import asyncio
 import json
@@ -22,8 +22,8 @@ from .models import (
 from .command_registry import CommandRegistry
 
 
-class ViralFlowPlugin:
-    """Main plugin class for ViralFlow bot integration."""
+class OpenclawPlugin:
+    """Main plugin class for Openclaw bot integration."""
 
     def __init__(self, config_path: Optional[str] = None):
         """Initialize plugin.
@@ -35,7 +35,7 @@ class ViralFlowPlugin:
         self.job_queue: Dict[str, Job] = {}
         self.config = self._load_config(config_path)
         self.rate_limiter = {}  # user_id -> {command -> timestamp}
-        logger.info("ViralFlow plugin initialized")
+        logger.info("Openclaw plugin initialized")
 
     def _load_config(self, config_path: Optional[str]) -> Dict[str, Any]:
         """Load configuration from file."""

@@ -1,11 +1,11 @@
-"""Telegram bot handler for ViralFlow plugin.
+"""Telegram bot handler for Openclaw plugin.
 
 Example Telegram bot integration. Requires python-telegram-bot:
     pip install python-telegram-bot
 
 Usage:
     export TELEGRAM_TOKEN="YOUR_BOT_TOKEN"
-    python -m src.viralflow.telegram_handler
+    python -m src.openclaw.telegram_handler
 """
 
 import os
@@ -23,22 +23,22 @@ from telegram.ext import (
     CallbackQueryHandler,
 )
 
-from .plugin import ViralFlowPlugin
+from .plugin import OpenclawPlugin
 from .models import PluginResponse
 
 
-class ViralFlowTelegramBot:
+class OpencrawTelegramBot:
     """Telegram bot for YouTube automation."""
 
-    def __init__(self, token: str, plugin: Optional[ViralFlowPlugin] = None):
+    def __init__(self, token: str, plugin: Optional[OpenclawPlugin] = None):
         """Initialize Telegram bot.
 
         Args:
             token: Telegram bot token
-            plugin: ViralFlowPlugin instance
+            plugin: OpenclawPlugin instance
         """
         self.token = token
-        self.plugin = plugin or ViralFlowPlugin()
+        self.plugin = plugin or OpenclawPlugin()
         self.application = Application.builder().token(token).build()
 
         self._setup_handlers()
@@ -328,7 +328,7 @@ async def main():
         logger.error("TELEGRAM_TOKEN environment variable required")
         return
 
-    bot = ViralFlowTelegramBot(token=token)
+    bot = OpencrawTelegramBot(token=token)
     await bot.run()
 
 
