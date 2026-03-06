@@ -1,0 +1,77 @@
+platforms:
+  tiktok:
+    enabled: true
+    type: poster
+    rate_limit_per_day: 100
+    max_video_size_mb: 4096
+
+  instagram:
+    enabled: true
+    type: poster
+    rate_limit_per_hour: 25
+    max_carousel_items: 10
+
+  facebook:
+    enabled: true
+    type: poster
+    rate_limit_per_hour: 200
+
+  pinterest:
+    enabled: true
+    type: poster
+    rate_limit_per_hour: 100
+
+  telegram:
+    enabled: true
+    type: poster
+    rate_limit_per_second: 30
+    max_video_size_mb: 50
+
+  whatsapp:
+    enabled: true
+    type: poster
+    rate_limit_per_second: 80
+    max_video_size_mb: 16
+
+  youtube_community:
+    enabled: true
+    type: poster
+    note: "API unavailable as of 2026 — always returns skipped"
+
+  medium:
+    enabled: true
+    type: repurposer
+    default_status: draft
+    max_tags: 5
+
+  substack:
+    enabled: true
+    type: repurposer
+    default_status: draft
+
+  twitter_thread:
+    enabled: true
+    type: repurposer
+    tier: basic
+    max_tweets_per_thread: 25
+
+  email:
+    enabled: true
+    type: repurposer
+    provider: sendgrid
+
+  podcast:
+    enabled: true
+    type: repurposer
+    tts_provider: elevenlabs
+    podcast_title: "Content Distribution Podcast"
+    podcast_description: "Auto-generated podcast episodes from written content."
+    podcast_author: "Distribution System"
+    podcast_email: "podcast@example.com"
+    audio_base_url: "https://example.com/podcast/audio"
+
+retry:
+  max_attempts: 3
+  base_delay_seconds: 1.0
+  max_delay_seconds: 60.0
+  backoff_factor: 2.0
