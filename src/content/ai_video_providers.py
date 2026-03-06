@@ -2,7 +2,7 @@
 AI Video Provider Abstraction
 
 Unified interface for multiple AI video generation providers.
-Supports easy switching between Runway, Pika, HailuoAI, and other providers.
+Supports easy switching between Pika and other providers.
 Includes cost comparison and smart routing for optimal provider selection.
 
 Usage:
@@ -13,7 +13,7 @@ Usage:
     )
 
     # Get a specific provider
-    provider = get_ai_video_provider("runway")
+    provider = get_ai_video_provider("pika")
     result = await provider.generate_video("A sunset over the ocean")
 
     # Use smart routing (auto-selects based on cost/quality)
@@ -46,14 +46,6 @@ for _env_path in _env_paths:
 
 # Import available providers
 try:
-    from .ai_video_runway import RunwayVideoGenerator, RunwayVideoResult
-    RUNWAY_AVAILABLE = True
-except ImportError:
-    RUNWAY_AVAILABLE = False
-    RunwayVideoGenerator = None
-    RunwayVideoResult = None
-
-try:
     from .video_pika import PikaVideoGenerator, PikaVideoResult
     PIKA_AVAILABLE = True
 except ImportError:
@@ -73,9 +65,7 @@ except ImportError:
 
 class AIVideoProviderType(str, Enum):
     """Supported AI video providers."""
-    RUNWAY = "runway"
     PIKA = "pika"
-    HAILUO = "hailuo"  # Future support
     KLING = "kling"    # Future support
 
 
@@ -212,112 +202,6 @@ class AIVideoProvider(ABC):
         return self.estimate_cost(duration)
 
 
-class RunwayProvider(AIVideoProvider):
-    """Runway ML video provider implementation."""
-
-    def __init__(self, api_key: Optional[str] = None, model: str = "gen3a_turbo"):
-        self._api_key = api_key or os.getenv("RUNWAYML_API_SECRET") or os.getenv("RUNWAY_API_KEY")
-        self._model = model
-        self._generator = None
-
-        if RUNWAY_AVAILABLE and self._api_key:
-            try:
-                self._generator = RunwayVideoGenerator(api_key=self._api_key, default_model=model)
-            except Exception as e:
-                logger.warning(f"Failed to initialize Runway: {e}")
-
-    @property
-    def name(self) -> str:
-        return "runway"
-
-    @property
-    def is_available(self) -> bool:
-        return RUNWAY_AVAILABLE and self._generator is not None
-
-    async def generate_video(
-        self,
-        prompt: str,
-        output_file: Optional[str] = None,
-        duration: int = 5,
-        aspect_ratio: str = "16:9",
-        **kwargs
-    ) -> AIVideoResult:
-        if not self.is_available:
-            return AIVideoResult(
-                success=False,
-                provider=self.name,
-                error="Runway provider not available"
-            )
-
-        result = await self._generator.generate_from_text(
-            prompt=prompt,
-            output_file=output_file,
-            duration=duration,
-            aspect_ratio=aspect_ratio,
-            model=kwargs.get("model", self._model),
-            seed=kwargs.get("seed")
-        )
-
-        return AIVideoResult(
-            success=result.success,
-            provider=self.name,
-            video_url=result.video_url,
-            local_path=result.local_path,
-            duration=result.duration,
-            aspect_ratio=result.aspect_ratio,
-            error=result.error,
-            task_id=result.task_id,
-            cost_estimate=result.cost_estimate,
-            generation_time=result.generation_time,
-            metadata={"model": result.model}
-        )
-
-    async def generate_from_image(
-        self,
-        image_path: str,
-        motion_prompt: str,
-        output_file: Optional[str] = None,
-        duration: int = 5,
-        **kwargs
-    ) -> AIVideoResult:
-        if not self.is_available:
-            return AIVideoResult(
-                success=False,
-                provider=self.name,
-                error="Runway provider not available"
-            )
-
-        result = await self._generator.generate_from_image(
-            image_path=image_path,
-            motion_prompt=motion_prompt,
-            output_file=output_file,
-            duration=duration,
-            model=kwargs.get("model", self._model),
-            seed=kwargs.get("seed")
-        )
-
-        return AIVideoResult(
-            success=result.success,
-            provider=self.name,
-            video_url=result.video_url,
-            local_path=result.local_path,
-            duration=result.duration,
-            error=result.error,
-            task_id=result.task_id,
-            cost_estimate=result.cost_estimate,
-            generation_time=result.generation_time,
-            metadata={"model": result.model}
-        )
-
-    def get_cost_per_second(self) -> float:
-        # Pricing varies by model
-        pricing = {
-            "gen3a_turbo": 0.05,
-            "gen3a_alpha": 0.10,
-        }
-        return pricing.get(self._model, 0.05)
-
-
 class PikaProvider(AIVideoProvider):
     """Pika Labs video provider implementation."""
 
@@ -427,22 +311,17 @@ class PikaProvider(AIVideoProvider):
 
 # Provider registry
 _PROVIDER_CLASSES: Dict[str, type] = {
-    "runway": RunwayProvider,
     "pika": PikaProvider,
 }
 
 # Provider cost comparison (cost per second in USD)
 PROVIDER_COSTS = {
-    "runway_turbo": 0.05,
-    "runway_alpha": 0.10,
     "pika_720p": 0.04,
     "pika_1080p": 0.09,
 }
 
 # Provider quality rankings (1-10, higher is better)
 PROVIDER_QUALITY = {
-    "runway_alpha": 10,
-    "runway_turbo": 8,
     "pika_1080p": 7,
     "pika_720p": 6,
 }
@@ -457,7 +336,7 @@ def get_ai_video_provider(
     Factory function to get an AI video provider.
 
     Args:
-        name: Provider name ("runway", "pika", etc.)
+        name: Provider name ("pika", etc.)
         api_key: Optional API key (uses environment if not provided)
         **kwargs: Provider-specific configuration
 
@@ -514,7 +393,7 @@ class AIVideoProviderRouter:
             preferred_providers: List of preferred providers in order
             budget_limit: Maximum cost per video in USD
         """
-        self.preferred_providers = preferred_providers or ["runway", "pika"]
+        self.preferred_providers = preferred_providers or ["pika"]
         self.budget_limit = budget_limit
 
         # Initialize available providers

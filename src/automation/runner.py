@@ -330,47 +330,14 @@ def task_video(
     logger.info(f"Music settings: enabled={music_enabled}, volume={music_volume}")
     logger.info(f"Subtitle settings: enabled={subtitles_enabled}, style={subtitle_style}")
 
-    from src.content.video_ultra import UltraVideoGenerator
-    from src.content.script_writer import VideoScript, ScriptSection
+    from src.content.video_fast import FastVideoGenerator
 
-    # Reconstruct script object
-    sections = []
-    for s in script_data.get("sections", []):
-        sections.append(ScriptSection(
-            timestamp=s.get("timestamp", "00:00"),
-            section_type=s.get("section_type", "content"),
-            title=s.get("title", ""),
-            narration=s.get("narration", ""),
-            screen_action=s.get("screen_action", ""),
-            keywords=s.get("keywords", []),
-            duration_seconds=s.get("duration_seconds", 10)
-        ))
-
-    script = VideoScript(
-        title=script_data.get("title", "Video"),
-        description=script_data.get("description", ""),
-        tags=script_data.get("tags", []),
-        sections=sections,
-        total_duration=script_data.get("total_duration", 60),
-        thumbnail_idea=""
-    )
-
-    generator = UltraVideoGenerator()
-
-    # Determine background music path (None if disabled)
-    background_music = None
-    if music_enabled:
-        background_music = generator.get_niche_music_path(niche)
+    generator = FastVideoGenerator()
 
     result = generator.create_video(
         audio_file=audio_file,
-        script=script,
         output_file=output_file,
-        niche=niche,
-        background_music=background_music,
-        music_volume=music_volume,
-        subtitles_enabled=subtitles_enabled,
-        subtitle_style=subtitle_style
+        title=script_data.get("title", "Video")
     )
 
     if result and os.path.exists(result):

@@ -40,8 +40,7 @@ Usage:
 import asyncio
 import time
 import threading
-from abc import ABC, abstractmethod
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -1271,14 +1270,6 @@ class MasterOrchestrator:
             Dict of task results
         """
         return await self.executor.execute_parallel(tasks, timeout)
-
-    def run_parallel_sync(
-        self,
-        tasks: List[Tuple[str, str, Dict[str, Any]]],
-        timeout: Optional[float] = None,
-    ) -> Dict[str, TaskResult]:
-        """Synchronous wrapper for parallel execution."""
-        return self.executor.execute_sync(tasks, timeout)
 
     def route_task(
         self,

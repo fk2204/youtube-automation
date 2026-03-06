@@ -58,6 +58,9 @@ except ImportError:
     SUBTITLES_AVAILABLE = False
     logger.debug("SubtitleGenerator not available - subtitles disabled")
 
+# Import shared video utilities
+from .video_utils import find_ffmpeg, two_pass_encode as _two_pass_encode, FFMPEG_PARAMS_REGULAR, FFMPEG_PARAMS_SHORTS
+
 
 class FastVideoGenerator:
     """
@@ -204,97 +207,19 @@ class FastVideoGenerator:
         Returns:
             Path to encoded file or None on failure
         """
-        import tempfile
-        passlog = tempfile.mktemp(prefix="ffmpeg_pass_")
-        ffmpeg_path = self.ffmpeg or "ffmpeg"
-
-        try:
-            # Pass 1: Analysis
-            pass1_cmd = [
-                ffmpeg_path, "-y",
-                "-i", input_file,
-                "-c:v", "libx264",
-                "-preset", self.encoding_preset,
-                "-b:v", target_bitrate,
-                "-maxrate", max_bitrate,
-                "-bufsize", "16M",
-                "-pass", "1",
-                "-passlogfile", passlog,
-                "-an",  # No audio for pass 1
-                "-f", "null",
-                "NUL" if os.name == "nt" else "/dev/null"
-            ]
-
-            logger.info("Two-pass encoding: Pass 1 (analysis)...")
-            subprocess.run(pass1_cmd, capture_output=True, timeout=600)
-
-            # Pass 2: Encode
-            pass2_cmd = [
-                ffmpeg_path, "-y",
-                "-i", input_file,
-                "-c:v", "libx264",
-                "-preset", self.encoding_preset,
-                "-b:v", target_bitrate,
-                "-maxrate", max_bitrate,
-                "-bufsize", "16M",
-                "-pass", "2",
-                "-passlogfile", passlog,
-                "-c:a", "aac",
-                "-b:a", "256k",
-            ] + self.FFMPEG_PARAMS_REGULAR + [output_file]
-
-            logger.info("Two-pass encoding: Pass 2 (encoding)...")
-            result = subprocess.run(pass2_cmd, capture_output=True, timeout=600)
-
-            if os.path.exists(output_file):
-                logger.success(f"Two-pass encoding complete: {output_file}")
-                return output_file
-
-            logger.error(f"Two-pass encoding failed: {result.stderr.decode()[:500]}")
-            return None
-
-        except Exception as e:
-            logger.error(f"Two-pass encoding error: {e}")
-            return None
-        finally:
-            # Cleanup passlog files
-            for ext in ["", "-0.log", "-0.log.mbtree"]:
-                try:
-                    log_file = passlog + ext
-                    if os.path.exists(log_file):
-                        os.remove(log_file)
-                except Exception:
-                    pass
+        return _two_pass_encode(
+            input_file=input_file,
+            output_file=output_file,
+            ffmpeg_path=self.ffmpeg or "ffmpeg",
+            encoding_preset=self.encoding_preset,
+            ffmpeg_params=self.ffmpeg_params,
+            target_bitrate=target_bitrate,
+            max_bitrate=max_bitrate,
+        )
 
     def _find_ffmpeg(self) -> Optional[str]:
         """Find FFmpeg executable."""
-        # Check if ffmpeg is in PATH
-        if shutil.which("ffmpeg"):
-            return "ffmpeg"
-
-        # Common Windows locations
-        common_paths = [
-            r"C:\ffmpeg\bin\ffmpeg.exe",
-            r"C:\Program Files\ffmpeg\bin\ffmpeg.exe",
-            os.path.expanduser("~\\ffmpeg\\bin\\ffmpeg.exe"),
-        ]
-
-        # Check WinGet installation paths
-        winget_base = os.path.expanduser("~\\AppData\\Local\\Microsoft\\WinGet\\Packages")
-        if os.path.exists(winget_base):
-            for folder in os.listdir(winget_base):
-                if "FFmpeg" in folder:
-                    # Search for ffmpeg.exe in this package
-                    package_path = os.path.join(winget_base, folder)
-                    for root, dirs, files in os.walk(package_path):
-                        if "ffmpeg.exe" in files:
-                            common_paths.insert(0, os.path.join(root, "ffmpeg.exe"))
-
-        for path in common_paths:
-            if os.path.exists(path):
-                return path
-
-        return None
+        return find_ffmpeg()
 
     def _create_video_single_pass(
         self,

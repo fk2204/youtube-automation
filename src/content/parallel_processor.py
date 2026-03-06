@@ -183,9 +183,9 @@ class ParallelVideoProcessor:
     def _create_full_video(params: Dict) -> Optional[str]:
         """Create a full video (worker method)."""
         # Import here to avoid issues with multiprocessing
-        from .video_ultra import UltraVideoGenerator
+        from .video_fast import FastVideoGenerator
 
-        generator = UltraVideoGenerator()
+        generator = FastVideoGenerator()
 
         # Extract params
         topic = params.get("topic")
@@ -194,9 +194,8 @@ class ParallelVideoProcessor:
         output_file = params.get("output_file", f"output/videos/{topic[:30]}.mp4")
 
         # Create video
-        result = generator.create_full_video(
-            topic=topic,
-            niche=niche,
+        result = generator.create_video(
+            title=topic,
             output_file=output_file
         )
 

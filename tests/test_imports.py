@@ -40,7 +40,7 @@ except Exception as e:
     print(f"[FAIL] token_manager: {e}")
 
 try:
-    from src.content.stock_footage import StockFootageManager
+    from src.content.stock_footage import AsyncStockDownloader
     print("[OK] stock_footage")
 except Exception as e:
     print(f"[FAIL] stock_footage: {e}")

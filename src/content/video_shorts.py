@@ -63,13 +63,27 @@ except ImportError:
     HOOKS_AVAILABLE = False
     logger.debug("VideoHookGenerator not available - hooks disabled")
 
-# Import GPU encoder detection from video_ultra
-try:
-    from .video_ultra import get_video_encoder, get_encoder_args
-    GPU_ENCODER_AVAILABLE = True
-except ImportError:
-    GPU_ENCODER_AVAILABLE = False
-    logger.debug("GPU encoder detection not available - using CPU encoding")
+# Import shared video utilities
+from .video_utils import find_ffmpeg as _find_ffmpeg_shared
+
+# GPU encoder detection (removed with long-form video support)
+# Use CPU encoding with fallback settings
+def get_video_encoder(ffmpeg_path: str):
+    """Fallback GPU encoder detection - returns CPU encoder info."""
+    return {
+        "encoder": "libx264",
+        "preset": "fast",
+        "extra_args": ["-crf", "23", "-b:v", "8M"],
+        "is_gpu": False,
+        "gpu_type": "cpu"
+    }
+
+def get_encoder_args(encoder_info: dict):
+    """Fallback encoder args generation."""
+    return ["-c:v", encoder_info.get("encoder", "libx264")] + encoder_info.get("extra_args", [])
+
+GPU_ENCODER_AVAILABLE = False
+logger.debug("GPU encoder detection not available - using CPU encoding")
 
 
 class ShortsVideoGenerator:
@@ -301,23 +315,7 @@ class ShortsVideoGenerator:
 
     def _find_ffmpeg(self) -> Optional[str]:
         """Find FFmpeg executable."""
-        if shutil.which("ffmpeg"):
-            return "ffmpeg"
-
-        # Check common Windows locations
-        common_paths = [
-            os.path.expanduser("~\\AppData\\Local\\Microsoft\\WinGet\\Packages"),
-            "C:\\ffmpeg\\bin",
-            "C:\\Program Files\\ffmpeg\\bin",
-        ]
-
-        for base_path in common_paths:
-            if os.path.exists(base_path):
-                for root, dirs, files in os.walk(base_path):
-                    if "ffmpeg.exe" in files:
-                        return os.path.join(root, "ffmpeg.exe")
-
-        return None
+        return _find_ffmpeg_shared()
 
     def _find_ffprobe(self) -> Optional[str]:
         """Find FFprobe executable."""

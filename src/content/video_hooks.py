@@ -84,6 +84,9 @@ try:
 except ImportError:
     raise ImportError("Please install pillow: pip install pillow")
 
+# Import shared video utilities
+from .video_utils import find_ffmpeg as _find_ffmpeg_shared
+
 
 class HookAnimationType(Enum):
     """Types of hook animations available."""
@@ -306,22 +309,7 @@ class VideoHookGenerator:
 
     def _find_ffmpeg(self) -> Optional[str]:
         """Find FFmpeg executable."""
-        if shutil.which("ffmpeg"):
-            return "ffmpeg"
-
-        common_paths = [
-            os.path.expanduser("~\\AppData\\Local\\Microsoft\\WinGet\\Packages"),
-            "C:\\ffmpeg\\bin",
-            "C:\\Program Files\\ffmpeg\\bin",
-        ]
-
-        for base_path in common_paths:
-            if os.path.exists(base_path):
-                for root, dirs, files in os.walk(base_path):
-                    if "ffmpeg.exe" in files:
-                        return os.path.join(root, "ffmpeg.exe")
-
-        return None
+        return _find_ffmpeg_shared()
 
     def _find_ffprobe(self) -> Optional[str]:
         """Find FFprobe executable."""

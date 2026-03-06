@@ -4,11 +4,13 @@ An AI-powered system for automated YouTube video creation and publishing.
 
 ## Project Overview
 
-This tool automates the entire YouTube content pipeline:
+This tool automates YouTube Short-Form content creation and distribution:
 1. **Research** trending topics using Google Trends and Reddit
 2. **Generate** scripts using AI (Ollama/Groq/Claude)
-3. **Create** videos with Edge-TTS voiceover and MoviePy
-4. **Upload** to multiple YouTube channels automatically
+3. **Create** short-form videos (15-60 sec, 9:16 aspect ratio) with Edge-TTS voiceover and MoviePy
+4. **Distribute** to YouTube Shorts, TikTok, and Instagram Reels
+
+**Scope:** Short-form video only. Not designed for long-form YouTube uploads.
 
 ## Tech Stack
 
@@ -36,10 +38,19 @@ youtube-automation/
 │   │   ├── trends.py        # Google Trends
 │   │   ├── reddit.py        # Reddit API
 │   │   └── idea_generator.py # AI idea generation
-│   ├── content/             # Content creation
+│   ├── content/             # Content creation (short-form only)
 │   │   ├── script_writer.py # Multi-provider AI scripts
 │   │   ├── tts.py           # Edge-TTS voice generation
-│   │   └── video_assembler.py # MoviePy video creation
+│   │   ├── video_utils.py   # Shared FFmpeg utilities (find_ffmpeg, two_pass_encode)
+│   │   ├── video_fast.py    # Fast short-form video generation
+│   │   ├── video_shorts.py  # YouTube Shorts optimized encoding
+│   │   ├── video_assembler.py # MoviePy video creation
+│   │   └── audio_processor.py # Audio normalization and enhancement
+│   ├── social/              # Social media distribution (NEW: Phase 3B)
+│   │   ├── platform_base.py # BasePoster mixin for shared functionality
+│   │   ├── social_utils.py  # HTTP error parsing, video writing utilities
+│   │   ├── social_poster.py # Multi-platform posting (Twitter, Reddit, Discord, etc)
+│   │   └── multi_platform.py # Multi-platform coordinator
 │   ├── youtube/             # YouTube API
 │   │   ├── auth.py          # OAuth2 authentication
 │   │   └── uploader.py      # Video upload
@@ -92,6 +103,36 @@ from src.content.script_writer import get_provider
 ai = get_provider("ollama")  # Free, local
 ai = get_provider("groq", api_key="...")  # Free, cloud
 ai = get_provider("claude", api_key="...")  # Paid, best
+```
+
+### Social Media Consolidation (Phase 3B)
+All social posters inherit from `BasePoster` mixin for shared functionality:
+```python
+from src.social.social_poster import TwitterPoster, RedditPoster
+from src.social.platform_base import BasePoster
+
+# All posters share:
+# - guard_unconfigured() - unified "not configured" handling
+# - _simulate_post() - simulation mode for testing
+# - _execute_with_library() - unified error handling for optional dependencies
+
+poster = TwitterPoster()
+result = poster.post(content)  # Returns {"success": bool, "simulated": bool, ...}
+```
+
+### Shared FFmpeg Utilities (Phase 3A)
+FFmpeg operations consolidated in `src/content/video_utils.py`:
+```python
+from src.content.video_utils import find_ffmpeg, two_pass_encode, FFMPEG_PARAMS_SHORTS
+
+ffmpeg_path = find_ffmpeg()  # Finds FFmpeg binary
+output = two_pass_encode(
+    input_file="raw.mp4",
+    output_file="encoded.mp4",
+    ffmpeg_path=ffmpeg_path,
+    encoding_preset="slow",
+    ffmpeg_params=FFMPEG_PARAMS_SHORTS
+)
 ```
 
 ### Edge-TTS Usage (Async)
@@ -183,7 +224,8 @@ print(result.video_url)
 
 - MoviePy TextClip requires ImageMagick on some systems
 - Edge-TTS may be rate-limited with heavy use
-- YouTube API has 10,000 quota units/day limit
+- YouTube Shorts has 9:16 aspect ratio requirement (1080x1920)
+- Short-form video max duration: YouTube Shorts (60s), TikTok (10m), Instagram Reels (90s)
 
 ## Claude Code Preferences
 
@@ -216,77 +258,41 @@ When working on this project, Claude should:
    - Run pre-publish checklist before uploading videos
    - Follow viral title patterns, hook formulas, and retention techniques
 
-## Recent Updates (2026-01-19) - MAJOR UPGRADE
+## Recent Updates (2026-03-05) - SHORT-FORM REFACTOR
 
-### 50% System Upgrade - New Components Added
+### Phase 3A: Shared Video Utilities Consolidation
+- [x] **Extracted FFmpeg operations** into `src/content/video_utils.py`
+- [x] **Consolidated find_ffmpeg()** - Single source of truth (removed 200+ lines of duplicate code)
+- [x] **Consolidated two_pass_encode()** - Unified H.264 encoding with standard parameters
+- [x] **Shared FFmpeg constants** - FFMPEG_PARAMS_REGULAR, FFMPEG_PARAMS_SHORTS for consistent encoding
 
-#### Token Efficiency System (NEW)
-- [x] **TokenOptimizer** - 50% reduction in API costs
-- [x] **PromptCache** - Cache repeated prompts and responses
-- [x] **SmartProviderRouter** - Auto-route to cheapest provider
-- [x] **BatchProcessor** - Combine multiple requests
-- [x] **EfficientPrompts** - Minimized prompt templates
+### Phase 3B: Social Media Consolidation
+- [x] **Created BasePoster mixin** (`src/social/platform_base.py`) - Shared functionality for all social posters
+- [x] **Created social_utils.py** - HTTP error parsing, video writing utilities, VideoInfo dataclass
+- [x] **Unified error handling** - All platforms use consistent error response format
+- [x] **Simulation mode** - All posters support testing without API calls
+- [x] **Library execution wrapper** - Unified handling for optional dependencies
 
-#### Viral Content Engine (NEW)
-- [x] **ViralHookGenerator** - 10+ proven hook formulas per niche
-- [x] **EmotionalArcBuilder** - Story structure with peaks/valleys
-- [x] **CuriosityGapCreator** - Open loops that drive retention
-- [x] **MicroPayoffScheduler** - Rewards every 30-60 seconds
-- [x] **PatternInterruptLibrary** - 20+ visual/audio interrupts
+### Phase 3C: Long-Form Removal
+- [x] **Removed video_ultra.py** (116KB) - Ultra high-quality long-form generation
+- [x] **Removed video_pro.py** (30KB) - Professional long-form content
+- [x] **Removed pro_video_engine.py** (82KB) - Complex long-form video engine
+- [x] **Removed ai_video_runway.py** (35KB) - Runway ML provider (long-form only)
+- [x] **Removed ai_video_hailuo.py** (26KB) - Hailuo AI provider (long-form only)
+- [x] **Updated all imports** across 10+ files to reference only short-form generators
 
-#### Pro Video Engine (NEW)
-- [x] **CinematicTransitions** - 20+ professional transitions
-- [x] **DynamicTextAnimations** - Kinetic typography system
-- [x] **VisualBeatSync** - Sync visuals to audio beats
-- [x] **ColorGradingPresets** - Film-look color grades
-- [x] **MotionGraphicsLibrary** - Lower thirds, callouts
+### Phase 4: Integration Testing & Quality Assurance
+- [x] **Created test suite** (38 tests total)
+  - 8 import tests verifying circular dependency prevention
+  - 14 BasePoster unit tests for shared functionality
+  - 16 social_utils unit tests for utilities
+- [x] **100% test pass rate** - All phases 3A-3B consolidations verified
 
-#### SEO Intelligence System (NEW)
-- [x] **KeywordResearcher** - Low-competition, high-volume keywords
-- [x] **TrendPredictor** - Identify rising topics before peak
-- [x] **CompetitorAnalyzer** - Analyze top performers
-- [x] **MetadataOptimizer** - A/B test-ready titles/descriptions
-
-#### Smart Scheduler (NEW)
-- [x] **OptimalTimeCalculator** - Best upload times per niche
-- [x] **AudienceTimezoneAnalyzer** - Post when audience is active
-- [x] **ContentCalendar** - Weekly/monthly planning
-- [x] **BatchScheduler** - Schedule multiple videos
-
-#### Unified Orchestration (NEW)
-- [x] **MasterOrchestrator** - Central control for all 19 agents
-- [x] **AgentCommunication** - Pub/sub messaging between agents
-- [x] **PipelineOrchestrator** - Parallel pipeline execution
-- [x] **WorkflowTemplates** - Pre-built video creation workflows
-
-#### Success Tracking (NEW)
-- [x] **SuccessTracker** - KPI tracking and goal progress
-- [x] **GrowthRoadmap** - Strategic plan for channel success
-
-### New Files Added (400KB+ new code)
-- `src/utils/token_optimizer.py` - Token efficiency system (55KB)
-- `src/content/viral_content_engine.py` - Viral content engine (57KB)
-- `src/content/pro_video_engine.py` - Pro video production (82KB)
-- `src/seo/keyword_intelligence.py` - SEO intelligence (73KB)
-- `src/scheduler/smart_scheduler.py` - Smart scheduling (48KB)
-- `src/agents/master_orchestrator.py` - Master orchestration (51KB)
-- `src/agents/agent_communication.py` - Agent messaging (55KB)
-- `src/automation/pipeline_orchestrator.py` - Pipeline control (50KB)
-- `src/automation/unified_launcher.py` - Unified launcher
-- `src/analytics/success_tracker.py` - Success tracking
-- `src/templates/efficient_prompts.py` - Efficient prompts
-- `docs/GROWTH_ROADMAP.md` - Growth strategy document
-
-### New Commands
-```bash
-# Unified Launcher
-python -c "from src.automation import daily_all; daily_all()"
-python -c "from src.automation import quick_video; quick_video('money_blueprints')"
-python -c "from src.automation import parallel_batch; parallel_batch(['money_blueprints'], 3)"
-
-# Success Tracking
-python -c "from src.analytics.success_tracker import get_success_tracker; get_success_tracker().print_dashboard()"
-```
+### New Files Added (Test Suite)
+- `pytest.ini` - pytest configuration for test discovery
+- `tests/unit/test_platform_base.py` - 14 tests for BasePoster mixin
+- `tests/unit/test_social_utils.py` - 16 tests for utility functions
+- `tests/integration/test_imports.py` - 8 tests for imports and circular dependencies
 
 ---
 
@@ -739,7 +745,24 @@ python run.py cache-stats
 python run.py cache-stats --cleanup
 ```
 
+## Architecture Notes (Phase 3A-3B Refactor)
+
+### Consolidation Patterns
+1. **Avoid Duplication** - FFmpeg operations, error handling, and simulation logic consolidated
+2. **Shared Mixins** - BasePoster provides template for social platform integration
+3. **Utility Modules** - video_utils.py, social_utils.py contain reusable functions
+4. **Test Coverage** - All new modules covered by comprehensive test suite
+
+### Long-Form Removal Rationale
+Decision made March 5, 2026: Focus on short-form only. Removed:
+- 289 KB of long-form video generation code
+- Runway ML and Hailuo AI providers (long-form only)
+- All pro_video_engine and video_ultra/video_pro code
+- This simplified the codebase and clarified the product focus
+
 ## Future Improvements
 
-- [ ] Add screen recording simulation with Playwright
-- [ ] Integrate VidIQ/TubeBuddy API for SEO
+- [ ] Add pattern interrupt optimization for short-form engagement
+- [ ] Integrate TikTok trending sounds API
+- [ ] Add auto-caption styling for different platforms
+- [ ] Implement A/B testing for thumbnail effectiveness

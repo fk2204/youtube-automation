@@ -433,7 +433,6 @@ def get_cleanup_directories() -> List[Path]:
         PROJECT_ROOT / "data" / "stock_cache",
         PROJECT_ROOT / "cache",
         PROJECT_ROOT / "logs",
-        Path(tempfile.gettempdir()) / "video_ultra",
         Path(tempfile.gettempdir()) / "video_shorts",
         Path(tempfile.gettempdir()) / "video_fast",
     ]

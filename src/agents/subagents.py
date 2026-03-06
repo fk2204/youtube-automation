@@ -32,8 +32,6 @@ from ..research.idea_generator import IdeaGenerator, ScoredIdea
 from ..content.script_writer import ScriptWriter, VideoScript
 from ..content.tts import TextToSpeech
 from ..content.video_fast import FastVideoGenerator
-from ..content.video_pro import ProVideoGenerator
-from ..content.video_ultra import UltraVideoGenerator
 
 
 @dataclass
@@ -169,11 +167,6 @@ class ScriptAgent:
         """Extract full narration from script."""
         return self.writer.get_full_narration(script)
 
-    def improve_hook(self, script: VideoScript) -> VideoScript:
-        """Improve the opening hook of a script."""
-        # TODO: Implement hook optimization
-        return script
-
 
 # ============================================================
 # PRODUCTION AGENT
@@ -188,29 +181,10 @@ class ProductionAgent:
     - Generate thumbnails
     """
 
-    def __init__(self, voice: str = "en-US-GuyNeural", use_ultra: bool = True):
+    def __init__(self, voice: str = "en-US-GuyNeural"):
         self.name = "ProductionAgent"
         self.tts = TextToSpeech(default_voice=voice)
         self.video_gen = FastVideoGenerator()
-        self.use_ultra = use_ultra
-
-        # Ultra video generator with Ken Burns, stock footage, animations
-        if use_ultra:
-            try:
-                self.ultra_video_gen = UltraVideoGenerator()
-                logger.info(f"{self.name} initialized with ULTRA video generator (Ken Burns + Stock)")
-            except Exception as e:
-                logger.warning(f"Ultra video generator unavailable: {e}")
-                # Fallback to Pro
-                try:
-                    self.ultra_video_gen = ProVideoGenerator()
-                    logger.info(f"{self.name} falling back to PRO video generator")
-                except Exception as e2:
-                    logger.warning(f"Pro video generator also unavailable: {e2}")
-                    self.ultra_video_gen = None
-                    self.use_ultra = False
-        else:
-            self.ultra_video_gen = None
 
         self.output_dir = Path("output")
         self.output_dir.mkdir(exist_ok=True)
@@ -308,51 +282,21 @@ class ProductionAgent:
         if not audio_file:
             return {"audio": None, "video": None, "thumbnail": None}
 
-        # Create video (use ULTRA generator with Ken Burns if available)
+        # Create video using FastVideoGenerator
         video_path = str(self.output_dir / f"{safe_name}.mp4")
-
-        if self.use_ultra and self.ultra_video_gen:
-            logger.info(f"[{self.name}] Using ULTRA video generator (Ken Burns + Stock Footage)")
-            video_file = self.ultra_video_gen.create_video(
-                audio_file=audio_file,
-                script=script,
-                output_file=video_path,
-                niche=niche,
-                subtitles_enabled=True,  # Enable burned-in subtitles for 15-25% retention boost
-                subtitle_style="regular"  # Use regular style, can be customized per niche
-            )
-        else:
-            # Fallback to basic video generator
-            video_file = self.create_video(
-                audio_file,
-                script.title,
-                f"{safe_name}.mp4"
-            )
+        video_file = self.create_video(
+            audio_file,
+            script.title,
+            f"{safe_name}.mp4"
+        )
 
         # Create thumbnail
         thumb_path = str(self.output_dir / f"{safe_name}_thumb.png")
-
-        if self.use_ultra and hasattr(self.ultra_video_gen, 'create_title_card'):
-            # Use ULTRA title card as thumbnail
-            self.ultra_video_gen.create_title_card(
-                title=script.title,
-                output_path=thumb_path,
-                style=self.ultra_video_gen.NICHE_STYLES.get(niche, self.ultra_video_gen.NICHE_STYLES["default"]),
-                subtitle=script.description[:50] if script.description else None
-            )
-            thumbnail_file = thumb_path if os.path.exists(thumb_path) else None
-        elif self.use_ultra and hasattr(self.ultra_video_gen, 'create_thumbnail_pro'):
-            thumbnail_file = self.ultra_video_gen.create_thumbnail_pro(
-                title=script.title,
-                output_file=thumb_path,
-                niche=niche
-            )
-        else:
-            thumbnail_file = self.create_thumbnail(
-                script.title,
-                f"{safe_name}_thumb.png",
-                subtitle=script.description[:50] if script.description else None
-            )
+        thumbnail_file = self.create_thumbnail(
+            script.title,
+            f"{safe_name}_thumb.png",
+            subtitle=script.description[:50] if script.description else None
+        )
 
         return {
             "audio": audio_file,

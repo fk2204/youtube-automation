@@ -34,6 +34,9 @@ from enum import Enum
 from loguru import logger
 import yaml
 
+# Import canonical BaseAgent
+from src.agents.base_agent import BaseAgent
+
 try:
     from apscheduler.schedulers.background import BackgroundScheduler
     from apscheduler.schedulers.blocking import BlockingScheduler
@@ -103,19 +106,6 @@ class ScheduledJob:
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
-
-
-class BaseAgent:
-    """Base class for all agents."""
-
-    def __init__(self, name: str):
-        self.name = name
-        self.state_dir = Path("data")
-        self.state_dir.mkdir(parents=True, exist_ok=True)
-
-    def run(self, **kwargs) -> Any:
-        """Execute the agent's main function. Must be implemented by subclasses."""
-        raise NotImplementedError("Subclasses must implement run()")
 
 
 class SchedulerAgent(BaseAgent):

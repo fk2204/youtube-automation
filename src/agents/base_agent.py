@@ -14,7 +14,12 @@ import functools
 
 # Import existing utilities
 import sys
-sys.path.insert(0, 'C:/Users/fkozi/youtube-automation')
+from pathlib import Path
+
+# Add project root to path (for imports)
+project_root = Path(__file__).parent.parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 
 @dataclass
@@ -136,10 +141,44 @@ def handle_agent_errors(func):
 class BaseAgent(ABC):
     """Base class for all YouTube automation agents."""
 
-    def __init__(self, provider: str = "groq", api_key: str = None):
-        self.name = self.__class__.__name__
-        self.provider = provider
-        self.api_key = api_key
+    def __init__(self, name: str = None, provider: str = "groq", api_key: str = None):
+        """
+        Initialize BaseAgent.
+
+        Supports both calling patterns:
+        - Canonical: BaseAgent(provider="groq", api_key="...")
+        - Legacy stub: BaseAgent("MonitorAgent") or BaseAgent(name="MonitorAgent")
+
+        Args:
+            name: Optional agent name (if provided as first positional arg or keyword)
+            provider: AI provider to use (default: groq)
+            api_key: API key for provider
+        """
+        # Support legacy stub calling pattern: super().__init__("AgentName")
+        # The first positional arg might be a name (string) instead of provider
+        if isinstance(name, str) and provider == "groq":
+            # If name looks like an agent name and provider is default, assume legacy pattern
+            self.name = name
+            self.provider = provider
+        else:
+            # Canonical pattern: name parameter is actually the provider
+            self.name = self.__class__.__name__
+            self.provider = name if isinstance(name, str) else provider
+            self.api_key = provider if api_key is None and isinstance(name, str) else api_key
+
+        # If name wasn't set by above logic, use class name
+        if not hasattr(self, 'name'):
+            self.name = self.__class__.__name__
+
+        # Set API key if provided
+        if not hasattr(self, 'api_key'):
+            self.api_key = api_key
+
+        # State directory for agents that need persistent storage
+        self.state_dir = Path("data")
+        if not self.state_dir.exists():
+            self.state_dir.mkdir(parents=True, exist_ok=True)
+
         self._start_time = None
 
         # Try to import utilities
@@ -149,7 +188,7 @@ class BaseAgent(ABC):
         except:
             self.tracker = None
 
-        logger.info(f"{self.name} initialized with provider={provider}")
+        logger.info(f"{self.name} initialized with provider={self.provider}")
 
     @abstractmethod
     def run(self, **kwargs) -> AgentResult:
@@ -249,3 +288,48 @@ class BaseAgent(ABC):
                 duration = time.time() - self.start
                 logger.debug(f"{self.agent.name}.{self.name} took {duration:.2f}s")
         return Timer(self, operation_name)
+
+    def _save_state(self, filename: str, state: Dict[str, Any]) -> bool:
+        """
+        Save agent state to a JSON file.
+
+        Args:
+            filename: Filename within state_dir to save to
+            state: Dictionary of state data to save
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            import json
+            filepath = self.state_dir / filename
+            with open(filepath, 'w') as f:
+                json.dump(state, f, indent=2, default=str)
+            logger.debug(f"{self.name}: Saved state to {filepath}")
+            return True
+        except Exception as e:
+            logger.error(f"{self.name}: Failed to save state: {e}")
+            return False
+
+    def _load_state(self, filename: str) -> Optional[Dict[str, Any]]:
+        """
+        Load agent state from a JSON file.
+
+        Args:
+            filename: Filename within state_dir to load from
+
+        Returns:
+            Dictionary of state data, or None if file doesn't exist or load fails
+        """
+        try:
+            import json
+            filepath = self.state_dir / filename
+            if not filepath.exists():
+                return None
+            with open(filepath, 'r') as f:
+                state = json.load(f)
+            logger.debug(f"{self.name}: Loaded state from {filepath}")
+            return state
+        except Exception as e:
+            logger.error(f"{self.name}: Failed to load state: {e}")
+            return None

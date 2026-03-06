@@ -18,6 +18,10 @@ import threading
 import time
 from loguru import logger
 
+# Import shared poster base class
+from .platform_base import BasePoster
+from .social_utils import parse_http_error
+
 
 class Platform(Enum):
     TWITTER = "twitter"
@@ -80,10 +84,11 @@ class SocialPlatform(ABC):
         return True, ""
 
 
-class TwitterPoster(SocialPlatform):
+class TwitterPoster(SocialPlatform, BasePoster):
     """Twitter/X posting integration."""
 
     MAX_TWEET_LENGTH = 280
+    platform_name = "Twitter/X"
 
     def __init__(self):
         self.api_key = os.getenv("TWITTER_API_KEY")
@@ -93,7 +98,7 @@ class TwitterPoster(SocialPlatform):
         self.bearer_token = os.getenv("TWITTER_BEARER_TOKEN")
 
     def get_platform_name(self) -> str:
-        return "Twitter/X"
+        return self.platform_name
 
     def is_configured(self) -> bool:
         return all([self.api_key, self.api_secret, self.access_token, self.access_secret])
@@ -108,15 +113,10 @@ class TwitterPoster(SocialPlatform):
 
     def post(self, content: str, url: str = None, image: str = None, **kwargs) -> Dict[str, Any]:
         """Post to Twitter using Twitter API v2."""
-        if not self.is_configured():
-            logger.warning("[Twitter] Not configured - would post: {}", content[:50])
-            return {
-                "success": False,
-                "error": "Twitter not configured - missing API credentials",
-                "platform": "twitter",
-                "simulated": True,
-                "content_preview": content[:100]
-            }
+        # Guard: check if configured
+        guard = self.guard_unconfigured(content)
+        if guard:
+            return guard
 
         # Validate content
         is_valid, error_msg = self.validate_content(content)
@@ -164,24 +164,11 @@ class TwitterPoster(SocialPlatform):
             logger.error("[Twitter] Failed to post: {}", str(e))
             return {"success": False, "error": str(e), "platform": "twitter"}
 
-    def _simulate_post(self, content: str, url: str = None, image: str = None) -> Dict[str, Any]:
-        """Simulate a post when API is not available."""
-        logger.info("[Twitter] SIMULATED POST:")
-        logger.info("  Content: {}", content)
-        if url:
-            logger.info("  URL: {}", url)
-        if image:
-            logger.info("  Image: {}", image)
-        return {
-            "success": True,
-            "post_id": f"sim_tweet_{int(time.time())}",
-            "platform": "twitter",
-            "simulated": True
-        }
 
-
-class RedditPoster(SocialPlatform):
+class RedditPoster(SocialPlatform, BasePoster):
     """Reddit posting integration."""
+
+    platform_name = "Reddit"
 
     def __init__(self):
         self.client_id = os.getenv("REDDIT_CLIENT_ID")
@@ -191,7 +178,7 @@ class RedditPoster(SocialPlatform):
         self.user_agent = os.getenv("REDDIT_USER_AGENT", "youtube-automation-bot/1.0")
 
     def get_platform_name(self) -> str:
-        return "Reddit"
+        return self.platform_name
 
     def is_configured(self) -> bool:
         return all([self.client_id, self.client_secret, self.username, self.password])

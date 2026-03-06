@@ -888,7 +888,7 @@ def show_status():
     print("  Directories cleaned:")
     print("    - output/videos, output/audio, output/thumbnails, output/shorts")
     print("    - data/stock_cache, cache, logs")
-    print("    - System temp (video_ultra, video_shorts, video_fast)")
+    print("    - System temp (video_shorts, video_fast)")
     print()
 
     # Show current disk usage summary

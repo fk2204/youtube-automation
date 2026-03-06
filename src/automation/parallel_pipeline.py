@@ -368,14 +368,13 @@ class ParallelVideoPipeline:
     ) -> str:
         """Encode video using GPU queue."""
         async def encode_func(data: Dict) -> str:
-            from src.content.video_ultra import UltraVideoGenerator
+            from src.content.video_fast import FastVideoGenerator
 
-            generator = UltraVideoGenerator()
+            generator = FastVideoGenerator()
             output_file = Path("output") / f"{task.channel_id}_{task.topic[:30]}.mp4"
 
             generator.create_video(
                 audio_file=data["audio_file"],
-                footage_files=data["footage_files"],
                 output_file=str(output_file),
                 title=script.get("title", task.topic)
             )

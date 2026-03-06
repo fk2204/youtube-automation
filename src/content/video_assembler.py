@@ -28,6 +28,9 @@ from typing import List, Dict, Optional, Tuple, Union
 from dataclasses import dataclass
 from loguru import logger
 
+# Import shared video utilities
+from .video_utils import two_pass_encode as _two_pass_encode, find_ffmpeg, FFMPEG_PARAMS_REGULAR, FFMPEG_PARAMS_SHORTS
+
 # Import audio processor for normalization
 try:
     from .audio_processor import AudioProcessor
@@ -127,6 +130,9 @@ class VideoAssembler:
             self.encoding_preset = "medium"  # Balanced quality/speed for regular videos
             self.ffmpeg_params = self.FFMPEG_PARAMS_REGULAR
 
+        # Find FFmpeg executable
+        self.ffmpeg = find_ffmpeg() or "ffmpeg"
+
         # Check for hardware acceleration
         self._nvenc_available = None  # Lazy detection
 
@@ -213,66 +219,15 @@ class VideoAssembler:
         Returns:
             Path to encoded file or None on failure
         """
-        import tempfile
-        passlog = tempfile.mktemp(prefix="ffmpeg_pass_")
-
-        try:
-            # Pass 1: Analysis
-            pass1_cmd = [
-                "ffmpeg", "-y",
-                "-i", input_file,
-                "-c:v", "libx264",
-                "-preset", self.encoding_preset,
-                "-b:v", target_bitrate,
-                "-maxrate", max_bitrate,
-                "-bufsize", "16M",
-                "-pass", "1",
-                "-passlogfile", passlog,
-                "-an",  # No audio for pass 1
-                "-f", "null",
-                "NUL" if os.name == "nt" else "/dev/null"
-            ]
-
-            logger.info("Two-pass encoding: Pass 1 (analysis)...")
-            subprocess.run(pass1_cmd, capture_output=True, timeout=600)
-
-            # Pass 2: Encode
-            pass2_cmd = [
-                "ffmpeg", "-y",
-                "-i", input_file,
-                "-c:v", "libx264",
-                "-preset", self.encoding_preset,
-                "-b:v", target_bitrate,
-                "-maxrate", max_bitrate,
-                "-bufsize", "16M",
-                "-pass", "2",
-                "-passlogfile", passlog,
-                "-c:a", "aac",
-                "-b:a", "256k",
-            ] + self.FFMPEG_PARAMS_REGULAR + [output_file]
-
-            logger.info("Two-pass encoding: Pass 2 (encoding)...")
-            result = subprocess.run(pass2_cmd, capture_output=True, timeout=600)
-
-            if os.path.exists(output_file):
-                logger.success(f"Two-pass encoding complete: {output_file}")
-                return output_file
-
-            logger.error(f"Two-pass encoding failed: {result.stderr.decode()[:500]}")
-            return None
-
-        except Exception as e:
-            logger.error(f"Two-pass encoding error: {e}")
-            return None
-        finally:
-            # Cleanup passlog files
-            for ext in ["", "-0.log", "-0.log.mbtree"]:
-                try:
-                    log_file = passlog + ext
-                    if os.path.exists(log_file):
-                        os.remove(log_file)
-                except Exception:
-                    pass
+        return _two_pass_encode(
+            input_file=input_file,
+            output_file=output_file,
+            ffmpeg_path=self.ffmpeg,
+            encoding_preset=self.encoding_preset,
+            ffmpeg_params=self.ffmpeg_params,
+            target_bitrate=target_bitrate,
+            max_bitrate=max_bitrate,
+        )
 
     def create_text_clip(
         self,

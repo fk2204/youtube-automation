@@ -247,18 +247,28 @@ class NaturalPacingInjector:
     """
     Injects natural pacing elements into scripts to make TTS sound more human.
 
-    This class adds breath markers, pauses after transition words, and emphasis
-    markers to create more natural-sounding speech that is less likely to be
-    detected as AI-generated.
+    This consolidated class adds breath markers, pauses after transition words, and emphasis
+    markers to create more natural-sounding speech that is less likely to be detected as AI-generated.
 
     Features:
     - Breath markers after long sentences (> 20 words)
     - Pauses after transition words (however, therefore, but, so, now, finally)
     - Emphasis markers for key words
+    - Rhythm variations and dynamic pacing
+    - Custom marker support
+
+    NOTE: This class merges two separate implementations into a single unified interface
+    that supports both SSML-based pacing (inject_natural_pacing) and marker-based pacing
+    (add_natural_pacing). Both APIs are fully functional and can be used interchangeably.
 
     Usage:
+        # SSML-based approach
         injector = NaturalPacingInjector()
         natural_script = injector.inject_natural_pacing("Your script text here...")
+
+        # Marker-based approach
+        pacer = NaturalPacingInjector(breath_marker="<breath/>")
+        paced_narration = pacer.add_natural_pacing(narration)
     """
 
     # Transition words that benefit from a pause after them
@@ -270,6 +280,14 @@ class NaturalPacingInjector:
         "first", "second", "third", "lastly", "ultimately"
     ]
 
+    # Extended pause words list (from v2 implementation)
+    PAUSE_AFTER_WORDS = [
+        'however', 'therefore', 'furthermore', 'moreover', 'additionally',
+        'consequently', 'nevertheless', 'meanwhile', 'but', 'so', 'and',
+        'now', 'first', 'second', 'third', 'finally', 'next', 'then',
+        'importantly', 'interestingly', 'surprisingly', 'actually',
+    ]
+
     # Words that often deserve emphasis in educational/informational content
     EMPHASIS_WORDS = [
         "critical", "crucial", "essential", "important", "key",
@@ -278,7 +296,14 @@ class NaturalPacingInjector:
         "revolutionary", "breakthrough", "powerful", "guaranteed"
     ]
 
-    # Pause durations in milliseconds
+    # Extended emphasis words (from v2 implementation)
+    EMPHASIS_WORDS_EXTENDED = [
+        'never', 'always', 'every', 'absolutely', 'completely', 'totally',
+        'exactly', 'precisely', 'definitely', 'certainly', 'critical',
+        'essential', 'crucial', 'important', 'key', 'major', 'significant',
+    ]
+
+    # Pause durations in milliseconds (SSML approach)
     PAUSE_BREATH = 250       # Short breath pause
     PAUSE_TRANSITION = 350   # After transition words
     PAUSE_EMPHASIS = 200     # Before emphasized words
@@ -288,7 +313,10 @@ class NaturalPacingInjector:
         long_sentence_threshold: int = 20,
         enable_breath_markers: bool = True,
         enable_transition_pauses: bool = True,
-        enable_emphasis_markers: bool = True
+        enable_emphasis_markers: bool = True,
+        breath_marker: str = "<breath/>",
+        short_pause_marker: str = "<pause:short/>",
+        medium_pause_marker: str = "<pause:medium/>"
     ):
         """
         Initialize the NaturalPacingInjector.
@@ -298,11 +326,17 @@ class NaturalPacingInjector:
             enable_breath_markers: Add breath pauses after long sentences. Default: True
             enable_transition_pauses: Add pauses after transition words. Default: True
             enable_emphasis_markers: Add emphasis to key words. Default: True
+            breath_marker: Marker for breath pauses (default: <breath/>)
+            short_pause_marker: Marker for short pauses (default: <pause:short/>)
+            medium_pause_marker: Marker for medium pauses (default: <pause:medium/>)
         """
         self.long_sentence_threshold = long_sentence_threshold
         self.enable_breath_markers = enable_breath_markers
         self.enable_transition_pauses = enable_transition_pauses
         self.enable_emphasis_markers = enable_emphasis_markers
+        self.breath_marker = breath_marker
+        self.short_pause_marker = short_pause_marker
+        self.medium_pause_marker = medium_pause_marker
 
         logger.debug(f"NaturalPacingInjector initialized: threshold={long_sentence_threshold} words")
 
@@ -312,9 +346,19 @@ class NaturalPacingInjector:
         sentences = re.split(sentence_pattern, text.strip())
         return [s.strip() for s in sentences if s.strip()]
 
+    def _count_words(self, text: str) -> int:
+        """Count words in text."""
+        return len(text.split())
+
+    def _is_long_sentence(self, sentence: str, threshold: int = 25) -> bool:
+        """Check if a sentence is long enough to need a breath marker."""
+        return self._count_words(sentence) >= threshold
+
+    # ============ SSML-based methods (v1) ============
+
     def add_breath_markers(self, text: str) -> str:
         """
-        Add breath pause markers after sentences longer than threshold.
+        Add breath pause markers after sentences longer than threshold (SSML format).
 
         Sentences with more than 20 words (default) get a short breath pause
         at the end to allow for natural breathing rhythm.
@@ -345,7 +389,7 @@ class NaturalPacingInjector:
 
     def add_transition_pauses(self, text: str) -> str:
         """
-        Add pauses after transition words.
+        Add pauses after transition words (SSML format).
 
         Transition words like "however", "therefore", "but" naturally
         have a brief pause after them in human speech.
@@ -381,7 +425,7 @@ class NaturalPacingInjector:
 
     def add_emphasis_markers(self, text: str) -> str:
         """
-        Add emphasis markers before key words.
+        Add emphasis markers before key words (SSML format).
 
         Adds SSML emphasis tags around words that should be stressed
         to convey importance or emotion.
@@ -409,7 +453,7 @@ class NaturalPacingInjector:
 
     def inject_natural_pacing(self, text: str) -> str:
         """
-        Apply all natural pacing injections to the text.
+        Apply all natural pacing injections to the text (SSML-based).
 
         This method combines:
         1. Breath markers after long sentences
@@ -458,6 +502,189 @@ class NaturalPacingInjector:
 
         logger.info(f"Processed {len(processed_sections)} sections with natural pacing")
         return processed_sections
+
+    # ============ Marker-based methods (v2) ============
+
+    def inject_breath_markers(self, narration: str, word_threshold: int = 25) -> str:
+        """
+        Add breath markers after long sentences (marker-based format).
+
+        Long sentences (25+ words by default) get a breath marker at the end
+        to create natural pauses in TTS delivery.
+
+        Args:
+            narration: The original narration text
+            word_threshold: Sentences with this many or more words get breath markers
+
+        Returns:
+            Narration with breath markers added
+        """
+        if not narration:
+            return narration
+
+        # Split into sentences
+        sentences = re.split(r'(?<=[.!?])\s+', narration)
+        result_sentences = []
+
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+
+            if self._is_long_sentence(sentence, word_threshold):
+                # Add breath marker after the sentence
+                result_sentences.append(f"{sentence} {self.breath_marker}")
+            else:
+                result_sentences.append(sentence)
+
+        return ' '.join(result_sentences)
+
+    def inject_pause_markers(self, narration: str) -> str:
+        """
+        Add pause markers after transition words (marker-based format).
+
+        Transition words like 'however', 'therefore', 'but', 'so' benefit
+        from a slight pause to improve comprehension and natural rhythm.
+
+        Args:
+            narration: The original narration text
+
+        Returns:
+            Narration with pause markers added
+        """
+        if not narration:
+            return narration
+
+        result = narration
+
+        # Add pauses after transition words at sentence starts
+        for word in self.PAUSE_AFTER_WORDS:
+            # Pattern: word at start of sentence or after punctuation
+            # Add comma if not already present (creates natural pause)
+            pattern = rf'(?<=[.!?]\s)({word})\s+(?!,)'
+            result = re.sub(
+                pattern,
+                rf'\1, ',
+                result,
+                flags=re.IGNORECASE
+            )
+
+            # Also handle sentence starts
+            pattern = rf'^({word})\s+(?!,)'
+            result = re.sub(
+                pattern,
+                rf'\1, ',
+                result,
+                flags=re.IGNORECASE | re.MULTILINE
+            )
+
+        return result
+
+    def inject_rhythm_variations(self, narration: str) -> str:
+        """
+        Add natural rhythm variations through punctuation and markers (marker-based format).
+
+        Creates more dynamic pacing by:
+        - Adding emphasis pauses before important words
+        - Breaking up monotonous sequences
+        - Adding natural comma pauses in long clauses
+
+        Args:
+            narration: The original narration text
+
+        Returns:
+            Narration with rhythm variations added
+        """
+        if not narration:
+            return narration
+
+        result = narration
+
+        # Add short pauses before emphasis words (if no comma already)
+        for word in self.EMPHASIS_WORDS_EXTENDED:
+            # Pattern: space before emphasis word (not at sentence start)
+            pattern = rf'(?<=[a-z])\s+({word})\b'
+            replacement = rf' - \1'  # Em-dash creates natural pause
+            result = re.sub(pattern, replacement, result, flags=re.IGNORECASE, count=3)
+
+        # Break up long clauses with commas
+        # Pattern: long sequence without punctuation (30+ chars between punctuation)
+        def add_clause_break(match):
+            text = match.group(0)
+            words = text.split()
+            if len(words) > 8:
+                # Add comma after ~half the words
+                mid = len(words) // 2
+                words[mid] = words[mid] + ','
+                return ' '.join(words)
+            return text
+
+        # Find long stretches without punctuation
+        pattern = r'[^.!?,;:]{80,}'
+        result = re.sub(pattern, add_clause_break, result)
+
+        return result
+
+    def add_natural_pacing(self, narration: str) -> str:
+        """
+        Main method that applies all pacing improvements (marker-based format).
+
+        Combines breath markers, pause markers, and rhythm variations
+        for natural-sounding TTS delivery.
+
+        Args:
+            narration: The original narration text
+
+        Returns:
+            Narration with full natural pacing applied
+        """
+        if not narration:
+            return narration
+
+        # Apply pacing techniques in order
+        paced = narration
+
+        # 1. Add pause markers after transition words
+        paced = self.inject_pause_markers(paced)
+
+        # 2. Add rhythm variations
+        paced = self.inject_rhythm_variations(paced)
+
+        # 3. Add breath markers after long sentences (do this last)
+        paced = self.inject_breath_markers(paced)
+
+        logger.debug("Natural pacing markers added to narration")
+
+        return paced
+
+    def remove_pacing_markers(self, narration: str) -> str:
+        """
+        Remove all pacing markers from narration.
+
+        Useful if you need clean text for display or other processing.
+
+        Args:
+            narration: Narration with pacing markers
+
+        Returns:
+            Clean narration without markers
+        """
+        if not narration:
+            return narration
+
+        result = narration
+
+        # Remove breath markers
+        result = result.replace(self.breath_marker, '')
+
+        # Remove pause markers
+        result = result.replace(self.short_pause_marker, '')
+        result = result.replace(self.medium_pause_marker, '')
+
+        # Clean up any double spaces
+        result = re.sub(r'\s+', ' ', result)
+
+        return result.strip()
 
 
 # ============================================================
@@ -2219,34 +2446,6 @@ Please provide an improved version of the script in the same JSON format, addres
 
         return hook
 
-    @staticmethod
-    def get_viral_title_templates(niche: str) -> List[str]:
-        """
-        Get all viral title templates for a niche.
-
-        Args:
-            niche: Content niche (finance, psychology, storytelling)
-
-        Returns:
-            List of title template strings
-        """
-        return VIRAL_TITLE_TEMPLATES.get(niche, VIRAL_TITLE_TEMPLATES.get("finance", []))
-
-    @staticmethod
-    def get_hook_formulas(niche: str) -> List[str]:
-        """
-        Get all hook formulas for a niche.
-
-        Args:
-            niche: Content niche (finance, psychology, storytelling)
-
-        Returns:
-            List of hook formula strings
-        """
-        niche_hooks = HOOK_FORMULAS.get(niche, [])
-        universal_hooks = HOOK_FORMULAS.get("universal", [])
-        return niche_hooks + universal_hooks
-
     def generate_pattern_interrupts(self, count: int = 5) -> List[str]:
         """
         Generate pattern interrupt phrases to use throughout script.
@@ -3321,241 +3520,6 @@ class RetentionOptimizer:
         )
 
         return optimized
-
-
-class NaturalPacingInjector:
-    """
-    Adds natural pacing markers to scripts for more human-like TTS delivery.
-
-    Injects:
-    - Breath markers <breath/> after long sentences
-    - Pause markers after transition words
-    - Natural rhythm variations through punctuation
-
-    Usage:
-        pacer = NaturalPacingInjector()
-        paced_narration = pacer.add_natural_pacing(narration)
-    """
-
-    # Transition words that benefit from a pause
-    PAUSE_AFTER_WORDS = [
-        'however', 'therefore', 'furthermore', 'moreover', 'additionally',
-        'consequently', 'nevertheless', 'meanwhile', 'but', 'so', 'and',
-        'now', 'first', 'second', 'third', 'finally', 'next', 'then',
-        'importantly', 'interestingly', 'surprisingly', 'actually',
-    ]
-
-    # Words that signal emphasis (benefit from slight pause before)
-    EMPHASIS_WORDS = [
-        'never', 'always', 'every', 'absolutely', 'completely', 'totally',
-        'exactly', 'precisely', 'definitely', 'certainly', 'critical',
-        'essential', 'crucial', 'important', 'key', 'major', 'significant',
-    ]
-
-    def __init__(self,
-                 breath_marker: str = "<breath/>",
-                 short_pause_marker: str = "<pause:short/>",
-                 medium_pause_marker: str = "<pause:medium/>"):
-        """
-        Initialize the natural pacing injector.
-
-        Args:
-            breath_marker: Marker for breath pauses (default: <breath/>)
-            short_pause_marker: Marker for short pauses (default: <pause:short/>)
-            medium_pause_marker: Marker for medium pauses (default: <pause:medium/>)
-        """
-        self.breath_marker = breath_marker
-        self.short_pause_marker = short_pause_marker
-        self.medium_pause_marker = medium_pause_marker
-
-    def _count_words(self, text: str) -> int:
-        """Count words in text."""
-        return len(text.split())
-
-    def _is_long_sentence(self, sentence: str, threshold: int = 25) -> bool:
-        """Check if a sentence is long enough to need a breath marker."""
-        return self._count_words(sentence) >= threshold
-
-    def inject_breath_markers(self, narration: str, word_threshold: int = 25) -> str:
-        """
-        Add breath markers after long sentences.
-
-        Long sentences (25+ words by default) get a breath marker at the end
-        to create natural pauses in TTS delivery.
-
-        Args:
-            narration: The original narration text
-            word_threshold: Sentences with this many or more words get breath markers
-
-        Returns:
-            Narration with breath markers added
-        """
-        if not narration:
-            return narration
-
-        # Split into sentences
-        sentences = re.split(r'(?<=[.!?])\s+', narration)
-        result_sentences = []
-
-        for sentence in sentences:
-            sentence = sentence.strip()
-            if not sentence:
-                continue
-
-            if self._is_long_sentence(sentence, word_threshold):
-                # Add breath marker after the sentence
-                result_sentences.append(f"{sentence} {self.breath_marker}")
-            else:
-                result_sentences.append(sentence)
-
-        return ' '.join(result_sentences)
-
-    def inject_pause_markers(self, narration: str) -> str:
-        """
-        Add pause markers after transition words.
-
-        Transition words like 'however', 'therefore', 'but', 'so' benefit
-        from a slight pause to improve comprehension and natural rhythm.
-
-        Args:
-            narration: The original narration text
-
-        Returns:
-            Narration with pause markers added
-        """
-        if not narration:
-            return narration
-
-        result = narration
-
-        # Add pauses after transition words at sentence starts
-        for word in self.PAUSE_AFTER_WORDS:
-            # Pattern: word at start of sentence or after punctuation
-            # Add comma if not already present (creates natural pause)
-            pattern = rf'(?<=[.!?]\s)({word})\s+(?!,)'
-            result = re.sub(
-                pattern,
-                rf'\1, ',
-                result,
-                flags=re.IGNORECASE
-            )
-
-            # Also handle sentence starts
-            pattern = rf'^({word})\s+(?!,)'
-            result = re.sub(
-                pattern,
-                rf'\1, ',
-                result,
-                flags=re.IGNORECASE | re.MULTILINE
-            )
-
-        return result
-
-    def inject_rhythm_variations(self, narration: str) -> str:
-        """
-        Add natural rhythm variations through punctuation and markers.
-
-        Creates more dynamic pacing by:
-        - Adding emphasis pauses before important words
-        - Breaking up monotonous sequences
-        - Adding natural comma pauses in long clauses
-
-        Args:
-            narration: The original narration text
-
-        Returns:
-            Narration with rhythm variations added
-        """
-        if not narration:
-            return narration
-
-        result = narration
-
-        # Add short pauses before emphasis words (if no comma already)
-        for word in self.EMPHASIS_WORDS:
-            # Pattern: space before emphasis word (not at sentence start)
-            pattern = rf'(?<=[a-z])\s+({word})\b'
-            replacement = rf' - \1'  # Em-dash creates natural pause
-            result = re.sub(pattern, replacement, result, flags=re.IGNORECASE, count=3)
-
-        # Break up long clauses with commas
-        # Pattern: long sequence without punctuation (30+ chars between punctuation)
-        def add_clause_break(match):
-            text = match.group(0)
-            words = text.split()
-            if len(words) > 8:
-                # Add comma after ~half the words
-                mid = len(words) // 2
-                words[mid] = words[mid] + ','
-                return ' '.join(words)
-            return text
-
-        # Find long stretches without punctuation
-        pattern = r'[^.!?,;:]{80,}'
-        result = re.sub(pattern, add_clause_break, result)
-
-        return result
-
-    def add_natural_pacing(self, narration: str) -> str:
-        """
-        Main method that applies all pacing improvements.
-
-        Combines breath markers, pause markers, and rhythm variations
-        for natural-sounding TTS delivery.
-
-        Args:
-            narration: The original narration text
-
-        Returns:
-            Narration with full natural pacing applied
-        """
-        if not narration:
-            return narration
-
-        # Apply pacing techniques in order
-        paced = narration
-
-        # 1. Add pause markers after transition words
-        paced = self.inject_pause_markers(paced)
-
-        # 2. Add rhythm variations
-        paced = self.inject_rhythm_variations(paced)
-
-        # 3. Add breath markers after long sentences (do this last)
-        paced = self.inject_breath_markers(paced)
-
-        logger.debug("Natural pacing markers added to narration")
-
-        return paced
-
-    def remove_pacing_markers(self, narration: str) -> str:
-        """
-        Remove all pacing markers from narration.
-
-        Useful if you need clean text for display or other processing.
-
-        Args:
-            narration: Narration with pacing markers
-
-        Returns:
-            Clean narration without markers
-        """
-        if not narration:
-            return narration
-
-        result = narration
-
-        # Remove breath markers
-        result = result.replace(self.breath_marker, '')
-
-        # Remove pause markers
-        result = result.replace(self.short_pause_marker, '')
-        result = result.replace(self.medium_pause_marker, '')
-
-        # Clean up any double spaces
-        result = re.sub(r'\s+', ' ', result)
-
-        return result.strip()
 
 
 # Example usage

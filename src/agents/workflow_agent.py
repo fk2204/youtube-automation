@@ -32,6 +32,9 @@ from dataclasses import dataclass, field, asdict
 from enum import Enum
 from loguru import logger
 
+# Import canonical BaseAgent
+from src.agents.base_agent import BaseAgent
+
 
 class WorkflowStatus(Enum):
     """Workflow status states."""
@@ -109,33 +112,6 @@ class WorkflowState:
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
-
-
-class BaseAgent:
-    """Base class for all agents."""
-
-    def __init__(self, name: str):
-        self.name = name
-        self.state_dir = Path("data/workflow_states")
-        self.state_dir.mkdir(parents=True, exist_ok=True)
-
-    def run(self, **kwargs) -> Any:
-        """Execute the agent's main function. Must be implemented by subclasses."""
-        raise NotImplementedError("Subclasses must implement run()")
-
-    def _save_state(self, state: Dict[str, Any], filename: str):
-        """Save state to JSON file."""
-        filepath = self.state_dir / filename
-        with open(filepath, "w") as f:
-            json.dump(state, f, indent=2, default=str)
-
-    def _load_state(self, filename: str) -> Optional[Dict[str, Any]]:
-        """Load state from JSON file."""
-        filepath = self.state_dir / filename
-        if filepath.exists():
-            with open(filepath) as f:
-                return json.load(f)
-        return None
 
 
 class WorkflowAgent(BaseAgent):
