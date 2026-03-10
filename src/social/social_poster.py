@@ -175,7 +175,7 @@ class RedditPoster(SocialPlatform, BasePoster):
         self.client_secret = os.getenv("REDDIT_CLIENT_SECRET")
         self.username = os.getenv("REDDIT_USERNAME")
         self.password = os.getenv("REDDIT_PASSWORD")
-        self.user_agent = os.getenv("REDDIT_USER_AGENT", "youtube-automation-bot/1.0")
+        self.user_agent = os.getenv("REDDIT_USER_AGENT", "joe-bot/1.0")
 
     def get_platform_name(self) -> str:
         return self.platform_name

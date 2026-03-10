@@ -1,16 +1,16 @@
-# YouTube Automation Tool
+# Joe
 
-An AI-powered system for automated YouTube video creation and publishing.
+An AI-powered system for automated content creation and publishing.
 
 ## Project Overview
 
-This tool automates YouTube Short-Form content creation and distribution:
+Joe automates short-form content creation and distribution:
 1. **Research** trending topics using Google Trends and Reddit
 2. **Generate** scripts using AI (Ollama/Groq/Claude)
 3. **Create** short-form videos (15-60 sec, 9:16 aspect ratio) with Edge-TTS voiceover and MoviePy
-4. **Distribute** to YouTube Shorts, TikTok, and Instagram Reels
+4. **Distribute** to multiple platforms (YouTube Shorts, TikTok, Instagram Reels, etc.)
 
-**Scope:** Short-form video only. Not designed for long-form YouTube uploads.
+**Scope:** Short-form video only.
 
 ## Tech Stack
 
@@ -28,7 +28,7 @@ This tool automates YouTube Short-Form content creation and distribution:
 ## Project Structure
 
 ```
-youtube-automation/
+joe/
 ├── config/
 │   ├── config.yaml          # Main settings
 │   ├── channels.yaml        # YouTube channel configs

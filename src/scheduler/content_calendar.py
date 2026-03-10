@@ -1001,7 +1001,7 @@ class ContentCalendar:
         for entry in calendar.entries:
             lines.extend([
                 "BEGIN:VEVENT",
-                f"UID:{entry.entry_id}@youtube-automation",
+                f"UID:{entry.entry_id}@joe",
                 f"DTSTAMP:{datetime.now().strftime('%Y%m%dT%H%M%SZ')}",
                 f"DTSTART:{entry.scheduled_date.strftime('%Y%m%d')}",
                 f"SUMMARY:{entry.title}",

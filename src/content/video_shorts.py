@@ -1482,7 +1482,7 @@ class ShortsVideoGenerator:
             project_root / "assets" / "music",           # Primary: assets/music/
             project_root / "music",                       # Alternative: music/
             Path.cwd() / "assets" / "music",             # CWD-relative
-            Path.home() / "youtube-automation" / "assets" / "music",  # Home directory
+            Path.home() / "joe" / "assets" / "music",  # Home directory
         ]
 
         logger.debug(f"Searching for background music for niche: {niche}")

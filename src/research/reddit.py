@@ -95,7 +95,7 @@ class RedditResearcher:
         self.client_secret = client_secret or os.getenv("REDDIT_CLIENT_SECRET")
         self.user_agent = user_agent or os.getenv(
             "REDDIT_USER_AGENT",
-            "youtube-automation-bot/1.0"
+            "joe-bot/1.0"
         )
 
         if not self.client_id or not self.client_secret:

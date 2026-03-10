@@ -1,8 +1,8 @@
-# YouTube Automation Tool - Main Configuration
+# Joe - Main Configuration
 
 # General Settings
 app:
-  name: "YouTube Automation Tool"
+  name: "Joe"
   version: "1.0.0"
   debug: true
   log_level: "INFO"

@@ -1,5 +1,5 @@
 """
-Reddit Research Module for YouTube Automation
+Reddit Research Module for Joe
 
 Comprehensive Reddit research for content discovery and trend analysis.
 Uses PRAW (Python Reddit API Wrapper) for API access.
@@ -8,13 +8,13 @@ Setup:
     1. Go to https://www.reddit.com/prefs/apps
     2. Click "create another app..."
     3. Select "script" type
-    4. Name: "youtube-automation-research" (or any name)
+    4. Name: "joe-research" (or any name)
     5. Redirect URI: http://localhost:8080 (not used but required)
     6. Get client_id (under app name) and client_secret
     7. Add to config/.env:
         REDDIT_CLIENT_ID=your_client_id
         REDDIT_CLIENT_SECRET=your_client_secret
-        REDDIT_USER_AGENT=youtube-automation/1.0
+        REDDIT_USER_AGENT=joe/1.0
 
 Usage:
     from src.research.reddit_researcher import RedditResearcher
@@ -323,7 +323,7 @@ class RedditResearcher:
         self.client_secret = client_secret or os.getenv("REDDIT_CLIENT_SECRET")
         self.user_agent = user_agent or os.getenv(
             "REDDIT_USER_AGENT",
-            "youtube-automation-research/1.0"
+            "joe-research/1.0"
         )
 
         # Rate limiting tracking

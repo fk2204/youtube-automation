@@ -2,7 +2,7 @@
 Database Session Management and Helper Functions
 
 Provides functions for database initialization, session management,
-and common database operations for the YouTube automation pipeline.
+and common database operations for the Joe content automation pipeline.
 """
 
 import os
@@ -29,7 +29,7 @@ from .models import (
 # Database configuration
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
-DB_PATH = DATA_DIR / "youtube_automation.db"
+DB_PATH = DATA_DIR / "joe.db"
 DATABASE_URL = f"sqlite:///{DB_PATH}"
 
 # Create engine and session factory

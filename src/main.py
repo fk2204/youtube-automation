@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-YouTube Automation Tool - Main Entry Point
+Joe - Main Entry Point
 
-This is the main script to run the YouTube automation pipeline.
+This is the main script to run the Joe content automation pipeline.
 
 Usage:
     # Run once for a specific niche
@@ -41,7 +41,7 @@ logger.add(
     level="INFO"
 )
 logger.add(
-    "logs/youtube_automation_{time:YYYY-MM-DD}.log",
+    "logs/joe_{time:YYYY-MM-DD}.log",
     rotation="1 day",
     retention="7 days",
     level="DEBUG"
