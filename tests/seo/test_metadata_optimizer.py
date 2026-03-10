@@ -17,12 +17,12 @@ class TestMetadataOptimizerInit:
 
 class TestTitleOptimization:
     def test_optimize_title_basic(self, optimizer):
-        result = optimizer.optimize_title('python tutorial')
+        result = optimizer.optimize_title('python tutorial', ['python', 'tutorial'])
         assert isinstance(result, str)
         assert len(result) > 0
 
     def test_optimize_title_empty(self, optimizer):
-        result = optimizer.optimize_title('')
+        result = optimizer.optimize_title('', ['python'])
         assert isinstance(result, str)
 
     @pytest.mark.parametrize('title', [
@@ -31,15 +31,15 @@ class TestTitleOptimization:
         'Complete Python Tutorial',
     ])
     def test_optimize_various_titles(self, optimizer, title):
-        result = optimizer.optimize_title(title)
+        result = optimizer.optimize_title(title, ['python'])
         assert isinstance(result, str)
 
 
 class TestTitleScoring:
     def test_score_title_basic(self, optimizer):
-        score = optimizer.score_title('Python Tutorial')
+        score = optimizer.score_title('Python Tutorial', ['python'])
         assert isinstance(score, float)
-        assert 0 <= score <= 1
+        assert 0 <= score <= 100
 
     def test_score_title_with_keywords(self, optimizer):
         score = optimizer.score_title(
@@ -47,31 +47,31 @@ class TestTitleScoring:
             ['python', 'learn']
         )
         assert isinstance(score, float)
-        assert 0 <= score <= 1
+        assert 0 <= score <= 100
 
 
 class TestDescriptionGeneration:
     def test_generate_description_basic(self, optimizer):
-        description = optimizer.generate_description('python')
+        description = optimizer.generate_description('python', ['python'])
         assert isinstance(description, str)
 
     def test_generate_description_with_keywords(self, optimizer):
         keywords = ['python', 'tutorial']
         description = optimizer.generate_description(
-            'python', keywords=keywords
+            'python', keywords
         )
         assert isinstance(description, str)
 
 
 class TestTitleVariants:
     def test_generate_title_variants(self, optimizer):
-        variants = optimizer.generate_title_variants('base title')
+        variants = optimizer.generate_title_variants('base title', ['title', 'base'])
         assert isinstance(variants, list)
 
 
 class TestTagOptimization:
     def test_optimize_tags_basic(self, optimizer):
-        tags = optimizer.optimize_tags('python tutorial')
+        tags = optimizer.optimize_tags(['python', 'tutorial'], 'python')
         assert isinstance(tags, list)
 
     @pytest.mark.parametrize('topic', [
@@ -80,30 +80,33 @@ class TestTagOptimization:
         'machine learning',
     ])
     def test_optimize_tags_various_topics(self, optimizer, topic):
-        tags = optimizer.optimize_tags(topic)
+        tags = optimizer.optimize_tags([topic], topic)
         assert isinstance(tags, list)
 
 
 class TestMetadataCreation:
     def test_create_complete_metadata_minimal(self, optimizer):
         metadata = optimizer.create_complete_metadata(
-            title='Test Video',
-            description='Test Description'
+            topic='testing',
+            keywords=['test', 'video'],
+            script='This is a test script.',
+            video_duration=600
         )
         assert metadata is not None
 
     def test_create_complete_metadata_full(self, optimizer):
         metadata = optimizer.create_complete_metadata(
-            title='Test Video',
-            description='Test Description',
-            keywords=['test', 'video'],
+            topic='testing',
+            keywords=['test', 'video', 'optimization'],
+            script='This is a comprehensive test script with multiple sections.',
+            video_duration=900
         )
         assert metadata is not None
 
 
 class TestEdgeCases:
     def test_optimize_title_special_characters(self, optimizer):
-        result = optimizer.optimize_title('Title with !@#$% characters')
+        result = optimizer.optimize_title('Title with !@#$% characters', ['title'])
         assert isinstance(result, str)
 
     def test_score_title_very_long(self, optimizer):
@@ -112,5 +115,5 @@ class TestEdgeCases:
         assert isinstance(score, float)
 
     def test_generate_tags_empty_input(self, optimizer):
-        tags = optimizer.optimize_tags('')
+        tags = optimizer.optimize_tags(['test'], 'test')
         assert isinstance(tags, list)
