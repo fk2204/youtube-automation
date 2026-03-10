@@ -1,0 +1,28 @@
+{
+  "channels": [
+    {
+      "name": "neural_forge",
+      "channel_id": "UCM8qHxAWrrUnWLVDIhx5giQ",
+      "niche": "tech_ai",
+      "description": "AI and technology insights"
+    },
+    {
+      "name": "money_blueprints",
+      "channel_id": "UCUQyLmQ3bkZWGH_dyvJboqw",
+      "niche": "finance",
+      "description": "Money-making strategies and passive income tips"
+    },
+    {
+      "name": "mind_unlocked",
+      "channel_id": "UCmXxzDLYL8ObEAxHxKTwrmg",
+      "niche": "psychology",
+      "description": "Psychology tips and self-improvement content"
+    },
+    {
+      "name": "prof8ssor_ai",
+      "channel_id": "UCzBXPvqkrZOWHAuvhMGon9w",
+      "niche": "ai",
+      "description": "AI tutorials and insights"
+    }
+  ]
+}

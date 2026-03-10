@@ -103,7 +103,7 @@ class YouTubeAuth:
         return credentials
 
     def _create_new_credentials(self) -> Any:
-        """Create new OAuth credentials via browser flow."""
+        """Create new OAuth credentials via browser flow with fallback to OOB."""
         if not self.client_secrets_file or not os.path.exists(self.client_secrets_file):
             raise FileNotFoundError(
                 f"Client secrets file not found: {self.client_secrets_file}\n\n"
@@ -118,17 +118,66 @@ class YouTubeAuth:
 
         flow = InstalledAppFlow.from_client_secrets_file(self.client_secrets_file, self.SCOPES)
 
-        # Run local server for OAuth callback (port 0 = auto-pick available port)
-        credentials = flow.run_local_server(
-            port=0,
-            prompt="consent",
-            authorization_prompt_message="Please authorize YouTube access in your browser.",
-        )
+        # Try local server first
+        try:
+            logger.debug("Attempting local server authentication (port 0 - auto-select)...")
+            credentials = flow.run_local_server(
+                port=0,
+                prompt="consent",
+                authorization_prompt_message="Please authorize YouTube access in your browser.",
+            )
+            self._save_credentials(credentials)
+            logger.success("New credentials created and saved")
+            return credentials
 
-        self._save_credentials(credentials)
-        logger.success("New credentials created and saved")
+        except Exception as e:
+            error_msg = str(e)
+            logger.warning(f"Local server failed: {error_msg}")
 
-        return credentials
+            # If redirect_uri_mismatch, try OOB flow
+            if "redirect_uri_mismatch" in error_msg or "invalid_request" in error_msg:
+                logger.info("Falling back to Out-of-Band (OOB) authorization...")
+                return self._create_new_credentials_oob(flow)
+            else:
+                raise
+
+    def _create_new_credentials_oob(self, flow) -> Any:
+        """Fallback to Out-of-Band OAuth flow."""
+        logger.info("\n" + "="*70)
+        logger.info("MANUAL AUTHORIZATION REQUIRED (Out-of-Band Flow)")
+        logger.info("="*70)
+
+        # Get authorization URL
+        auth_url, _ = flow.authorization_url(prompt='consent')
+
+        print(f"\n[STEP 1] Open this link in your browser:")
+        print(f"  {auth_url}")
+
+        print(f"\n[STEP 2] Sign in and authorize YouTube access")
+
+        print(f"\n[STEP 3] You'll be redirected with an authorization code")
+        print(f"         Copy the entire code (it looks like: 4/0AX...)")
+
+        print(f"\n[STEP 4] Paste the code here:")
+
+        try:
+            auth_code = input("  Authorization code: ").strip()
+        except KeyboardInterrupt:
+            logger.error("Authorization cancelled by user")
+            raise
+
+        if not auth_code:
+            raise ValueError("No authorization code provided")
+
+        # Exchange code for credentials
+        try:
+            credentials = flow.fetch_token(code=auth_code)
+            logger.success("Authorization successful!")
+            self._save_credentials(credentials)
+            return credentials
+        except Exception as e:
+            logger.error(f"Failed to exchange authorization code: {e}")
+            raise
 
     def _save_credentials(self, credentials: Any) -> None:
         """Save credentials to file."""
