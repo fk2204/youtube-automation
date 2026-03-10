@@ -1,5 +1,5 @@
 """
-YouTube Automation FastAPI Server
+Joe FastAPI Server
 Exposes youtube-automation as HTTP API for integration with Dubravko backend
 """
 
@@ -34,8 +34,8 @@ from src.scheduler.smart_scheduler import SmartScheduler
 # ═══════════════════════════════════════════════════════════════════════════════
 
 app = FastAPI(
-    title="YouTube Automation API",
-    description="Control youtube-automation via HTTP API",
+    title="Joe API",
+    description="Control joe via HTTP API",
     version="2.1.0"
 )
 
@@ -596,7 +596,7 @@ async def _notify_backend(job_id: str):
 @app.on_event("startup")
 async def startup_event():
     """Initialize on startup"""
-    print("YouTube Automation API starting...")
+    print("Joe API starting...")
     print(f"Configured channels: {[ch['id'] for ch in CONFIG['channels']]}")
     print(f"API Key: {'Set' if os.getenv('YOUTUBE_API_KEY') else 'Not set (development mode)'}")
 

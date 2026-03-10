@@ -1,5 +1,5 @@
 """
-Tests for New YouTube Automation Modules
+Tests for New Joe Modules
 
 Tests for:
 - WhisperCaptionGenerator

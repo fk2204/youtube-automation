@@ -1,5 +1,5 @@
 """
-CrewAI Multi-Agent System for YouTube Automation
+CrewAI Multi-Agent System for Joe
 
 Orchestrates multiple AI agents to handle the complete video pipeline:
 - Researcher: Finds trending topics
@@ -355,7 +355,7 @@ class SimplePipeline:
 # Example usage
 if __name__ == "__main__":
     print("\n" + "="*60)
-    print("YOUTUBE AUTOMATION CREW")
+    print("JOE CREW")
     print("="*60 + "\n")
 
     # Uses AI_PROVIDER from environment, falls back to "ollama"

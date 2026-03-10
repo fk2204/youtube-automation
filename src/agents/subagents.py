@@ -1,5 +1,5 @@
 """
-YouTube Automation Subagents
+Joe Subagents
 
 Specialized agents for different parts of the video production pipeline.
 Each agent handles a specific task and can work independently or together.

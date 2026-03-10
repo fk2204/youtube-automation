@@ -1,5 +1,5 @@
 """
-Social Media Integration for YouTube Automation
+Social Media Integration for Joe
 
 This module provides tools for posting to multiple social media platforms
 to drive first-hour engagement after YouTube video uploads.

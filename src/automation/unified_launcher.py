@@ -1,5 +1,5 @@
 """
-Unified Launcher for YouTube Automation
+Unified Launcher for Joe
 Single entry point for all automation tasks with parallel execution.
 """
 

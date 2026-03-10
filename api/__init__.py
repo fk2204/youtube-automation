@@ -1,5 +1,5 @@
 """
-YouTube Automation API Module
+Joe API Module
 Exposes youtube-automation functionality via FastAPI
 """
 

@@ -1,5 +1,5 @@
 """
-Efficient Prompt Templates for YouTube Automation
+Efficient Prompt Templates for Joe
 Minimized, cached prompts that reduce token usage by 50%+.
 """
 

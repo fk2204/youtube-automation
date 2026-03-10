@@ -1,5 +1,5 @@
 """
-Predictive Topic Selection Module for YouTube Automation
+Predictive Topic Selection Module for Joe
 
 Combines multiple signals to predict viral potential and recommend
 optimal posting timing for maximum reach.

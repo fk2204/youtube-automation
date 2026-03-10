@@ -1,5 +1,5 @@
 """
-SQLAlchemy Models for YouTube Automation Database
+SQLAlchemy Models for Joe Database
 
 Defines the database schema for tracking videos, uploads, and generation pipeline.
 """

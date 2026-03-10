@@ -1,5 +1,5 @@
 """
-Performance Profiler for YouTube Automation.
+Performance Profiler for Joe.
 
 Provides utilities for tracking execution time, memory usage, and performance
 metrics across the application.

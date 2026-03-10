@@ -1,5 +1,5 @@
 """
-YouTube Automation Database Module
+Joe Database Module
 
 Provides SQLAlchemy models and database utilities for tracking
 videos, uploads, and generation pipeline progress.

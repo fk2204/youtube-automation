@@ -1,5 +1,5 @@
 """
-Comment Sentiment Analysis Module for YouTube Automation
+Comment Sentiment Analysis Module for Joe
 
 Analyze YouTube comments to extract insights, identify trends, and
 generate content ideas from audience feedback.

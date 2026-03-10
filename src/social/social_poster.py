@@ -309,7 +309,7 @@ class DiscordPoster(SocialPlatform):
                         "title": content[:256],  # Discord embed title limit
                         "url": url,
                         "color": 16711680,  # Red color for YouTube
-                        "footer": {"text": "YouTube Automation Bot"}
+                        "footer": {"text": "Joe Bot"}
                     }]
                 }
                 if image and os.path.exists(image):

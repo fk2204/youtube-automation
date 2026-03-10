@@ -1,5 +1,5 @@
 """
-Performance Benchmarking Suite for YouTube Automation.
+Performance Benchmarking Suite for Joe.
 
 This module provides benchmarks for:
 - Video generation (FFmpeg, MoviePy, effects)

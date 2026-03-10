@@ -1,4 +1,4 @@
-# YouTube Automation Agents
+# Joe Agents
 #
 # This module exports all agent classes for easy importing:
 #
@@ -178,4 +178,4 @@ __all__ = [
 
 # Version info
 __version__ = "2.2.0"  # Updated with Quality Cluster Agents
-__author__ = "YouTube Automation Team"
+__author__ = "Joe Team"

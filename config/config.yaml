@@ -131,7 +131,7 @@ scheduler:
 # Database
 database:
   type: "sqlite"
-  path: "data/youtube_automation.db"
+  path: "data/joe.db"
 
 # Output directories
 output:

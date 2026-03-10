@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-One-Click Setup for New YouTube Automation Features
+One-Click Setup for New Joe Features
 
 This script:
 1. Installs all required dependencies
@@ -415,7 +415,7 @@ def main():
 
     args = parser.parse_args()
 
-    print_header("YouTube Automation - New Features Setup")
+    print_header("Joe - New Features Setup")
 
     # Check Python version
     if not check_python_version():

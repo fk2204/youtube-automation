@@ -1,5 +1,5 @@
 """
-Video Hook Generator for YouTube Automation
+Video Hook Generator for Joe
 
 Creates catchy, attention-grabbing intros for the first 3-5 seconds of videos.
 Ensures viewers see something engaging in the FIRST SECOND.

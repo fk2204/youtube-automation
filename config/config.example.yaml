@@ -380,7 +380,7 @@ success_tracking:
 # =============================================================================
 database:
   type: "sqlite"
-  path: "data/youtube_automation.db"
+  path: "data/joe.db"
 
   # Performance
   indexes: true                # Enable query indexes

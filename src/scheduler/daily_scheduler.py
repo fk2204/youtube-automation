@@ -628,7 +628,7 @@ def run_scheduler(include_videos: bool = True, include_shorts: bool = True):
 
     print()
     print("=" * 60)
-    print("  YOUTUBE AUTOMATION SCHEDULER")
+    print("  JOE SCHEDULER")
     print("=" * 60)
     print()
     print(f"  Total jobs scheduled: {total_job_count}")
@@ -913,7 +913,7 @@ def show_status():
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="YouTube Automation Scheduler")
+    parser = argparse.ArgumentParser(description="Joe Scheduler")
     parser.add_argument("--test", action="store_true", help="Run one video per channel immediately")
     parser.add_argument("--test-shorts", action="store_true", help="Run one Short per channel immediately")
     parser.add_argument("--test-all", action="store_true", help="Run one video AND one Short per channel")

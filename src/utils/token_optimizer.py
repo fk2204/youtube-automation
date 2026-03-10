@@ -1,5 +1,5 @@
 """
-Token Optimization System for YouTube Automation
+Token Optimization System for Joe
 
 Comprehensive system to reduce API costs by 50%+ through:
 1. Prompt caching - Cache repeated prompts with intelligent invalidation

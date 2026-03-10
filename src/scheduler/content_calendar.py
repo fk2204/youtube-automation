@@ -1,5 +1,5 @@
 """
-Content Calendar Module for YouTube Automation
+Content Calendar Module for Joe
 
 Comprehensive content planning with weekly/monthly views, topic clustering,
 optimal posting analysis, and gap identification.
@@ -994,7 +994,7 @@ class ContentCalendar:
         lines = [
             "BEGIN:VCALENDAR",
             "VERSION:2.0",
-            "PRODID:-//YouTube Automation//Content Calendar//EN",
+            "PRODID:-//Joe//Content Calendar//EN",
             f"X-WR-CALNAME:{calendar.channel_id} Content Calendar",
         ]
 

@@ -260,7 +260,7 @@ def test_research():
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="YouTube Automation Tool",
+        description="Joe",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -316,7 +316,7 @@ Examples:
     Path("logs").mkdir(exist_ok=True)
 
     print("\n" + "="*60)
-    print("  YOUTUBE AUTOMATION TOOL")
+    print("  JOE")
     print("="*60 + "\n")
 
     if args.test_tts:

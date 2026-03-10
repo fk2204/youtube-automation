@@ -1,5 +1,5 @@
 """
-Agent Orchestration System for YouTube Automation
+Agent Orchestration System for Joe
 Manages agent communication, pipelines, and workflows.
 """
 

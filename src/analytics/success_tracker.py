@@ -1,5 +1,5 @@
 """
-Success Metrics Tracker for YouTube Automation
+Success Metrics Tracker for Joe
 Tracks KPIs, goals, and progress toward channel success.
 """
 
@@ -366,7 +366,7 @@ class SuccessTracker:
         data = self.get_dashboard_data()
 
         print("\n" + "=" * 60)
-        print("📊 YOUTUBE AUTOMATION SUCCESS DASHBOARD")
+        print("📊 JOE SUCCESS DASHBOARD")
         print("=" * 60)
 
         print("\n📅 TODAY'S METRICS")

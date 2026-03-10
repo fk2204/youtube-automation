@@ -931,8 +931,8 @@ def _handle_agents_command(args):
 def main():
     if len(sys.argv) < 2:
         print("""
-YouTube Automation Quick Launcher
-=================================
+Joe Quick Launcher
+==================
 
 Commands:
   python run.py video <channel>     Create & upload 1 regular video
@@ -983,8 +983,6 @@ AI Video Generation (Runway, Pika):
 
 Performance & Optimization:
   python run.py gpu-status            Show GPU acceleration status
-  python run.py benchmark             Run video encoding performance benchmark
-  python run.py benchmark 60          Run 60-second benchmark
   python run.py async-download-test   Test async download speeds
 
 Reddit Research Commands:
@@ -3182,133 +3180,6 @@ Examples:
         except Exception as e:
             print(f"Error detecting GPU: {e}")
             sys.exit(1)
-
-        print(f"\n{'='*60}")
-
-    elif cmd == "benchmark":
-        # Run performance benchmark
-        import time
-        import tempfile
-        from pathlib import Path
-
-        print(f"\n{'='*60}")
-        print("PERFORMANCE BENCHMARK")
-        print(f"{'='*60}\n")
-
-        # Parse options
-        duration = 30  # seconds
-        iterations = 3
-        if len(sys.argv) > 2:
-            try:
-                duration = int(sys.argv[2])
-            except ValueError:
-                pass
-
-        print(f"Test parameters:")
-        print(f"  Video duration: {duration}s")
-        print(f"  Iterations: {iterations}")
-        print(f"  Resolution: 1920x1080")
-        print()
-
-        from src.content.video_pro import ProVideoGenerator
-
-        # Create test audio
-        temp_dir = Path(tempfile.gettempdir()) / "benchmark"
-        temp_dir.mkdir(exist_ok=True)
-        audio_file = temp_dir / "test_audio.mp3"
-
-        # Generate silent audio if it doesn't exist
-        if not audio_file.exists():
-            print("Generating test audio...")
-            import subprocess
-            cmd = [
-                "ffmpeg", "-y", "-f", "lavfi", "-i", f"anullsrc=r=44100:cl=stereo",
-                "-t", str(duration), "-c:a", "mp3", str(audio_file)
-            ]
-            subprocess.run(cmd, capture_output=True)
-
-        # Benchmark scenarios
-        scenarios = [
-            {"name": "CPU Encoding", "use_gpu": False},
-            {"name": "GPU Encoding", "use_gpu": True},
-        ]
-
-        results = {}
-
-        for scenario in scenarios:
-            scenario_name = scenario["name"]
-            print(f"\n{scenario_name}:")
-            print("-" * 40)
-
-            times = []
-
-            for i in range(iterations):
-                output_file = temp_dir / f"bench_{scenario_name.replace(' ', '_')}_{i}.mp4"
-
-                # Create simple test script object
-                class TestScript:
-                    def __init__(self):
-                        self.title = "Benchmark Test"
-                        self.description = "Performance test"
-                        self.sections = []
-
-                generator = ProVideoGenerator(use_gpu=scenario["use_gpu"])
-
-                start = time.time()
-
-                try:
-                    result = generator.create_video(
-                        audio_file=str(audio_file),
-                        script=TestScript(),
-                        output_file=str(output_file),
-                        use_stock=False
-                    )
-
-                    elapsed = time.time() - start
-                    times.append(elapsed)
-
-                    print(f"  Run {i+1}/{iterations}: {elapsed:.1f}s")
-
-                    # Cleanup
-                    if output_file.exists():
-                        output_file.unlink()
-
-                except Exception as e:
-                    print(f"  Run {i+1}/{iterations}: FAILED - {e}")
-                    continue
-
-            if times:
-                avg_time = sum(times) / len(times)
-                min_time = min(times)
-                max_time = max(times)
-
-                results[scenario_name] = {
-                    "avg": avg_time,
-                    "min": min_time,
-                    "max": max_time
-                }
-
-                print(f"\n  Average: {avg_time:.1f}s")
-                print(f"  Min:     {min_time:.1f}s")
-                print(f"  Max:     {max_time:.1f}s")
-
-        # Compare results
-        if "CPU Encoding" in results and "GPU Encoding" in results:
-            cpu_time = results["CPU Encoding"]["avg"]
-            gpu_time = results["GPU Encoding"]["avg"]
-            speedup = cpu_time / gpu_time if gpu_time > 0 else 0
-
-            print(f"\n{'='*60}")
-            print(f"RESULTS SUMMARY")
-            print(f"{'='*60}\n")
-            print(f"CPU Encoding:  {cpu_time:.1f}s average")
-            print(f"GPU Encoding:  {gpu_time:.1f}s average")
-            print(f"Speedup:       {speedup:.2f}x faster with GPU")
-            print(f"Time Saved:    {cpu_time - gpu_time:.1f}s per video")
-
-        # Cleanup
-        if audio_file.exists():
-            audio_file.unlink()
 
         print(f"\n{'='*60}")
 

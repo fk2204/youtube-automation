@@ -1,5 +1,5 @@
 """
-Dynamic Sponsor Segment Manager for YouTube Automation
+Dynamic Sponsor Segment Manager for Joe
 
 Manage sponsor reads with optimal placement, template-based generation,
 and A/B testing for maximum sponsor satisfaction and viewer retention.

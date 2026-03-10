@@ -1,5 +1,5 @@
 """
-Base Agent Infrastructure for YouTube Automation
+Base Agent Infrastructure for Joe
 Provides abstract base class and utilities for all agents.
 """
 

@@ -1,5 +1,5 @@
 """
-YouTube Automation Module
+Joe Module
 
 Token-optimized automation with independent task runners.
 Includes unified launcher for parallel execution.

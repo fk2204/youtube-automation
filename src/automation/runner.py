@@ -1254,7 +1254,7 @@ def task_short_with_upload(channel_id: str, topic: str = None) -> Dict[str, Any]
 
 # CLI Interface
 def main():
-    parser = argparse.ArgumentParser(description="YouTube Automation Runner")
+    parser = argparse.ArgumentParser(description="Joe Runner")
     parser.add_argument("task", choices=["research", "script", "audio", "video", "short", "upload", "full", "full-upload", "short-pipeline", "short-upload", "budget"])
     parser.add_argument("args", nargs="*", help="Task arguments")
     parser.add_argument("--niche", default="default", help="Content niche")

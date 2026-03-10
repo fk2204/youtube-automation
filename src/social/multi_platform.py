@@ -1,5 +1,5 @@
 """
-Multi-Platform Distribution Module for YouTube Automation
+Multi-Platform Distribution Module for Joe
 
 Repurpose long-form content to short-form formats for maximum reach across:
 - YouTube Shorts

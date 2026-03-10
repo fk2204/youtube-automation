@@ -1,5 +1,5 @@
 """
-Integration Tests for New YouTube Automation Pipeline Components
+Integration Tests for New Joe Pipeline Components
 
 Tests the integration between:
 - Hook generation -> Script creation -> TTS -> Caption flow

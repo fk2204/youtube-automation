@@ -1,5 +1,5 @@
 """
-Subtitle/Caption System for YouTube Automation
+Subtitle/Caption System for Joe
 
 Generates and burns subtitles into videos for better accessibility and retention.
 Subtitles increase retention by 15-25% according to research.
