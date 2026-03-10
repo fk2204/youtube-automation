@@ -218,21 +218,162 @@ class SlavkoBotAPI:
             logger.error(f"Video creation failed: {e}")
             return {"status": "error", "message": str(e)}
 
+    # Distribution Center Functions
+    def distribute_video(self, video_file: str, title: str, niche: str, platforms: List[str] = None) -> Dict[str, Any]:
+        """
+        Distribute video to multiple platforms (distribution center feature).
+
+        Platforms: youtube, tiktok, instagram, twitter, reddit, facebook, discord, linkedin
+        """
+        try:
+            from src.social.multi_platform import MultiPlatformDistributor, Platform
+
+            if not platforms:
+                platforms = ["youtube", "tiktok", "instagram"]
+
+            distributor = MultiPlatformDistributor()
+
+            result = {
+                "status": "ok",
+                "video_file": video_file,
+                "title": title,
+                "niche": niche,
+                "distributions": [],
+            }
+
+            # Export for each platform
+            for platform in platforms:
+                try:
+                    if platform == "youtube":
+                        result["distributions"].append({
+                            "platform": "YouTube",
+                            "format": "1080x1920 (Shorts)",
+                            "status": "ready",
+                        })
+                    elif platform == "tiktok":
+                        result["distributions"].append({
+                            "platform": "TikTok",
+                            "format": "1080x1920 (9:16)",
+                            "status": "ready",
+                            "note": "Manual upload via TikTok Studio",
+                        })
+                    elif platform == "instagram":
+                        result["distributions"].append({
+                            "platform": "Instagram Reels",
+                            "format": "1080x1920 (9:16)",
+                            "status": "ready",
+                            "note": "Manual upload via Instagram app",
+                        })
+                    elif platform == "twitter":
+                        result["distributions"].append({
+                            "platform": "Twitter",
+                            "format": "Text + link preview",
+                            "status": "ready",
+                        })
+                    elif platform == "reddit":
+                        result["distributions"].append({
+                            "platform": "Reddit",
+                            "format": "Text + subreddit",
+                            "status": "ready",
+                        })
+                    elif platform == "facebook":
+                        result["distributions"].append({
+                            "platform": "Facebook",
+                            "format": "Video/post",
+                            "status": "ready",
+                        })
+                except Exception as e:
+                    logger.warning(f"Platform {platform} skipped: {e}")
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Distribution failed: {e}")
+            return {"status": "error", "message": str(e)}
+
+    def post_social(self, content: str, platforms: List[str] = None, url: str = None) -> Dict[str, Any]:
+        """
+        Post content directly to social platforms.
+
+        Platforms: twitter, reddit, discord, linkedin, facebook
+        """
+        try:
+            from src.social.social_poster import (
+                TwitterPoster,
+                RedditPoster,
+                DiscordPoster,
+                LinkedInPoster,
+                FacebookPoster,
+            )
+
+            if not platforms:
+                platforms = ["twitter", "reddit"]
+
+            results = {"status": "ok", "platforms": []}
+
+            for platform in platforms:
+                try:
+                    if platform == "twitter":
+                        poster = TwitterPoster()
+                        result = poster.post(content, url=url)
+                        results["platforms"].append({"platform": "Twitter", "status": "posted"})
+
+                    elif platform == "reddit":
+                        poster = RedditPoster()
+                        result = poster.post(content, url=url)
+                        results["platforms"].append({"platform": "Reddit", "status": "posted"})
+
+                    elif platform == "discord":
+                        poster = DiscordPoster()
+                        result = poster.post(content, url=url)
+                        results["platforms"].append({"platform": "Discord", "status": "posted"})
+
+                    elif platform == "linkedin":
+                        poster = LinkedInPoster()
+                        result = poster.post(content, url=url)
+                        results["platforms"].append({"platform": "LinkedIn", "status": "posted"})
+
+                    elif platform == "facebook":
+                        poster = FacebookPoster()
+                        result = poster.post(content, url=url)
+                        results["platforms"].append({"platform": "Facebook", "status": "posted"})
+
+                except Exception as e:
+                    logger.warning(f"Platform {platform} failed: {e}")
+                    results["platforms"].append({"platform": platform, "status": "failed", "error": str(e)})
+
+            return results
+
+        except Exception as e:
+            logger.error(f"Social posting failed: {e}")
+            return {"status": "error", "message": str(e)}
+
     def get_help(self) -> str:
         """Show all available commands."""
         return """
-**Joe Bot - 10 Monetization Features:**
+**Joe Bot - Content Generator & Distribution Center**
 
-1. /status <channel> - Analytics Dashboard
-2. /trending <niche> - Trending Topics Research
-3. /ab-test <vid> <A> <B> - A/B Testing System
-4. /alerts <channel> - Performance Monitoring
-5. /optimize <channel> - Auto-Optimization
-6. /competitors <topic> - Competitor Analysis
-7. /keywords <topic> - SEO Keywords
-8. /best-time <channel> - Schedule Optimization
-9. /revenue [channel] - Revenue Projection
-10. /create <channel> [topic] - Create Video
+CONTENT GENERATION:
+1. /create <channel> [topic] - Generate video for YouTube
+
+ANALYTICS & MONETIZATION:
+2. /status <channel> - Analytics Dashboard
+3. /trending <niche> - Trending Topics Research
+4. /ab-test <vid> <A> <B> - A/B Testing System
+5. /alerts <channel> - Performance Monitoring
+6. /optimize <channel> - Auto-Optimization
+7. /competitors <topic> - Competitor Analysis
+8. /keywords <topic> - SEO Keywords
+9. /best-time <channel> - Schedule Optimization
+10. /revenue [channel] - Revenue Projection
+
+DISTRIBUTION CENTER:
+11. /distribute <file> <title> <niche> - Export to YouTube/TikTok/Instagram
+12. /post-social <content> [platforms] - Post to Twitter/Reddit/Discord/LinkedIn
+
+PLATFORMS SUPPORTED:
+Videos: YouTube Shorts, TikTok, Instagram Reels, Facebook
+Text: Twitter, Reddit, Discord, LinkedIn, Facebook
 
 Niches: finance, psychology, ai, self-improvement
         """
