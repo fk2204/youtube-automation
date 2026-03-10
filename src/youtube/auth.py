@@ -75,13 +75,35 @@ class YouTubeAuth:
         Returns:
             Valid Google OAuth credentials
         """
+        import json
+        from google.oauth2.credentials import Credentials
+
         credentials = None
 
         # Try to load existing credentials
         if os.path.exists(self.credentials_file):
             logger.info("Loading existing credentials...")
-            with open(self.credentials_file, "rb") as f:
-                credentials = pickle.load(f)
+
+            # Try JSON format first (from config/credentials/*.json)
+            if self.credentials_file.endswith('.json'):
+                try:
+                    with open(self.credentials_file, "r") as f:
+                        cred_data = json.load(f)
+                    credentials = Credentials.from_authorized_user_info(cred_data, self.SCOPES)
+                    logger.info("Loaded JSON credentials")
+                except Exception as e:
+                    logger.warning(f"Could not load JSON credentials: {e}")
+                    credentials = None
+
+            # Try pickle format (fallback)
+            if not credentials:
+                try:
+                    with open(self.credentials_file, "rb") as f:
+                        credentials = pickle.load(f)
+                    logger.info("Loaded pickle credentials")
+                except Exception as e:
+                    logger.warning(f"Could not load pickle credentials: {e}")
+                    credentials = None
 
         # Check if credentials are valid
         if credentials and credentials.valid:
